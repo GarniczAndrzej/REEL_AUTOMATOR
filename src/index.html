@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reels EDL Automator</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">▶</div>
+    Reels EDL Automator
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button class="api-save-btn" id="openProjectBtn">Otwórz projekt…</button>
+    <button class="api-save-btn" id="saveProjectBtn">Zapisz</button>
+    <button class="api-save-btn" id="saveProjectAsBtn">Zapisz jako…</button>
+  </div>
+  <div class="api-bar">
+    <label>Provider</label>
+    <select id="modelSelect">
+      <option value="gemini">Gemini (Google)</option>
+      <option value="claude">Claude (Anthropic)</option>
+      <option value="openrouter">OpenRouter</option>
+    </select>
+
+    <input type="password" id="apiKeyInput" placeholder="Wklej API key..." autocomplete="off">
+
+    <!-- OpenRouter: wybór modelu -->
+    <div class="or-model-wrap" id="orModelWrap">
+      <div class="or-search-wrap" id="orSearchWrap">
+        <input type="text" id="orModelSearch" placeholder="Szukaj modelu..." autocomplete="off">
+        <div class="or-dropdown" id="orDropdown"></div>
+      </div>
+      <span class="or-selected-badge" id="orSelectedBadge" title="">brak modelu</span>
+      <button class="or-load-btn" id="orLoadBtn">Załaduj modele</button>
+    </div>
+
+    <button class="api-save-btn" id="saveApiKeyBtn">Zapisz</button>
+    <span class="api-status" id="apiStatus"></span>
+  </div>
+</header>
+
+<main>
+  <div class="sidebar">
+    <div class="step-item active" id="nav1">
+      <div class="step-num">1</div>
+      <div class="step-info">
+        <div class="step-title">Import SRT</div>
+        <div class="step-desc">Wczytaj napisy i skonfiguruj</div>
+      </div>
+    </div>
+    <div class="step-item" id="nav2">
+      <div class="step-num">2</div>
+      <div class="step-info">
+        <div class="step-title">Analiza AI</div>
+        <div class="step-desc">AI wybiera segmenty do Reelsów</div>
+      </div>
+    </div>
+    <div class="step-item" id="nav3">
+      <div class="step-num">3</div>
+      <div class="step-info">
+        <div class="step-title">Eksport EDL</div>
+        <div class="step-desc">Gotowy timeline do Premiere/DaVinci</div>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div style="padding: 12px 24px;">
+      <div style="font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;">Status projektu</div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 12px; color: var(--text3);">SRT: <span id="statusSrt" style="color: var(--text2);">brak</span></div>
+        <div style="font-size: 12px; color: var(--text3);">Segmenty: <span id="statusSegs" style="color: var(--text2);">0</span></div>
+        <div style="font-size: 12px; color: var(--text3);">Reelsy: <span id="statusReels" style="color: var(--text2);">0</span></div>
+        <div style="font-size: 12px; color: var(--text3);">EDL: <span id="statusEdl" style="color: var(--text2);">brak</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- STEP 1 -->
+    <div class="panel active" id="panel1">
+      <div class="panel-header">
+        <h2>Import pliku SRT</h2>
+        <p>Wczytaj plik z napisami. Skrypt automatycznie połączy fragmenty w pełne zdania z zachowaniem timecodes.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Plik napisów</div>
+        <div id="dropZone" class="drop-zone">
+          <input type="file" id="srtFile" accept=".srt,.vtt">
+          <div class="drop-icon">📄</div>
+          <div class="drop-label">Przeciągnij plik .srt lub .vtt</div>
+          <div class="drop-sub">Obsługiwane: SRT, WebVTT (UTF-8)</div>
+        </div>
+        <div id="fileLoaded" style="display:none" class="file-loaded">
+          <span class="file-loaded-icon">✓</span>
+          <span class="file-loaded-name" id="fileName">—</span>
+          <span class="file-loaded-meta" id="fileMeta">—</span>
+          <button class="file-clear" id="clearFileBtn">✕</button>
+        </div>
+      </div>
+
+      <!-- F1 — Whisper transcription -->
+      <div class="card">
+        <div class="card-title">Transkrypcja wideo (Whisper)</div>
+        <div class="info-box" style="margin-bottom:12px;font-size:12px;">
+          Wygeneruj SRT automatycznie z pliku wideo. Wymaga zainstalowanego <code>whisper-cli</code> (<code>brew install whisper-cpp</code>) i modelu <code>.bin</code> (np. <code>ggml-large-v3-turbo.bin</code>).
+        </div>
+        <div class="settings-grid">
+          <div class="setting-item" style="grid-column:1/-1;">
+            <label>Plik wideo</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="whisperVideoPath" placeholder="Wybierz plik wideo…" style="flex:1;" readonly>
+              <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="browseWhisperVideoBtn">Przeglądaj</button>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Model Whisper (.bin)</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="whisperModelPath" placeholder="np. /models/ggml-large-v3-turbo.bin" style="flex:1;" readonly>
+              <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" id="browseWhisperModelBtn">Plik</button>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Język transkrypcji</label>
+            <select id="whisperLanguage">
+              <option value="pl">Polski</option>
+              <option value="en">Angielski</option>
+              <option value="de">Niemiecki</option>
+              <option value="fr">Francuski</option>
+              <option value="es">Hiszpański</option>
+              <option value="auto">Auto-detekcja</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-primary" id="transcribeBtn" disabled>🎙 Transkrybuj wideo</button>
+        </div>
+        <div id="whisperProgressBox" style="display:none;margin-top:12px;">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:6px;" id="whisperProgressLabel">Inicjalizacja…</div>
+          <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+            <div id="whisperProgressFill" style="height:100%;width:0%;background:var(--accent);transition:width 0.3s;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Ustawienia projektu</div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>FPS materiału</label>
+            <select id="fpsSelect">
+              <option value="25">25 fps (PAL / Europa)</option>
+              <option value="24">24 fps (Kino)</option>
+              <option value="30">30 fps (NTSC)</option>
+              <option value="50">50 fps (Slow motion)</option>
+              <option value="60">60 fps</option>
+            </select>
+            <div class="fps-note">Musi zgadzać się z twoim materiałem wideo!</div>
+          </div>
+          <div class="setting-item">
+            <label>Nazwa pliku wideo (do EDL)</label>
+            <input type="text" id="videoFilename" placeholder="np. webinar_2024.mp4">
+          </div>
+          <div class="setting-item">
+            <label>Przerwa między reelsami (klatki)</label>
+            <input type="number" id="gapFrames" value="60" min="0" max="500">
+          </div>
+          <div class="setting-item">
+            <label>Min. długość zdania (znaki)</label>
+            <input type="number" id="minChars" value="20" min="5" max="100">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="segmentsCard" style="display:none">
+        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Segmenty zdań</span>
+          <span id="segCount" class="badge badge-purple">0 segmentów</span>
+        </div>
+        <div class="segments-preview" id="segmentsPreview"></div>
+        <div style="margin-top: 12px;" class="btn-row">
+          <button class="btn btn-secondary" id="downloadMdBtn">⬇ Pobierz .md (podgląd)</button>
+          <button class="btn btn-secondary" id="downloadJsonBtn">⬇ Pobierz segments.json</button>
+        </div>
+      </div>
+
+      <!-- F18 — Additional video sources -->
+      <div class="card" id="additionalSourcesCard" style="display:none;">
+        <div class="card-title">Dodatkowe źródła wideo</div>
+        <div id="additionalSourcesList"></div>
+      </div>
+
+      <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-primary" id="parseBtn" disabled>Analizuj SRT →</button>
+        <button class="btn btn-secondary" id="addSourceBtn">+ Dodaj kolejne źródło wideo</button>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="panel" id="panel2">
+      <div class="panel-header">
+        <h2>Analiza AI</h2>
+        <p>AI przeanalizuje segmenty i zaproponuje strukturę Reelsów zgodnie z twoim promptem.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Prompt dla AI</div>
+        <div class="info-box" style="margin-bottom: 14px;">
+          <strong>Wskazówka:</strong> Opisz jaki typ treści chcesz wycinać. Możesz podać branżę, cel marketingowy, długość reelsów. Segmenty zostaną automatycznie dołączone do prompta.
+        </div>
+        <textarea id="userPrompt" rows="6" placeholder="Np: Stwórz reelsy sprzedażowe z tego webinaru o inwestowaniu. Szukaj fragmentów z mocnymi hookam, konkretnymi liczbami i wezwaniami do działania. Każdy reel ma mieć 30-60 sekund i strukturę HOOK → BODY → CTA. Możesz zmieniać kolejność segmentów."></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="analyzeBtn">Analizuj z AI →</button>
+        <button class="btn btn-secondary" id="compareBtn">⚖ Porównaj dostawców</button>
+        <button class="btn btn-secondary" id="downloadPromptBtn">⬇ Eksportuj prompt .txt (do ręcznego użycia)</button>
+        <button class="btn btn-secondary" id="clearLlmCacheBtn" title="Usuń pamięć podręczną odpowiedzi AI">🗑 Cache AI</button>
+      </div>
+
+      <div class="progress-container" id="progressBox">
+        <div class="progress-steps">
+          <div class="p-step" id="ps1"><div class="p-dot"></div>Przygotowanie prompta</div>
+          <div class="p-step" id="ps2"><div class="p-dot"></div>Wysyłanie do AI</div>
+          <div class="p-step" id="ps3"><div class="p-dot"></div>Parsowanie odpowiedzi</div>
+        </div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+
+      <div class="card" id="reelsCard" style="display:none">
+        <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Zaproponowane Reelsy</span>
+          <span id="reelsCount" class="badge badge-green">0 reelsów</span>
+        </div>
+        <div class="reels-list" id="reelsList"></div>
+        <div style="margin-top:14px;" class="btn-row">
+          <button class="btn btn-secondary" id="editJsonBtn">✏ Edytuj JSON ręcznie</button>
+          <button class="btn btn-secondary" id="genMetaBtn">🪄 Generuj metadane</button>
+        </div>
+      </div>
+
+      <!-- F6 — metadata card -->
+      <div class="card" id="metadataCard" style="display:none">
+        <div class="card-title">Metadane reelsów</div>
+        <div id="metadataList"></div>
+      </div>
+
+      <div class="card" id="jsonEditorCard" style="display:none">
+        <div class="card-title">Edytor JSON (ręczne poprawki)</div>
+        <textarea class="json-editor" id="jsonEditor" rows="12"></textarea>
+        <div style="margin-top:10px;" class="btn-row">
+          <button class="btn btn-primary" id="applyManualJsonBtn">Zastosuj JSON →</button>
+        </div>
+      </div>
+
+      <!-- Wklejanie JSON od zewnętrznego AI -->
+      <div class="card" id="pasteJsonCard">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Wklej JSON od AI</span>
+          <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">alternatywa — bez API key</span>
+        </div>
+        <div class="info-box" style="margin-bottom:12px;font-size:12px;">
+          Pobierz prompt (.txt), wklej do ChatGPT / Gemini / Claude web, a odpowiedź JSON wklej tutaj.
+        </div>
+        <textarea class="json-editor" id="pasteJsonInput" rows="8"
+          placeholder='Wklej tutaj odpowiedź od AI, np:
+[
+  {
+    "reel_name": "Reel 1 - Hook sprzedażowy",
+    "clip_ids": [3, 7, 12, 15]
+  },
+  {
+    "reel_name": "Reel 2 - Testimonial",
+    "clip_ids": [22, 23, 8]
+  }
+]'></textarea>
+        <div style="margin-top:10px;" class="btn-row">
+          <button class="btn btn-primary" id="applyPastedJsonBtn">Zastosuj →</button>
+          <button class="btn btn-secondary" id="clearPastedJsonBtn">Wyczyść</button>
+          <span id="pasteJsonStatus" style="font-size:12px;margin-left:8px;"></span>
+        </div>
+      </div>
+
+      <div class="btn-row" id="step2Next" style="display:none">
+        <button class="btn btn-primary" id="goStep3Btn">Eksportuj →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="panel" id="panel3">
+      <div class="panel-header">
+        <h2>Eksport</h2>
+        <p>Wybierz format i pobierz gotowe pliki do Premiere Pro, DaVinci Resolve lub uruchom skrypt bezpośrednio w DaVinci.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Podsumowanie projektu</div>
+        <div class="badge-row" id="summaryBadges">
+          <span class="badge badge-purple" id="sumSegs">0 segmentów</span>
+          <span class="badge badge-green" id="sumReels">0 reelsów</span>
+          <span class="badge badge-amber" id="sumClips">0 klipów</span>
+        </div>
+      </div>
+
+      <!-- Plik wideo -->
+      <div class="card">
+        <div class="card-title">Plik wideo źródłowy</div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Nazwa pliku (do EDL/XML)</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="videoFilename2" placeholder="np. webinar.mp4" style="flex:1;">
+              <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="browseVideoBtn">Przeglądaj</button>
+            </div>
+          </div>
+          <div class="setting-item">
+            <label>Pełna ścieżka (do XML/Lua)</label>
+            <input type="text" id="videoFullPath" placeholder="np. /Users/jan/Videos/webinar.mp4 lub C:\Videos\webinar.mp4">
+            <div class="fps-note">Wymagane dla XML i skryptu DaVinci — musi być absolutna ścieżka na twoim komputerze.</div>
+          </div>
+          <div class="setting-item">
+            <label>Rozdzielczość wideo</label>
+            <select id="resolutionSelect">
+              <option value="1920x1080">1920×1080 (Full HD)</option>
+              <option value="3840x2160">3840×2160 (4K UHD)</option>
+              <option value="1280x720">1280×720 (HD)</option>
+              <option value="2560x1440">2560×1440 (2K)</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>Nazwa projektu</label>
+            <input type="text" id="projectName" placeholder="Reels 2024" value="Reels">
+          </div>
+          <div class="setting-item">
+            <label>Domyślny próg scalania (klatki)</label>
+            <input type="number" id="mergeThreshold" value="12" min="0" max="120">
+            <div class="fps-note">Globalny domyślny. Każdy reel może mieć własny próg (suwak w nagłówku reela). 0 = każde zdanie osobno.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Zakładki eksportu -->
+      <div class="export-tabs">
+        <button class="export-tab active" id="tabBtnEdl">
+          <span class="tab-icon">📋</span>
+          <span class="tab-label">EDL</span>
+          <span class="tab-sub">Premiere & DaVinci</span>
+        </button>
+        <button class="export-tab" id="tabBtnXml">
+          <span class="tab-icon">🎬</span>
+          <span class="tab-label">XML</span>
+          <span class="tab-sub">Premiere Pro (bogaty)</span>
+        </button>
+        <button class="export-tab" id="tabBtnLua">
+          <span class="tab-icon">⚡</span>
+          <span class="tab-label">Skrypt DaVinci</span>
+          <span class="tab-sub">1 klik → gotowy timeline</span>
+        </button>
+        <button class="export-tab" id="tabBtnRender">
+          <span class="tab-icon">🎞</span>
+          <span class="tab-label">Render MP4</span>
+          <span class="tab-sub">Bezpośredni render FFmpeg</span>
+        </button>
+        <button class="export-tab" id="tabBtnMeta">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">Metadane</span>
+          <span class="tab-sub">Tytuły, hashtagi, miniatury</span>
+        </button>
+      </div>
+
+      <!-- EDL tab -->
+      <div class="export-panel active" id="tabEdl">
+        <div class="info-box" style="margin-bottom:14px;">
+          <strong>EDL (CMX 3600)</strong> — Uniwersalny format. Importuj w Premiere: <em>File → Import</em> lub DaVinci: <em>File → Import Timeline → Import AAF, EDL, XML</em>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="generateEdlBtn">⚡ Generuj EDL</button>
+        </div>
+        <div class="card" id="edlCard" style="display:none;margin-top:14px;">
+          <div class="card-title">Podgląd</div>
+          <div class="edl-output" id="edlOutput"></div>
+          <div style="margin-top:14px;" class="btn-row">
+            <button class="btn btn-success" id="downloadEdlBtn">⬇ Pobierz .edl</button>
+            <button class="btn btn-secondary" id="copyEdlBtn">Kopiuj</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- XML tab -->
+      <div class="export-panel" id="tabXml">
+        <div class="info-box" style="margin-bottom:14px;">
+          <strong>XML (xmeml / FCP7)</strong> — Bogaty format z pełnymi ścieżkami do plików i nazwami klipów. Importuj w Premiere: <em>File → Import</em> lub DaVinci: <em>File → Import Timeline → Import AAF, EDL, XML</em>.<br>
+          <strong style="color:var(--amber);">Wymagana pełna ścieżka</strong> do pliku wideo powyżej.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="generateXmlBtn">⚡ Generuj XML</button>
+        </div>
+        <div class="card" id="xmlCard" style="display:none;margin-top:14px;">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Podgląd XML</span>
+            <span id="xmlSeqCount" class="badge badge-purple"></span>
+          </div>
+          <div class="edl-output" id="xmlOutput" style="color:#7dd3fc;"></div>
+          <div style="margin-top:14px;" class="btn-row">
+            <button class="btn btn-success" id="downloadXmlBtn">⬇ Pobierz .xml</button>
+            <button class="btn btn-secondary" id="copyXmlBtn">Kopiuj</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DaVinci Lua tab -->
+      <div class="export-panel" id="tabLua">
+        <div class="info-box" style="margin-bottom:16px;">
+          <strong>Skrypt Lua — DaVinci Resolve API</strong><br>
+          Skrypt tworzy <strong>jeden timeline</strong> ze wszystkimi reelsami ułożonymi jeden po drugim, z przerwą (gap) ustawioną w kroku 1.<br><br>
+          <strong>Jak uruchomić:</strong><br>
+          1. Otwórz DaVinci Resolve i projekt<br>
+          2. <em>Workspace → Console</em> (lub Ctrl+F12)<br>
+          3. Wklej skrypt → kliknij <strong>Run</strong><br>
+          4. Gotowe — timelines pojawią się w Media Pool 🎉<br><br>
+          <strong style="color:var(--amber);">Wymagana pełna ścieżka</strong> do pliku wideo powyżej.
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="generateLuaBtn">⚡ Generuj skrypt Lua</button>
+        </div>
+        <div class="card" id="luaCard" style="display:none;margin-top:14px;">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Skrypt Lua</span>
+            <span id="luaInfo" class="badge badge-green"></span>
+          </div>
+          <div class="edl-output" id="luaOutput" style="color:#a5f3a0;font-size:11px;"></div>
+          <div style="margin-top:14px;" class="btn-row">
+            <button class="btn btn-success" id="copyLuaBtn">📋 Kopiuj skrypt (wklej do DaVinci Console)</button>
+            <button class="btn btn-secondary" id="downloadLuaBtn">⬇ Pobierz .lua</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Render MP4 tab -->
+      <div class="export-panel" id="tabRender">
+        <div class="info-box" style="margin-bottom:14px;">
+          <strong>Render MP4</strong> — Bezpośredni render przez FFmpeg. Użyj pełnej ścieżki wideo powyżej jako źródła.<br>
+          Wymaga pliku wideo w polu "Pełna ścieżka" oraz katalogu wyjściowego.
+        </div>
+
+        <!-- F12/F17 — Platform & user presets -->
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">Preset platformy / renderowania</div>
+          <div class="settings-grid">
+            <div class="setting-item" style="grid-column:1/-1;">
+              <label>Wybierz preset</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="presetSelect" style="flex:1;max-width:340px;">
+                  <option value="">— wybierz preset —</option>
+                </select>
+                <button class="btn btn-primary" style="padding:6px 14px;font-size:12px;" id="applyPlatformPresetBtn">Zastosuj</button>
+                <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;display:none;" id="deleteGlobalPresetBtn" title="Usuń globalny preset">🗑</button>
+                <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;display:none;" id="deleteProjectPresetBtn" title="Usuń preset projektu">🗑</button>
+              </div>
+              <div class="fps-note">Presetów platformy zastępują ustawienia formatu, bitrate i normalizacji.</div>
+            </div>
+            <div class="setting-item">
+              <label>Zapisz jako globalny preset</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="globalPresetName" placeholder="Nazwa presetu…" style="flex:1;">
+                <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="saveGlobalPresetBtn">Zapisz</button>
+              </div>
+              <div class="fps-note">Zapisany w ustawieniach aplikacji — dostępny w każdym projekcie.</div>
+            </div>
+            <div class="setting-item">
+              <label>Zapisz jako preset projektu</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="projectPresetName" placeholder="Nazwa presetu…" style="flex:1;">
+                <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="saveProjectPresetBtn">Zapisz</button>
+              </div>
+              <div class="fps-note">Zapisany w pliku .reelproj — przenośny razem z projektem.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Basic settings -->
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">Ustawienia renderu</div>
+          <div class="settings-grid">
+            <div class="setting-item" style="grid-column:1/-1;">
+              <label>Katalog wyjściowy</label>
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="renderOutDir" placeholder="/Users/jan/Videos/output" style="flex:1;">
+                <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="browseOutDirBtn">Przeglądaj</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label>Bitrate wideo</label>
+              <input type="text" id="renderBitrate" value="8M" placeholder="np. 8M lub 15M">
+            </div>
+            <!-- F2 — encoder -->
+            <div class="setting-item" style="grid-column:1/-1;">
+              <label>Enkoder wideo</label>
+              <select id="renderCodecSelect" style="max-width:320px;">
+                <option value="auto">Auto (zalecane)</option>
+                <option value="libx264">libx264 (CPU)</option>
+                <option value="h264_videotoolbox">h264_videotoolbox (Apple Silicon / Intel Mac)</option>
+                <option value="h264_nvenc">h264_nvenc (NVIDIA)</option>
+                <option value="h264_qsv">h264_qsv (Intel Quick Sync)</option>
+              </select>
+              <div id="detectedEncoderLabel" class="fps-note"></div>
+            </div>
+            <div class="setting-item">
+              <label>Audio</label>
+              <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;padding-top:4px;">
+                <input type="checkbox" id="renderLoudnorm"> Normalizacja głośności (-14 LUFS)
+              </label>
+            </div>
+            <div class="setting-item">
+              <label>Równoległość kolejki</label>
+              <select id="renderConcurrency" style="max-width:180px;">
+                <option value="1">1 (kolejno)</option>
+                <option value="2" selected>2 (domyślnie)</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label>Napisy</label>
+              <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;padding-top:4px;">
+                <input type="checkbox" id="renderBurnSubtitles"> Wypal napisy (burn-in)
+              </label>
+            </div>
+            <!-- F4 — filler removal -->
+            <div class="setting-item">
+              <label>Wypełniacze</label>
+              <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;padding-top:4px;">
+                <input type="checkbox" id="renderRemoveFillers"> Usuń wypełniacze (yyy, eee, no, …)
+              </label>
+              <div class="fps-note" style="margin-top:4px;">Wymaga transkrypcji przez Whisper z danymi słów. Ignorowane bez danych słów.</div>
+            </div>
+            <div class="setting-item" style="grid-column:1/-1;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);">
+                <input type="checkbox" id="renderStreamCopy"> Tryb szybki (stream-copy)
+              </label>
+              <div class="fps-note" style="margin-top:6px;">Cuts mogą się przesunąć do ~2s przed/po wybranym timecode (cięcia tylko na keyframe). ~10× szybsze. Użyj do wstępnego przeglądu, NIE do finalnej wersji. Niedostępne z logo, 9:16, napisami, loudnorm.</div>
+            </div>
+            <div class="setting-item" style="grid-column:1/-1;">
+              <label>Format wyjścia</label>
+              <div style="display:flex;gap:20px;padding-top:4px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;">
+                  <input type="radio" name="renderAspect" value="source"> Źródłowy (bez zmian)
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;">
+                  <input type="radio" name="renderAspect" value="vertical_9_16"> Pionowy 9:16 (1080×1920)
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);cursor:pointer;">
+                  <input type="radio" name="renderAspect" value="both"> Oba (dwa pliki)
+                </label>
+              </div>
+              <!-- F5 — face tracking (visible only for 9:16) -->
+              <div id="faceTrackingRow" style="display:none;margin-top:10px;padding-left:4px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                  <label style="font-size:12px;color:var(--text3);text-transform:none;letter-spacing:0;white-space:nowrap;">Śledzenie twarzy:</label>
+                  <select id="renderFaceTrackingMode" style="max-width:240px;font-size:12px;">
+                    <option value="center">Środek kadru (domyślnie)</option>
+                    <option value="auto">Automatyczne (analiza gradientu)</option>
+                  </select>
+                </div>
+                <div id="faceTrackingProgress" style="display:none;margin-top:8px;">
+                  <div style="font-size:11px;color:var(--text2);">Analizuję kadry wideo…</div>
+                  <div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:4px;max-width:300px;">
+                    <div style="height:100%;width:60%;background:var(--accent2);animation:indeterminate 1.4s infinite linear;"></div>
+                  </div>
+                </div>
+                <div class="fps-note" style="margin-top:4px;">Tryb auto analizuje gradient krawędzi w niskiej rozdzielczości (320×180 @ 2fps). Wynik jest cachowany.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logo card -->
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title" style="margin-bottom:0;">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-family:var(--display);font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:1px;">
+              <input type="checkbox" id="renderLogoEnable"> Logo PNG
+            </label>
+          </div>
+          <div id="renderLogoSection" style="display:none;margin-top:16px;">
+            <div class="settings-grid">
+              <div class="setting-item" style="grid-column:1/-1;">
+                <label>Plik logo (PNG z przezroczystością)</label>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="text" id="renderLogoPath" placeholder="Wybierz plik PNG…" style="flex:1;" readonly>
+                  <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="browseLogoBtn">Przeglądaj</button>
+                </div>
+              </div>
+              <div class="setting-item">
+                <label>Pozycja</label>
+                <div style="display:inline-grid;grid-template-columns:1fr 1fr;gap:4px;width:88px;margin-top:4px;">
+                  <button class="logo-pos-btn btn btn-secondary" data-pos="tl" title="Lewy górny" style="padding:6px;font-size:16px;">↖</button>
+                  <button class="logo-pos-btn btn btn-secondary" data-pos="tr" title="Prawy górny" style="padding:6px;font-size:16px;">↗</button>
+                  <button class="logo-pos-btn btn btn-secondary" data-pos="bl" title="Lewy dolny" style="padding:6px;font-size:16px;">↙</button>
+                  <button class="logo-pos-btn btn btn-secondary" data-pos="br" title="Prawy dolny" style="padding:6px;font-size:16px;">↘</button>
+                </div>
+              </div>
+              <div class="setting-item">
+                <label>Krycie: <span id="renderLogoOpacityVal">100</span>%</label>
+                <input type="range" id="renderLogoOpacity" min="0" max="100" value="100">
+                <label style="margin-top:10px;">Szerokość: <span id="renderLogoWidthVal">15</span>% kadru</label>
+                <input type="range" id="renderLogoWidth" min="5" max="40" value="15">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Intro / Outro card -->
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title">Intro / Outro</div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <label>Intro (pre-roll)</label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="renderIntroPath" placeholder="Brak" style="flex:1;" readonly>
+                <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" id="browseIntroBtn">Wybierz</button>
+                <button class="btn btn-secondary" style="padding:6px 8px;font-size:12px;color:var(--text3);" id="clearIntroBtn" title="Usuń">✕</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label>Outro (post-roll)</label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="renderOutroPath" placeholder="Brak" style="flex:1;" readonly>
+                <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" id="browseOutroBtn">Wybierz</button>
+                <button class="btn btn-secondary" style="padding:6px 8px;font-size:12px;color:var(--text3);" id="clearOutroBtn" title="Usuń">✕</button>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:10px;">Intro i outro są dodawane do każdego reela. Jeśli kodeki są niezgodne nastąpi automatyczne re-enkodowanie.</div>
+        </div>
+
+        <div class="btn-row" style="margin-bottom:14px;">
+          <button class="btn btn-primary" id="renderAllBtn">🎞 Renderuj wszystkie</button>
+          <button class="btn btn-secondary" id="renderPreviewBtn">🔍 Preview (480p)</button>
+        </div>
+        <div id="renderQueuePanel" style="display:none;" class="card">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Kolejka renderowania</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" id="cancelAllBtn">Anuluj wszystko</button>
+              <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" id="clearDoneBtn">Wyczyść zakończone</button>
+            </div>
+          </div>
+          <div id="renderQueueRows"></div>
+        </div>
+      </div>
+
+      <!-- F6 — Metadane tab panel -->
+      <div class="export-panel" id="tabMeta">
+        <div class="info-box" style="margin-bottom:14px;">
+          <strong>Metadane reelsów</strong> — Tytuły, hooki, opisy i hashtagi wygenerowane przez AI w Kroku 2. Można też wyodrębnić miniatury z wyrenderowanych plików MP4.
+        </div>
+        <div id="metadataTabList"></div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn btn-success" id="downloadMetadataBtn" disabled>⬇ Eksportuj metadane .json</button>
+          <button class="btn btn-secondary" id="extractThumbsBtn" disabled>📸 Wytnij miniatury z MP4</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;">
+          Miniatury wymagają wyrenderowanych plików MP4 w kolejce (zakładka Render MP4) i ustawionego katalogu wyjściowego.
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</main>
+
+<script type="module" src="./main.js"></script>
+
+<!-- FN2 — Preview video panel (fixed, shown when user interacts with a timeline) -->
+<div id="previewPanel" style="display:none;">
+  <video id="previewVideo" preload="metadata" playsinline></video>
+</div>
+
+<!-- F13 — Resume interrupted renders banner -->
+<div id="resumeBanner" style="display:none;">
+  <span>⏸ Poprzednie renderowanie przerwane — <strong><span id="resumeCount">?</span> zadań</strong> oczekuje.</span>
+  <button class="btn btn-primary" id="resumeYesBtn" style="padding:5px 14px;font-size:12px;">Wznów</button>
+  <button class="btn btn-secondary" id="resumeNoBtn" style="padding:5px 12px;font-size:12px;">Usuń</button>
+</div>
+
+<!-- F8 — Compare two AI runs modal -->
+<div id="compareModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span style="font-family:var(--display);font-weight:700;font-size:15px;">Porównaj dwóch dostawców AI</span>
+      <button class="btn btn-secondary" id="compareModalClose" style="padding:4px 10px;">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <!-- Provider A -->
+        <div class="card" style="padding:14px;">
+          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">Dostawca A</div>
+          <div class="setting-item" style="margin-bottom:8px;">
+            <select id="compareProviderA">
+              <option value="gemini">Gemini (Google)</option>
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+          </div>
+          <div class="setting-item" style="margin-bottom:8px;">
+            <input type="password" id="compareKeyA" placeholder="API key A…" autocomplete="off">
+          </div>
+          <div class="setting-item" id="compareModelRowA" style="display:none;">
+            <input type="text" id="compareModelA" placeholder="Model (np. mistralai/mistral-7b-instruct)">
+          </div>
+        </div>
+        <!-- Provider B -->
+        <div class="card" style="padding:14px;">
+          <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;">Dostawca B</div>
+          <div class="setting-item" style="margin-bottom:8px;">
+            <select id="compareProviderB">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="gemini">Gemini (Google)</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+          </div>
+          <div class="setting-item" style="margin-bottom:8px;">
+            <input type="password" id="compareKeyB" placeholder="API key B…" autocomplete="off">
+          </div>
+          <div class="setting-item" id="compareModelRowB" style="display:none;">
+            <input type="text" id="compareModelB" placeholder="Model (np. mistralai/mistral-7b-instruct)">
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-primary" id="compareRunBtn">⚡ Uruchom porównanie</button>
+      </div>
+
+      <div id="compareLog" style="display:none;font-size:12px;font-family:var(--mono);color:var(--text2);background:var(--surface2);border-radius:6px;padding:10px;margin-bottom:12px;max-height:100px;overflow-y:auto;"></div>
+
+      <div id="compareDiff" style="display:none;margin-bottom:14px;"></div>
+
+      <div id="compareActions" style="display:none;gap:10px;">
+        <button class="btn btn-primary" id="compareUseA">✓ Użyj A</button>
+        <button class="btn btn-primary" id="compareUseB">✓ Użyj B</button>
+        <button class="btn btn-secondary" id="compareMerge">⊕ Scal oba</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
