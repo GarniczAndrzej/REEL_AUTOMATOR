@@ -4,8 +4,17 @@ import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
 import { framesToTC } from '../parser/srt.js';
 import { isFiller } from '../render/fillers.js';
-import { loadWaveform, drawWaveform, cachedPeaks, invalidateWaveform } from '../render/waveform.js';
-import { drawTimeline, frameFromX, reelSourceSpan } from '../render/timeline.js';
+import {
+  loadWaveform,
+  drawWaveform,
+  cachedPeaks,
+  invalidateWaveform,
+} from '../render/waveform.js';
+import {
+  drawTimeline,
+  frameFromX,
+  reelSourceSpan,
+} from '../render/timeline.js';
 
 // ── Undo / redo (F16 — covers reelsData, sentences, renderConfig) ──────
 
@@ -14,10 +23,13 @@ const redoStack = [];
 
 export function snap() {
   return {
-    reelsData: state.reelsData.map(r => ({ ...r, clip_ids: [...r.clip_ids] })),
-    sentences: state.sentences.map(s => ({ ...s })),
+    reelsData: state.reelsData.map((r) => ({
+      ...r,
+      clip_ids: [...r.clip_ids],
+    })),
+    sentences: state.sentences.map((s) => ({ ...s })),
     renderConfig: JSON.parse(JSON.stringify(state.renderConfig)),
-    reelsMetadata: (state.reelsMetadata || []).map(m => m ? { ...m } : m),
+    reelsMetadata: (state.reelsMetadata || []).map((m) => (m ? { ...m } : m)),
   };
 }
 
@@ -60,7 +72,7 @@ export function redo() {
 // ── Timeline / preview state ────────────────────────────────────────
 
 const playheadState = new Map(); // reelIdx → current playhead frame (source)
-let activeReelIdx = null;        // reel that owns the preview video
+let activeReelIdx = null; // reel that owns the preview video
 let previewVideoEl = null;
 let isDraggingTimeline = false;
 let cachedAssetUrl = '';
@@ -75,8 +87,12 @@ let focusedClip = null; // { reelIdx, clipIdx, sentenceId }
 
 function setFocusedClip(reelIdx, clipIdx, sentenceId) {
   focusedClip = { reelIdx, clipIdx, sentenceId };
-  document.querySelectorAll('.clip-row.focused').forEach(el => el.classList.remove('focused'));
-  const row = document.querySelector(`.clip-row[data-reel-idx="${reelIdx}"][data-clip-idx="${clipIdx}"]`);
+  document
+    .querySelectorAll('.clip-row.focused')
+    .forEach((el) => el.classList.remove('focused'));
+  const row = document.querySelector(
+    `.clip-row[data-reel-idx="${reelIdx}"][data-clip-idx="${clipIdx}"]`,
+  );
   if (row) row.classList.add('focused');
 }
 
@@ -119,8 +135,8 @@ function mergeWithNext(reelIdx, clipIdx) {
   const id1 = reel.clip_ids[clipIdx];
   const id2 = reel.clip_ids[clipIdx + 1];
   if (id1 == null || id2 == null) return;
-  const s1 = state.sentences.find(x => x.id === id1);
-  const s2 = state.sentences.find(x => x.id === id2);
+  const s1 = state.sentences.find((x) => x.id === id1);
+  const s2 = state.sentences.find((x) => x.id === id2);
   if (!s1 || !s2) return;
   const before = snap();
   s1.text = s1.text + ' ' + s2.text;
@@ -136,7 +152,7 @@ function mergeWithNext(reelIdx, clipIdx) {
 
 function applyTrim(sentenceId, side, newFrame) {
   invalidateWaveform(sentenceId);
-  const s = state.sentences.find(x => x.id === sentenceId);
+  const s = state.sentences.find((x) => x.id === sentenceId);
   if (!s) return;
   const fps = state.fps;
   if (side === 'start') {
@@ -159,7 +175,7 @@ function frameToDisplayTime(frame, fps) {
   const m = Math.floor((secs % 3600) / 60);
   const s = Math.floor(secs % 60);
   const ms = Math.round((secs % 1) * 1000);
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
 }
 
 function showPreviewPanel() {
@@ -203,7 +219,9 @@ function seekToFrame(ri, frame) {
   activeReelIdx = ri;
 
   // Redraw this reel's timeline
-  const canvas = document.querySelector(`.reel-timeline[data-reel-idx="${ri}"]`);
+  const canvas = document.querySelector(
+    `.reel-timeline[data-reel-idx="${ri}"]`,
+  );
   if (canvas) drawTimeline(canvas, reel, state.sentences, state.fps, frame);
 
   // Update tc display
@@ -212,7 +230,9 @@ function seekToFrame(ri, frame) {
 
   // Seek video (readyState ≥ 1 means metadata loaded)
   if (previewVideoEl && previewVideoEl.readyState >= 1) {
-    try { previewVideoEl.currentTime = frame / state.fps; } catch {}
+    try {
+      previewVideoEl.currentTime = frame / state.fps;
+    } catch {}
   }
 
   showPreviewPanel();
@@ -222,29 +242,40 @@ function updateGapColors(ri) {
   const reel = state.reelsData[ri];
   if (!reel) return;
   const threshold = reel.mergeThreshold ?? state.mergeThreshold;
-  document.querySelectorAll(`.clip-gap[data-reel-idx="${ri}"]`).forEach(gap => {
-    const gapFrames = +gap.dataset.gapFrames;
-    const willMerge = gapFrames <= threshold;
-    gap.classList.toggle('will-merge', willMerge);
-    gap.classList.toggle('separate', !willMerge);
-    const label = gap.querySelector('.clip-gap-label');
-    if (label) {
-      label.textContent = gapFrames <= 0
-        ? '0 kl. — scalony'
-        : (willMerge ? `${gapFrames} kl. — będzie scalony` : `${gapFrames} kl. — osobny span`);
-    }
-  });
+  document
+    .querySelectorAll(`.clip-gap[data-reel-idx="${ri}"]`)
+    .forEach((gap) => {
+      const gapFrames = +gap.dataset.gapFrames;
+      const willMerge = gapFrames <= threshold;
+      gap.classList.toggle('will-merge', willMerge);
+      gap.classList.toggle('separate', !willMerge);
+      const label = gap.querySelector('.clip-gap-label');
+      if (label) {
+        label.textContent =
+          gapFrames <= 0
+            ? '0 kl. — scalony'
+            : willMerge
+              ? `${gapFrames} kl. — będzie scalony`
+              : `${gapFrames} kl. — osobny span`;
+      }
+    });
 }
 
 function drawAllTimelines() {
   const list = document.getElementById('reelsList');
-  list.querySelectorAll('.reel-timeline[data-reel-idx]').forEach(canvas => {
+  list.querySelectorAll('.reel-timeline[data-reel-idx]').forEach((canvas) => {
     const ri = +canvas.dataset.reelIdx;
     const reel = state.reelsData[ri];
     if (!reel || !reel.clip_ids.length) return;
     const w = canvas.clientWidth;
     if (w > 0 && canvas.width !== w) canvas.width = w;
-    drawTimeline(canvas, reel, state.sentences, state.fps, playheadState.get(ri));
+    drawTimeline(
+      canvas,
+      reel,
+      state.sentences,
+      state.fps,
+      playheadState.get(ri),
+    );
   });
 }
 
@@ -259,34 +290,45 @@ function initPreviewVideo() {
     const frame = Math.round(previewVideoEl.currentTime * state.fps);
     playheadState.set(activeReelIdx, frame);
 
-    const canvas = document.querySelector(`.reel-timeline[data-reel-idx="${activeReelIdx}"]`);
+    const canvas = document.querySelector(
+      `.reel-timeline[data-reel-idx="${activeReelIdx}"]`,
+    );
     const reel = state.reelsData[activeReelIdx];
-    if (canvas && reel) drawTimeline(canvas, reel, state.sentences, state.fps, frame);
+    if (canvas && reel)
+      drawTimeline(canvas, reel, state.sentences, state.fps, frame);
 
-    const tc = document.querySelector(`.tl-tc[data-reel-idx="${activeReelIdx}"]`);
+    const tc = document.querySelector(
+      `.tl-tc[data-reel-idx="${activeReelIdx}"]`,
+    );
     if (tc) tc.textContent = frameToDisplayTime(frame, state.fps);
   });
 
   previewVideoEl.addEventListener('pause', () => {
     if (activeReelIdx === null) return;
-    const btn = document.querySelector(`.tl-play-btn[data-reel-idx="${activeReelIdx}"]`);
+    const btn = document.querySelector(
+      `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
+    );
     if (btn) btn.textContent = '▶';
   });
 
   previewVideoEl.addEventListener('ended', () => {
     if (activeReelIdx === null) return;
-    const btn = document.querySelector(`.tl-play-btn[data-reel-idx="${activeReelIdx}"]`);
+    const btn = document.querySelector(
+      `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
+    );
     if (btn) btn.textContent = '▶';
   });
 
   previewVideoEl.addEventListener('play', () => {
     if (activeReelIdx === null) return;
-    const btn = document.querySelector(`.tl-play-btn[data-reel-idx="${activeReelIdx}"]`);
+    const btn = document.querySelector(
+      `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
+    );
     if (btn) btn.textContent = '⏸';
   });
 
   // Hide panel when leaving step 2
-  document.addEventListener('reel:goStep', e => {
+  document.addEventListener('reel:goStep', (e) => {
     if (e.detail !== 2) hidePreviewPanel();
   });
 
@@ -301,30 +343,49 @@ export function init() {
   console.log('[step2.init] start');
   const promptEl = document.getElementById('userPrompt');
   promptEl.value = state.userPrompt;
-  promptEl.addEventListener('input', e => { state.userPrompt = e.target.value; emit(); });
-
-  document.getElementById('analyzeBtn').addEventListener('click', runAIAnalysis);
-  document.getElementById('clearLlmCacheBtn').addEventListener('click', async () => {
-    await clearLlmCache();
-    alert('Cache AI wyczyszczony.');
+  promptEl.addEventListener('input', (e) => {
+    state.userPrompt = e.target.value;
+    emit();
   });
-  document.getElementById('downloadPromptBtn').addEventListener('click', downloadPromptTXT);
-  document.getElementById('editJsonBtn').addEventListener('click', editReelsJSON);
-  document.getElementById('applyManualJsonBtn').addEventListener('click', applyManualJSON);
-  document.getElementById('applyPastedJsonBtn').addEventListener('click', applyPastedJSON);
-  document.getElementById('clearPastedJsonBtn').addEventListener('click', clearPastedJSON);
+
+  document
+    .getElementById('analyzeBtn')
+    .addEventListener('click', runAIAnalysis);
+  document
+    .getElementById('clearLlmCacheBtn')
+    .addEventListener('click', async () => {
+      await clearLlmCache();
+      alert('Cache AI wyczyszczony.');
+    });
+  document
+    .getElementById('downloadPromptBtn')
+    .addEventListener('click', downloadPromptTXT);
+  document
+    .getElementById('editJsonBtn')
+    .addEventListener('click', editReelsJSON);
+  document
+    .getElementById('applyManualJsonBtn')
+    .addEventListener('click', applyManualJSON);
+  document
+    .getElementById('applyPastedJsonBtn')
+    .addEventListener('click', applyPastedJSON);
+  document
+    .getElementById('clearPastedJsonBtn')
+    .addEventListener('click', clearPastedJSON);
   document.getElementById('goStep3Btn').addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('reel:goStep', { detail: 3 }));
   });
 
-  document.getElementById('genMetaBtn').addEventListener('click', generateMetadata);
+  document
+    .getElementById('genMetaBtn')
+    .addEventListener('click', generateMetadata);
 
   initPreviewVideo();
 
   const list = document.getElementById('reelsList');
 
   // ── Reel header toggle (delegated) ───────────────────────────────
-  list.addEventListener('click', e => {
+  list.addEventListener('click', (e) => {
     if (e.target.closest('.clip-del-btn')) return;
     if (e.target.closest('.reel-threshold-wrap')) return;
     const h = e.target.closest('[data-toggle-reel]');
@@ -334,21 +395,21 @@ export function init() {
   });
 
   // ── Delete clip (delegated) ──────────────────────────────────────
-  list.addEventListener('click', e => {
+  list.addEventListener('click', (e) => {
     const btn = e.target.closest('.clip-del-btn');
     if (!btn) return;
     removeClip(+btn.dataset.reelIdx, +btn.dataset.clipIdx);
   });
 
   // ── Merge with next (delegated) ──────────────────────────────────
-  list.addEventListener('click', e => {
+  list.addEventListener('click', (e) => {
     const btn = e.target.closest('.clip-merge-btn');
     if (!btn) return;
     mergeWithNext(+btn.dataset.reelIdx, +btn.dataset.clipIdx);
   });
 
   // ── Per-reel threshold slider ─────────────────────────────────────
-  list.addEventListener('input', e => {
+  list.addEventListener('input', (e) => {
     const slider = e.target.closest('.reel-threshold');
     if (!slider) return;
     const ri = +slider.dataset.reelIdx;
@@ -360,7 +421,7 @@ export function init() {
   });
 
   // ── Drag-to-reorder ──────────────────────────────────────────────
-  list.addEventListener('dragstart', e => {
+  list.addEventListener('dragstart', (e) => {
     const row = e.target.closest('.clip-row');
     if (!row) return;
     dragSrc = { reelIdx: +row.dataset.reelIdx, clipIdx: +row.dataset.clipIdx };
@@ -370,18 +431,28 @@ export function init() {
   });
 
   list.addEventListener('dragend', () => {
-    list.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
-    list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    list.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    list
+      .querySelectorAll('.dragging')
+      .forEach((el) => el.classList.remove('dragging'));
+    list
+      .querySelectorAll('.drag-over')
+      .forEach((el) => el.classList.remove('drag-over'));
+    list
+      .querySelectorAll('.drop-target')
+      .forEach((el) => el.classList.remove('drop-target'));
     dragSrc = null;
   });
 
-  list.addEventListener('dragover', e => {
+  list.addEventListener('dragover', (e) => {
     if (!dragSrc) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    list.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    list
+      .querySelectorAll('.drag-over')
+      .forEach((el) => el.classList.remove('drag-over'));
+    list
+      .querySelectorAll('.drop-target')
+      .forEach((el) => el.classList.remove('drop-target'));
     const row = e.target.closest('.clip-row');
     if (row && !row.classList.contains('dragging')) {
       row.classList.add('drag-over');
@@ -391,13 +462,17 @@ export function init() {
     }
   });
 
-  list.addEventListener('dragleave', e => {
+  list.addEventListener('dragleave', (e) => {
     if (e.relatedTarget && list.contains(e.relatedTarget)) return;
-    list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-    list.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    list
+      .querySelectorAll('.drag-over')
+      .forEach((el) => el.classList.remove('drag-over'));
+    list
+      .querySelectorAll('.drop-target')
+      .forEach((el) => el.classList.remove('drop-target'));
   });
 
-  list.addEventListener('drop', e => {
+  list.addEventListener('drop', (e) => {
     e.preventDefault();
     if (!dragSrc) return;
     const row = e.target.closest('.clip-row:not(.dragging)');
@@ -406,26 +481,37 @@ export function init() {
       const dstReel = +row.dataset.reelIdx;
       const dstIdx = +row.dataset.clipIdx;
       const rect = row.getBoundingClientRect();
-      const before = e.clientY < rect.top + rect.height / 2 ? dstIdx : dstIdx + 1;
+      const before =
+        e.clientY < rect.top + rect.height / 2 ? dstIdx : dstIdx + 1;
       moveClip(dragSrc.reelIdx, dragSrc.clipIdx, dstReel, before);
     } else if (clips) {
       const dstReel = +clips.dataset.reelIdx;
-      moveClip(dragSrc.reelIdx, dragSrc.clipIdx, dstReel, state.reelsData[dstReel].clip_ids.length);
+      moveClip(
+        dragSrc.reelIdx,
+        dragSrc.clipIdx,
+        dstReel,
+        state.reelsData[dstReel].clip_ids.length,
+      );
     }
     dragSrc = null;
   });
 
   // ── Trim handles ─────────────────────────────────────────────────
-  list.addEventListener('pointerdown', e => {
+  list.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.trim-handle');
     if (!handle) return;
     e.preventDefault();
     const sentenceId = +handle.dataset.sentenceId;
     const side = handle.dataset.side;
-    const s = state.sentences.find(x => x.id === sentenceId);
+    const s = state.sentences.find((x) => x.id === sentenceId);
     if (!s) return;
     if (!trimWarnShown) {
-      if (!confirm('Trymowanie zmienia segmenty SRT — działanie nieodwracalne.\nCmd-Z cofa zmianę. Kontynuować?')) return;
+      if (
+        !confirm(
+          'Trymowanie zmienia segmenty SRT — działanie nieodwracalne.\nCmd-Z cofa zmianę. Kontynuować?',
+        )
+      )
+        return;
       trimWarnShown = true;
     }
     handle.setPointerCapture(e.pointerId);
@@ -439,32 +525,44 @@ export function init() {
     };
   });
 
-  list.addEventListener('pointermove', e => {
+  list.addEventListener('pointermove', (e) => {
     if (!trimState) return;
-    const s = state.sentences.find(x => x.id === trimState.sentenceId);
+    const s = state.sentences.find((x) => x.id === trimState.sentenceId);
     if (!s) return;
     const fps = state.fps;
-    const deltaFrames = Math.round((e.clientX - trimState.startX) * fps / 100);
+    const deltaFrames = Math.round(
+      ((e.clientX - trimState.startX) * fps) / 100,
+    );
     let newFrame = trimState.origFrame + deltaFrames;
-    let trimStartFrac = 0, trimEndFrac = 1;
+    let trimStartFrac = 0,
+      trimEndFrac = 1;
     if (trimState.side === 'start') {
       newFrame = Math.max(0, Math.min(newFrame, s.end_frame - 1));
       trimState.currentFrame = newFrame;
-      const row = list.querySelector(`.clip-row[data-sentence-id="${trimState.sentenceId}"]`);
-      if (row) row.querySelector('.clip-tc').textContent =
-        `#${s.id} ${framesToTC(newFrame, fps)}→${s.end_tc}`;
-      trimStartFrac = (newFrame - s.start_frame) / Math.max(1, s.duration_frame);
+      const row = list.querySelector(
+        `.clip-row[data-sentence-id="${trimState.sentenceId}"]`,
+      );
+      if (row)
+        row.querySelector('.clip-tc').textContent =
+          `#${s.id} ${framesToTC(newFrame, fps)}→${s.end_tc}`;
+      trimStartFrac =
+        (newFrame - s.start_frame) / Math.max(1, s.duration_frame);
     } else {
       newFrame = Math.max(s.start_frame + 1, newFrame);
       trimState.currentFrame = newFrame;
-      const row = list.querySelector(`.clip-row[data-sentence-id="${trimState.sentenceId}"]`);
-      if (row) row.querySelector('.clip-tc').textContent =
-        `#${s.id} ${s.start_tc}→${framesToTC(newFrame, fps)}`;
+      const row = list.querySelector(
+        `.clip-row[data-sentence-id="${trimState.sentenceId}"]`,
+      );
+      if (row)
+        row.querySelector('.clip-tc').textContent =
+          `#${s.id} ${s.start_tc}→${framesToTC(newFrame, fps)}`;
       trimEndFrac = (newFrame - s.start_frame) / Math.max(1, s.duration_frame);
     }
     const peaks = cachedPeaks(trimState.sentenceId);
     if (peaks) {
-      const canvas = list.querySelector(`.clip-waveform[data-sentence-id="${trimState.sentenceId}"]`);
+      const canvas = list.querySelector(
+        `.clip-waveform[data-sentence-id="${trimState.sentenceId}"]`,
+      );
       if (canvas) drawWaveform(canvas, peaks, trimStartFrac, trimEndFrac);
     }
   });
@@ -478,33 +576,42 @@ export function init() {
     trimState = null;
   });
 
-  list.addEventListener('pointercancel', () => { trimState = null; isDraggingTimeline = false; });
+  list.addEventListener('pointercancel', () => {
+    trimState = null;
+    isDraggingTimeline = false;
+  });
 
   // ── Timeline scrubbing ───────────────────────────────────────────
-  list.addEventListener('pointerdown', e => {
+  list.addEventListener('pointerdown', (e) => {
     const canvas = e.target.closest('.reel-timeline');
     if (!canvas) return;
     e.preventDefault();
     const ri = +canvas.dataset.reelIdx;
     canvas.setPointerCapture(e.pointerId);
     isDraggingTimeline = true;
-    seekToFrame(ri, frameFromX(canvas, state.reelsData[ri], state.sentences, e.clientX));
+    seekToFrame(
+      ri,
+      frameFromX(canvas, state.reelsData[ri], state.sentences, e.clientX),
+    );
   });
 
-  list.addEventListener('pointermove', e => {
+  list.addEventListener('pointermove', (e) => {
     if (!isDraggingTimeline) return;
     const canvas = e.target.closest('.reel-timeline');
     if (!canvas) return;
     const ri = +canvas.dataset.reelIdx;
-    seekToFrame(ri, frameFromX(canvas, state.reelsData[ri], state.sentences, e.clientX));
+    seekToFrame(
+      ri,
+      frameFromX(canvas, state.reelsData[ri], state.sentences, e.clientX),
+    );
   });
 
-  list.addEventListener('pointerup', e => {
+  list.addEventListener('pointerup', (e) => {
     if (isDraggingTimeline) isDraggingTimeline = false;
   });
 
   // ── Timeline play/pause button ───────────────────────────────────
-  list.addEventListener('click', e => {
+  list.addEventListener('click', (e) => {
     const btn = e.target.closest('.tl-play-btn');
     if (!btn || !previewVideoEl) return;
     const ri = +btn.dataset.reelIdx;
@@ -517,7 +624,9 @@ export function init() {
       const ph = playheadState.get(ri) ?? minFrame;
       activeReelIdx = ri;
       if (previewVideoEl.readyState >= 1) {
-        try { previewVideoEl.currentTime = ph / state.fps; } catch {}
+        try {
+          previewVideoEl.currentTime = ph / state.fps;
+        } catch {}
       }
       showPreviewPanel();
     }
@@ -530,17 +639,30 @@ export function init() {
   });
 
   // ── Clip row click → set focus (F14) ─────────────────────────────
-  list.addEventListener('click', e => {
-    if (e.target.closest('.clip-del-btn, .clip-merge-btn, .trim-handle, .clip-grip')) return;
+  list.addEventListener('click', (e) => {
+    if (
+      e.target.closest(
+        '.clip-del-btn, .clip-merge-btn, .trim-handle, .clip-grip',
+      )
+    )
+      return;
     const row = e.target.closest('.clip-row');
     if (!row) return;
-    setFocusedClip(+row.dataset.reelIdx, +row.dataset.clipIdx, +row.dataset.sentenceId);
+    setFocusedClip(
+      +row.dataset.reelIdx,
+      +row.dataset.clipIdx,
+      +row.dataset.sentenceId,
+    );
   });
 
   // ── F14 — NLE keyboard shortcuts (no modifier) ────────────────────
-  document.addEventListener('keydown', e => {
+  document.addEventListener('keydown', (e) => {
     if (!document.getElementById('panel2').classList.contains('active')) return;
-    if (e.target.matches('input, textarea, select') || e.target.closest('[contenteditable]')) return;
+    if (
+      e.target.matches('input, textarea, select') ||
+      e.target.closest('[contenteditable]')
+    )
+      return;
 
     switch (e.key) {
       case ' ':
@@ -600,7 +722,10 @@ export function init() {
       case 'J':
         if (previewVideoEl) {
           previewVideoEl.pause();
-          previewVideoEl.currentTime = Math.max(0, previewVideoEl.currentTime - 5 / state.fps);
+          previewVideoEl.currentTime = Math.max(
+            0,
+            previewVideoEl.currentTime - 5 / state.fps,
+          );
         }
         break;
       case 'k':
@@ -614,14 +739,30 @@ export function init() {
     }
   });
 
-  document.getElementById('compareBtn').addEventListener('click', openCompareModal);
-  document.getElementById('compareModalClose').addEventListener('click', closeCompareModal);
-  document.getElementById('compareRunBtn').addEventListener('click', runComparison);
-  document.getElementById('compareUseA').addEventListener('click', () => applyCompareResult('A'));
-  document.getElementById('compareUseB').addEventListener('click', () => applyCompareResult('B'));
-  document.getElementById('compareMerge').addEventListener('click', () => applyCompareResult('merge'));
-  document.getElementById('compareProviderA').addEventListener('change', syncCompareModelRow);
-  document.getElementById('compareProviderB').addEventListener('change', syncCompareModelRow);
+  document
+    .getElementById('compareBtn')
+    .addEventListener('click', openCompareModal);
+  document
+    .getElementById('compareModalClose')
+    .addEventListener('click', closeCompareModal);
+  document
+    .getElementById('compareRunBtn')
+    .addEventListener('click', runComparison);
+  document
+    .getElementById('compareUseA')
+    .addEventListener('click', () => applyCompareResult('A'));
+  document
+    .getElementById('compareUseB')
+    .addEventListener('click', () => applyCompareResult('B'));
+  document
+    .getElementById('compareMerge')
+    .addEventListener('click', () => applyCompareResult('merge'));
+  document
+    .getElementById('compareProviderA')
+    .addEventListener('change', syncCompareModelRow);
+  document
+    .getElementById('compareProviderB')
+    .addEventListener('change', syncCompareModelRow);
   syncCompareModelRow();
   console.log('[step2.init] done');
 }
@@ -632,20 +773,24 @@ export function renderReels() {
   const fps = state.fps;
   const list = document.getElementById('reelsList');
 
-  list.innerHTML = state.reelsData.map((r, ri) => {
-    const totalDur = r.clip_ids.reduce((acc, id) => {
-      const s = state.sentences.find(x => x.id === id);
-      return acc + (s ? s.duration_frame / fps : 0);
-    }, 0).toFixed(1);
+  list.innerHTML = state.reelsData
+    .map((r, ri) => {
+      const totalDur = r.clip_ids
+        .reduce((acc, id) => {
+          const s = state.sentences.find((x) => x.id === id);
+          return acc + (s ? s.duration_frame / fps : 0);
+        }, 0)
+        .toFixed(1);
 
-    const threshold = r.mergeThreshold ?? state.mergeThreshold;
+      const threshold = r.mergeThreshold ?? state.mergeThreshold;
 
-    const clipsHtml = r.clip_ids.length
-      ? r.clip_ids.map((id, ci) => {
-          const s = state.sentences.find(x => x.id === id);
-          if (!s) return '';
-          const dur = (s.duration_frame / fps).toFixed(2);
-          const clipHtml = `<div class="clip-row" draggable="true"
+      const clipsHtml = r.clip_ids.length
+        ? r.clip_ids
+            .map((id, ci) => {
+              const s = state.sentences.find((x) => x.id === id);
+              if (!s) return '';
+              const dur = (s.duration_frame / fps).toFixed(2);
+              const clipHtml = `<div class="clip-row" draggable="true"
   data-reel-idx="${ri}" data-clip-idx="${ci}" data-sentence-id="${id}">
   <div class="clip-grip" title="Przeciągnij aby zmienić kolejność">⠿</div>
   <div class="trim-handle trim-start" data-sentence-id="${id}" data-side="start" title="Przytnij lewy koniec — przeciągnij">◀</div>
@@ -659,35 +804,47 @@ export function renderReels() {
   <button class="clip-del-btn" data-reel-idx="${ri}" data-clip-idx="${ci}" title="Usuń z reela">✕</button>
 </div>`;
 
-          if (ci < r.clip_ids.length - 1) {
-            const nextS = state.sentences.find(x => x.id === r.clip_ids[ci + 1]);
-            if (nextS) {
-              const gapFrames = nextS.start_frame - s.end_frame;
-              const willMerge = gapFrames <= threshold;
-              const gapClass = willMerge ? 'will-merge' : 'separate';
-              const gapText = gapFrames <= 0
-                ? '0 kl. — scalony'
-                : (willMerge ? `${gapFrames} kl. — będzie scalony` : `${gapFrames} kl. — osobny span`);
-              const mergeBtn = gapFrames > 0
-                ? `<button class="clip-merge-btn" data-reel-idx="${ri}" data-clip-idx="${ci}" title="Scal z następnym">⊕</button>`
-                : '';
-              return clipHtml + `\n<div class="clip-gap ${gapClass}" data-reel-idx="${ri}" data-clip-idx="${ci}" data-gap-frames="${gapFrames}"><span class="clip-gap-icon">⬡</span> <span class="clip-gap-label">${gapText}</span>${mergeBtn}</div>`;
-            }
-          }
-          return clipHtml;
-        }).join('')
-      : '<div class="clip-empty">Upuść klipy tutaj</div>';
+              if (ci < r.clip_ids.length - 1) {
+                const nextS = state.sentences.find(
+                  (x) => x.id === r.clip_ids[ci + 1],
+                );
+                if (nextS) {
+                  const gapFrames = nextS.start_frame - s.end_frame;
+                  const willMerge = gapFrames <= threshold;
+                  const gapClass = willMerge ? 'will-merge' : 'separate';
+                  const gapText =
+                    gapFrames <= 0
+                      ? '0 kl. — scalony'
+                      : willMerge
+                        ? `${gapFrames} kl. — będzie scalony`
+                        : `${gapFrames} kl. — osobny span`;
+                  const mergeBtn =
+                    gapFrames > 0
+                      ? `<button class="clip-merge-btn" data-reel-idx="${ri}" data-clip-idx="${ci}" title="Scal z następnym">⊕</button>`
+                      : '';
+                  return (
+                    clipHtml +
+                    `\n<div class="clip-gap ${gapClass}" data-reel-idx="${ri}" data-clip-idx="${ci}" data-gap-frames="${gapFrames}"><span class="clip-gap-icon">⬡</span> <span class="clip-gap-label">${gapText}</span>${mergeBtn}</div>`
+                  );
+                }
+              }
+              return clipHtml;
+            })
+            .join('')
+        : '<div class="clip-empty">Upuść klipy tutaj</div>';
 
-    const timelineHtml = r.clip_ids.length ? `
+      const timelineHtml = r.clip_ids.length
+        ? `
   <div class="reel-timeline-wrap" data-reel-idx="${ri}">
     <div class="reel-preview-bar">
       <button class="tl-play-btn" data-reel-idx="${ri}" title="Odtwórz / Pauza">▶</button>
       <span class="tl-tc" data-reel-idx="${ri}">--:--:--.---</span>
     </div>
     <canvas class="reel-timeline" data-reel-idx="${ri}" height="40"></canvas>
-  </div>` : '';
+  </div>`
+        : '';
 
-    return `<div class="reel-card" data-reel-idx="${ri}">
+      return `<div class="reel-card" data-reel-idx="${ri}">
   <div class="reel-header expanded" data-toggle-reel>
     <span class="reel-badge">REEL ${ri + 1}</span>
     <span class="reel-name">${esc(r.reel_name)}</span>
@@ -696,9 +853,11 @@ export function renderReels() {
   </div>
   <div class="reel-clips open" data-reel-idx="${ri}">${clipsHtml}</div>${timelineHtml}
 </div>`;
-  }).join('');
+    })
+    .join('');
 
-  document.getElementById('reelsCount').textContent = state.reelsData.length + ' reelsów';
+  document.getElementById('reelsCount').textContent =
+    state.reelsData.length + ' reelsów';
   scheduleWaveformLoad();
   requestAnimationFrame(() => drawAllTimelines());
 }
@@ -707,28 +866,40 @@ function scheduleWaveformLoad() {
   if (!state.videoPath) return;
   const fps = state.fps;
   const list = document.getElementById('reelsList');
-  list.querySelectorAll('.clip-waveform[data-sentence-id]').forEach(canvas => {
-    const sid = +canvas.dataset.sentenceId;
-    const s = state.sentences.find(x => x.id === sid);
-    if (!s) return;
-    const peaks = cachedPeaks(sid);
-    if (peaks) {
-      drawWaveform(canvas, peaks, 0, 1);
-      return;
-    }
-    loadWaveform(sid, state.videoPath, s.start_frame / fps, s.end_frame / fps, 400).then(p => {
-      if (!p) return;
-      // Canvas may have been replaced by another renderReels call; re-query by sentenceId
-      const el = list.querySelector(`.clip-waveform[data-sentence-id="${sid}"]`);
-      if (el) drawWaveform(el, p, 0, 1);
+  list
+    .querySelectorAll('.clip-waveform[data-sentence-id]')
+    .forEach((canvas) => {
+      const sid = +canvas.dataset.sentenceId;
+      const s = state.sentences.find((x) => x.id === sid);
+      if (!s) return;
+      const peaks = cachedPeaks(sid);
+      if (peaks) {
+        drawWaveform(canvas, peaks, 0, 1);
+        return;
+      }
+      loadWaveform(
+        sid,
+        state.videoPath,
+        s.start_frame / fps,
+        s.end_frame / fps,
+        400,
+      ).then((p) => {
+        if (!p) return;
+        // Canvas may have been replaced by another renderReels call; re-query by sentenceId
+        const el = list.querySelector(
+          `.clip-waveform[data-sentence-id="${sid}"]`,
+        );
+        if (el) drawWaveform(el, p, 0, 1);
+      });
     });
-  });
 }
 
 function esc(str) {
   return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // Render clip text with filler words struck-through in red (F4)
@@ -741,7 +912,10 @@ function renderClipText(s) {
   let html = '';
   let chars = 0;
   for (const w of s.words) {
-    if (chars >= MAX) { html += '…'; break; }
+    if (chars >= MAX) {
+      html += '…';
+      break;
+    }
     const t = w.text.trim();
     if (!t) continue;
     const safe = esc(t);
@@ -756,12 +930,22 @@ function renderClipText(s) {
 // ── AI analysis ────────────────────────────────────────────────────
 
 async function runAIAnalysis() {
-  const apiKey = document.getElementById('apiKeyInput').value.trim() ||
-    localStorage.getItem('edl_apikey_' + state.currentProvider) || '';
-  if (!apiKey) { alert('Wklej API key w nagłówku!'); return; }
-  if (!state.sentences.length) { alert('Najpierw przeanalizuj plik SRT (Krok 1)!'); return; }
+  const apiKey =
+    document.getElementById('apiKeyInput').value.trim() ||
+    localStorage.getItem('edl_apikey_' + state.currentProvider) ||
+    '';
+  if (!apiKey) {
+    alert('Wklej API key w nagłówku!');
+    return;
+  }
+  if (!state.sentences.length) {
+    alert('Najpierw przeanalizuj plik SRT (Krok 1)!');
+    return;
+  }
   if (state.currentProvider === 'openrouter' && !state.orSelectedModel) {
-    alert('Wybierz model OpenRouter! Kliknij "Załaduj modele" obok pola API key.');
+    alert(
+      'Wybierz model OpenRouter! Kliknij "Załaduj modele" obok pola API key.',
+    );
     return;
   }
 
@@ -770,22 +954,46 @@ async function runAIAnalysis() {
 
   const progressBox = document.getElementById('progressBox');
   progressBox.classList.add('visible');
-  setPS(1, 'running'); setPS(2, ''); setPS(3, '');
+  setPS(1, 'running');
+  setPS(2, '');
+  setPS(3, '');
   logClear();
   document.getElementById('reelsCard').style.display = 'none';
   document.getElementById('step2Next').style.display = 'none';
 
-  const prompt = buildPrompt(state.userPrompt, state.sentences, state.sources?.length ? state.sources : null, state.videoFilename || '');
+  const prompt = buildPrompt(
+    state.userPrompt,
+    state.sentences,
+    state.sources?.length ? state.sources : null,
+    state.videoFilename || '',
+  );
   log('Przygotowano prompt. Segmentów: ' + state.sentences.length, 'info');
-  log('Provider: ' + state.currentProvider + (state.currentProvider === 'openrouter' ? ' / ' + state.orSelectedModel : ''), 'info');
-  setPS(1, 'done'); setPS(2, 'running');
+  log(
+    'Provider: ' +
+      state.currentProvider +
+      (state.currentProvider === 'openrouter'
+        ? ' / ' + state.orSelectedModel
+        : ''),
+    'info',
+  );
+  setPS(1, 'done');
+  setPS(2, 'running');
 
   try {
     const orModel = state.orSelectedModel;
-    if (state.currentProvider === 'openrouter') log('Model: ' + orModel, 'info');
+    if (state.currentProvider === 'openrouter')
+      log('Model: ' + orModel, 'info');
 
-    const cacheKey = JSON.stringify({ provider: state.currentProvider, model: orModel || '', prompt });
-    const { result: responseText, fromCache, hashShort } = await withLlmCache(cacheKey, () => {
+    const cacheKey = JSON.stringify({
+      provider: state.currentProvider,
+      model: orModel || '',
+      prompt,
+    });
+    const {
+      result: responseText,
+      fromCache,
+      hashShort,
+    } = await withLlmCache(cacheKey, () => {
       if (state.currentProvider === 'gemini') return callGemini(apiKey, prompt);
       if (state.currentProvider === 'claude') return callClaude(apiKey, prompt);
       return callOpenRouter(apiKey, prompt, orModel);
@@ -794,9 +1002,13 @@ async function runAIAnalysis() {
     if (fromCache) {
       log(`Odpowiedź z pamięci podręcznej (hash: ${hashShort}) ⚡`, 'ok');
     } else {
-      log('Odpowiedź AI otrzymana (' + responseText.length + ' znaków)', 'info');
+      log(
+        'Odpowiedź AI otrzymana (' + responseText.length + ' znaków)',
+        'info',
+      );
     }
-    setPS(2, 'done'); setPS(3, 'running');
+    setPS(2, 'done');
+    setPS(3, 'running');
 
     const cleaned = responseText.replace(/```json|```/g, '').trim();
     pushUndo(snap());
@@ -809,7 +1021,8 @@ async function runAIAnalysis() {
     document.getElementById('step2Next').style.display = 'flex';
     emit();
   } catch (e) {
-    setPS(2, 'err'); setPS(3, 'err');
+    setPS(2, 'err');
+    setPS(3, 'err');
     log('BŁĄD: ' + e.message, 'err');
     log('Sprawdź API key i połączenie internetowe.', 'err');
   } finally {
@@ -820,7 +1033,11 @@ async function runAIAnalysis() {
 function editReelsJSON() {
   const card = document.getElementById('jsonEditorCard');
   card.style.display = card.style.display === 'none' ? 'block' : 'none';
-  document.getElementById('jsonEditor').value = JSON.stringify(state.reelsData, null, 2);
+  document.getElementById('jsonEditor').value = JSON.stringify(
+    state.reelsData,
+    null,
+    2,
+  );
 }
 
 function applyManualJSON() {
@@ -844,7 +1061,11 @@ function applyManualJSON() {
 function applyPastedJSON() {
   const raw = document.getElementById('pasteJsonInput').value.trim();
   const status = document.getElementById('pasteJsonStatus');
-  if (!raw) { status.style.color = 'var(--red)'; status.textContent = 'Pole jest puste.'; return; }
+  if (!raw) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Pole jest puste.';
+    return;
+  }
   try {
     const cleaned = raw.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
@@ -876,12 +1097,21 @@ function clearPastedJSON() {
 // ── F6 Metadata generation ─────────────────────────────────────────
 
 async function generateMetadata() {
-  if (!state.reelsData.length) { alert('Najpierw wygeneruj reelsy (Krok 2)!'); return; }
-  const apiKey = document.getElementById('apiKeyInput').value.trim() ||
-    localStorage.getItem('edl_apikey_' + state.currentProvider) || '';
-  if (!apiKey) { alert('Wklej API key w nagłówku!'); return; }
+  if (!state.reelsData.length) {
+    alert('Najpierw wygeneruj reelsy (Krok 2)!');
+    return;
+  }
+  const apiKey =
+    document.getElementById('apiKeyInput').value.trim() ||
+    localStorage.getItem('edl_apikey_' + state.currentProvider) ||
+    '';
+  if (!apiKey) {
+    alert('Wklej API key w nagłówku!');
+    return;
+  }
   if (state.currentProvider === 'openrouter' && !state.orSelectedModel) {
-    alert('Wybierz model OpenRouter!'); return;
+    alert('Wybierz model OpenRouter!');
+    return;
   }
 
   const btn = document.getElementById('genMetaBtn');
@@ -892,7 +1122,11 @@ async function generateMetadata() {
 
   for (const [ri, reel] of state.reelsData.entries()) {
     const prompt = buildMetadataPrompt(reel, state.sentences);
-    const placeholder = { reelIdx: ri, reelName: reel.reel_name, loading: true };
+    const placeholder = {
+      reelIdx: ri,
+      reelName: reel.reel_name,
+      loading: true,
+    };
     state.reelsMetadata[ri] = placeholder;
     renderMetadataList();
 
@@ -903,13 +1137,25 @@ async function generateMetadata() {
       } else if (state.currentProvider === 'claude') {
         responseText = await callClaude(apiKey, prompt);
       } else {
-        responseText = await callOpenRouter(apiKey, prompt, state.orSelectedModel);
+        responseText = await callOpenRouter(
+          apiKey,
+          prompt,
+          state.orSelectedModel,
+        );
       }
       const cleaned = responseText.replace(/```json|```/g, '').trim();
       const meta = JSON.parse(cleaned);
-      state.reelsMetadata[ri] = { reelIdx: ri, reelName: reel.reel_name, ...meta };
+      state.reelsMetadata[ri] = {
+        reelIdx: ri,
+        reelName: reel.reel_name,
+        ...meta,
+      };
     } catch (e) {
-      state.reelsMetadata[ri] = { reelIdx: ri, reelName: reel.reel_name, error: e.message };
+      state.reelsMetadata[ri] = {
+        reelIdx: ri,
+        reelName: reel.reel_name,
+        error: e.message,
+      };
     }
     renderMetadataList();
   }
@@ -929,21 +1175,30 @@ export function renderMetadataList() {
 
 function buildMetadataHTML() {
   if (!state.reelsMetadata.length) return '';
-  return state.reelsMetadata.map((m, i) => {
-    if (!m) return '';
-    if (m.loading) return `<div style="padding:12px;color:var(--text3);font-size:12px;">Reel ${i+1}: ładowanie…</div>`;
-    if (m.error) return `<div style="padding:12px;color:var(--red);font-size:12px;">Reel ${i+1} — Błąd: ${esc(m.error)}</div>`;
-    const tags = (m.hashtags || []).map(h => `<span style="background:var(--surface2);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--accent2);">${esc(h)}</span>`).join(' ');
-    return `<div class="card" style="margin-bottom:12px;padding:14px;">
-  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Reel ${i+1}: ${esc(m.reel_name)}</div>
+  return state.reelsMetadata
+    .map((m, i) => {
+      if (!m) return '';
+      if (m.loading)
+        return `<div style="padding:12px;color:var(--text3);font-size:12px;">Reel ${i + 1}: ładowanie…</div>`;
+      if (m.error)
+        return `<div style="padding:12px;color:var(--red);font-size:12px;">Reel ${i + 1} — Błąd: ${esc(m.error)}</div>`;
+      const tags = (m.hashtags || [])
+        .map(
+          (h) =>
+            `<span style="background:var(--surface2);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--accent2);">${esc(h)}</span>`,
+        )
+        .join(' ');
+      return `<div class="card" style="margin-bottom:12px;padding:14px;">
+  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Reel ${i + 1}: ${esc(m.reel_name)}</div>
   <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">${esc(m.title || '—')}</div>
   <div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:8px;">${esc(m.hook || '')}</div>
   <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">${esc(m.description || '')}</div>
   <div style="display:flex;flex-wrap:wrap;gap:4px;">${tags}</div>
   ${m.thumbnailTimestamp != null ? `<div style="font-size:11px;color:var(--text3);margin-top:8px;">📸 Miniatura: ${m.thumbnailTimestamp}s</div>` : ''}
 </div>`;
-  }).join('');
-}  // end buildMetadataHTML
+    })
+    .join('');
+} // end buildMetadataHTML
 
 // ── F8 — Compare two AI runs ───────────────────────────────────────
 
@@ -964,34 +1219,58 @@ function closeCompareModal() {
 }
 
 function syncCompareModelRow() {
-  ['A', 'B'].forEach(side => {
+  ['A', 'B'].forEach((side) => {
     const sel = document.getElementById('compareProvider' + side);
     const row = document.getElementById('compareModelRow' + side);
-    if (row) row.style.display = sel && sel.value === 'openrouter' ? '' : 'none';
+    if (row)
+      row.style.display = sel && sel.value === 'openrouter' ? '' : 'none';
   });
 }
 
 async function runComparison() {
-  if (!state.sentences.length) { alert('Najpierw załaduj SRT (Krok 1)!'); return; }
-  const prompt = buildPrompt(state.userPrompt, state.sentences, state.sources?.length ? state.sources : null, state.videoFilename || '');
+  if (!state.sentences.length) {
+    alert('Najpierw załaduj SRT (Krok 1)!');
+    return;
+  }
+  const prompt = buildPrompt(
+    state.userPrompt,
+    state.sentences,
+    state.sources?.length ? state.sources : null,
+    state.videoFilename || '',
+  );
 
-  const getConfig = side => ({
+  const getConfig = (side) => ({
     provider: document.getElementById('compareProvider' + side).value,
-    key: document.getElementById('compareKey' + side).value.trim() || localStorage.getItem('edl_apikey_' + document.getElementById('compareProvider' + side).value) || '',
+    key:
+      document.getElementById('compareKey' + side).value.trim() ||
+      localStorage.getItem(
+        'edl_apikey_' + document.getElementById('compareProvider' + side).value,
+      ) ||
+      '',
     model: document.getElementById('compareModel' + side)?.value.trim() || '',
   });
 
   const cfgA = getConfig('A');
   const cfgB = getConfig('B');
-  if (!cfgA.key) { alert('Brak API key dla dostawcy A!'); return; }
-  if (!cfgB.key) { alert('Brak API key dla dostawcy B!'); return; }
+  if (!cfgA.key) {
+    alert('Brak API key dla dostawcy A!');
+    return;
+  }
+  if (!cfgB.key) {
+    alert('Brak API key dla dostawcy B!');
+    return;
+  }
 
   const logEl = document.getElementById('compareLog');
   logEl.style.display = 'block';
   logEl.innerHTML = '<div>Uruchamiam oba dostawców równolegle…</div>';
 
   const callProvider = async (cfg) => {
-    const cacheKey = JSON.stringify({ provider: cfg.provider, model: cfg.model, prompt });
+    const cacheKey = JSON.stringify({
+      provider: cfg.provider,
+      model: cfg.model,
+      prompt,
+    });
     const { result } = await withLlmCache(cacheKey, () => {
       if (cfg.provider === 'gemini') return callGemini(cfg.key, prompt);
       if (cfg.provider === 'claude') return callClaude(cfg.key, prompt);
@@ -1003,10 +1282,15 @@ async function runComparison() {
   document.getElementById('compareRunBtn').disabled = true;
   try {
     [compareResultA, compareResultB] = await Promise.all([
-      callProvider(cfgA).catch(e => { throw new Error('A: ' + e.message); }),
-      callProvider(cfgB).catch(e => { throw new Error('B: ' + e.message); }),
+      callProvider(cfgA).catch((e) => {
+        throw new Error('A: ' + e.message);
+      }),
+      callProvider(cfgB).catch((e) => {
+        throw new Error('B: ' + e.message);
+      }),
     ]);
-    logEl.innerHTML += '<div style="color:var(--green)">✓ Oba dostawcy odpowiedzieli.</div>';
+    logEl.innerHTML +=
+      '<div style="color:var(--green)">✓ Oba dostawcy odpowiedzieli.</div>';
     renderCompareDiff(compareResultA, compareResultB);
   } catch (e) {
     logEl.innerHTML += `<div style="color:var(--red)">Błąd: ${esc(e.message)}</div>`;
@@ -1016,29 +1300,34 @@ async function runComparison() {
 }
 
 function renderCompareDiff(runA, runB) {
-  const idsA = new Set(runA.flatMap(r => r.clip_ids));
-  const idsB = new Set(runB.flatMap(r => r.clip_ids));
+  const idsA = new Set(runA.flatMap((r) => r.clip_ids));
+  const idsB = new Set(runB.flatMap((r) => r.clip_ids));
   const all = [...new Set([...idsA, ...idsB])].sort((a, b) => a - b);
 
-  const rows = all.map(id => {
-    const s = state.sentences.find(x => x.id === id);
-    const txt = s ? esc(s.text.substring(0, 60)) + (s.text.length > 60 ? '…' : '') : `id=${id}`;
-    const inA = idsA.has(id), inB = idsB.has(id);
-    const col = inA && inB ? 'both' : inA ? 'a-only' : 'b-only';
-    return `<tr class="diff-row diff-${col}">
+  const rows = all
+    .map((id) => {
+      const s = state.sentences.find((x) => x.id === id);
+      const txt = s
+        ? esc(s.text.substring(0, 60)) + (s.text.length > 60 ? '…' : '')
+        : `id=${id}`;
+      const inA = idsA.has(id),
+        inB = idsB.has(id);
+      const col = inA && inB ? 'both' : inA ? 'a-only' : 'b-only';
+      return `<tr class="diff-row diff-${col}">
       <td style="padding:4px 8px;font-size:11px;color:var(--text2);">${id}</td>
       <td style="padding:4px 8px;font-size:11px;">${txt}</td>
       <td style="padding:4px 8px;text-align:center;">${inA ? '✓' : ''}</td>
       <td style="padding:4px 8px;text-align:center;">${inB ? '✓' : ''}</td>
     </tr>`;
-  }).join('');
+    })
+    .join('');
 
   const diffEl = document.getElementById('compareDiff');
   diffEl.style.display = 'block';
   diffEl.innerHTML = `
 <div style="margin-bottom:8px;font-size:12px;color:var(--text2);">
   Dostawca A: ${runA.length} reelsów | Dostawca B: ${runB.length} reelsów<br>
-  Tylko A: ${[...idsA].filter(id => !idsB.has(id)).length} kl. | Tylko B: ${[...idsB].filter(id => !idsA.has(id)).length} kl. | Wspólne: ${[...idsA].filter(id => idsB.has(id)).length} kl.
+  Tylko A: ${[...idsA].filter((id) => !idsB.has(id)).length} kl. | Tylko B: ${[...idsB].filter((id) => !idsA.has(id)).length} kl. | Wspólne: ${[...idsA].filter((id) => idsB.has(id)).length} kl.
 </div>
 <div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;">
 <table style="width:100%;border-collapse:collapse;">
@@ -1084,8 +1373,16 @@ function applyCompareResult(which) {
 }
 
 function downloadPromptTXT() {
-  if (!state.sentences.length) { alert('Najpierw przeanalizuj SRT (Krok 1)!'); return; }
-  const content = buildPrompt(state.userPrompt, state.sentences, state.sources?.length ? state.sources : null, state.videoFilename || '');
+  if (!state.sentences.length) {
+    alert('Najpierw przeanalizuj SRT (Krok 1)!');
+    return;
+  }
+  const content = buildPrompt(
+    state.userPrompt,
+    state.sentences,
+    state.sources?.length ? state.sources : null,
+    state.videoFilename || '',
+  );
   const url = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
   const a = document.createElement('a');
   a.href = url;
@@ -1098,7 +1395,9 @@ function setPS(n, s) {
   const el = document.getElementById('ps' + n);
   el.className = 'p-step' + (s ? ' ' + s : '');
 }
-function logClear() { document.getElementById('logBox').innerHTML = ''; }
+function logClear() {
+  document.getElementById('logBox').innerHTML = '';
+}
 function log(msg, type = '') {
   const box = document.getElementById('logBox');
   const d = document.createElement('div');

@@ -40,24 +40,29 @@ Zasady:
   renderConfig: defaultRenderConfig(),
 
   // Phase 4 F2
-  detectedHwEncoder: null,    // null until detect_hw_encoder resolves
+  detectedHwEncoder: null, // null until detect_hw_encoder resolves
 
   // Phase 4 F1
   whisperModelPath: '',
   whisperLanguage: 'pl',
   // Phase 4 F5
-  _faceKfsCache: null,   // raw keyframes from last detect_face_keyframes call
+  _faceKfsCache: null, // raw keyframes from last detect_face_keyframes call
 
   // Phase 4 F6
-  reelsMetadata: [],    // [{reelIdx, reelName, title, hook, description, hashtags, thumbnailTimestamp}]
+  reelsMetadata: [], // [{reelIdx, reelName, title, hook, description, hashtags, thumbnailTimestamp}]
 
   // F17 — per-project named render presets
-  namedPresets: {},     // { [name]: RenderConfig }
+  namedPresets: {}, // { [name]: RenderConfig }
 
   // F18 — additional video sources (source 0 = state.videoPath / state.srtContent)
-  sources: [],          // [{videoFilename, videoPath, srtName, srtContent}] for sources index 1+
+  sources: [], // [{videoFilename, videoPath, srtName, srtContent}] for sources index 1+
 };
 
 const listeners = new Set();
-export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
-export function emit() { listeners.forEach(fn => fn(state)); }
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+export function emit() {
+  listeners.forEach((fn) => fn(state));
+}

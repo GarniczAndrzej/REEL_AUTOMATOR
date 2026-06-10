@@ -1,7 +1,8 @@
 function reelSourceSpan(reel, sentences) {
-  let minFrame = Infinity, maxFrame = -Infinity;
+  let minFrame = Infinity,
+    maxFrame = -Infinity;
   for (const id of reel.clip_ids) {
-    const s = sentences.find(x => x.id === id);
+    const s = sentences.find((x) => x.id === id);
     if (!s) continue;
     if (s.start_frame < minFrame) minFrame = s.start_frame;
     if (s.end_frame > maxFrame) maxFrame = s.end_frame;
@@ -30,20 +31,20 @@ export function drawTimeline(canvas, reel, sentences, fps, playheadFrame) {
 
   // Clip blocks sorted by start_frame
   const clips = reel.clip_ids
-    .map(id => sentences.find(s => s.id === id))
+    .map((id) => sentences.find((s) => s.id === id))
     .filter(Boolean)
     .sort((a, b) => a.start_frame - b.start_frame);
 
   for (const s of clips) {
-    const x1 = (s.start_frame - minFrame) / totalSpan * w;
-    const x2 = (s.end_frame - minFrame) / totalSpan * w;
+    const x1 = ((s.start_frame - minFrame) / totalSpan) * w;
+    const x2 = ((s.end_frame - minFrame) / totalSpan) * w;
     ctx.fillStyle = 'rgba(124,109,250,0.75)';
     ctx.fillRect(x1, 2, Math.max(2, x2 - x1), h - 4);
   }
 
   // Playhead — 2px white vertical line
   if (playheadFrame !== undefined) {
-    const px = (playheadFrame - minFrame) / totalSpan * w;
+    const px = ((playheadFrame - minFrame) / totalSpan) * w;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(px - 1, 0, 2, h);
   }

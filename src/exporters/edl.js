@@ -5,14 +5,25 @@ function _isDropFrame(fps) {
   return Math.abs(fps - 29.97) < 0.02 || Math.abs(fps - 59.94) < 0.02;
 }
 
-export function generateEDL({ reelsData, sentences, fps, gapFrames, videoFilename, mergeThreshold }) {
+export function generateEDL({
+  reelsData,
+  sentences,
+  fps,
+  gapFrames,
+  videoFilename,
+  mergeThreshold,
+}) {
   const fcm = _isDropFrame(fps) ? 'DROP FRAME' : 'NON-DROP FRAME';
   let out = `TITLE: REELS_EDL_AUTOMATOR\nFCM: ${fcm}\n\n`;
   let cursor = 3600 * fps;
   let eventNum = 1;
 
   for (const [reelIdx, reel] of reelsData.entries()) {
-    const spans = mergeAdjacentClips(reel.clip_ids, sentences, reel.mergeThreshold ?? mergeThreshold);
+    const spans = mergeAdjacentClips(
+      reel.clip_ids,
+      sentences,
+      reel.mergeThreshold ?? mergeThreshold,
+    );
     out += `* ============================================\n`;
     out += `* REEL: ${reel.reel_name}\n`;
     out += `* ============================================\n`;

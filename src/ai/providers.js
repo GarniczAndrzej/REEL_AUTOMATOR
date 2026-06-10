@@ -31,7 +31,8 @@ export async function callClaude(apiKey, prompt) {
       model: CLAUDE_MODEL,
       max_tokens: 16384,
       messages: [{ role: 'user', content: prompt }],
-      system: 'Jesteś ekspertem od montażu wideo. Zwracasz TYLKO czysty JSON bez komentarzy ani markdown.',
+      system:
+        'Jesteś ekspertem od montażu wideo. Zwracasz TYLKO czysty JSON bez komentarzy ani markdown.',
     }),
   });
   if (!resp.ok) {
@@ -48,7 +49,7 @@ export async function callOpenRouter(apiKey, prompt, orModel) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey,
+      Authorization: 'Bearer ' + apiKey,
       'HTTP-Referer': window.location.href,
       'X-Title': 'Reels EDL Automator',
     },
@@ -57,14 +58,20 @@ export async function callOpenRouter(apiKey, prompt, orModel) {
       max_tokens: 16384,
       temperature: 0.3,
       messages: [
-        { role: 'system', content: 'Jesteś ekspertem od montażu wideo. Zwracasz TYLKO czysty JSON bez komentarzy ani markdown.' },
+        {
+          role: 'system',
+          content:
+            'Jesteś ekspertem od montażu wideo. Zwracasz TYLKO czysty JSON bez komentarzy ani markdown.',
+        },
         { role: 'user', content: prompt },
       ],
     }),
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || 'OpenRouter API error ' + resp.status);
+    throw new Error(
+      err.error?.message || 'OpenRouter API error ' + resp.status,
+    );
   }
   const data = await resp.json();
   if (data.error) throw new Error(data.error.message || 'OpenRouter error');

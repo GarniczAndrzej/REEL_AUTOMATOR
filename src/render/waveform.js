@@ -9,7 +9,13 @@ export function cachedPeaks(sentenceId) {
   return cache.get(sentenceId) ?? null;
 }
 
-export async function loadWaveform(sentenceId, videoPath, startS, endS, numSamples) {
+export async function loadWaveform(
+  sentenceId,
+  videoPath,
+  startS,
+  endS,
+  numSamples,
+) {
   if (cache.has(sentenceId)) return cache.get(sentenceId);
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -30,7 +36,12 @@ export async function loadWaveform(sentenceId, videoPath, startS, endS, numSampl
 // Draw waveform bars on canvas.
 // trimStartFrac / trimEndFrac (0–1): region inside the trim shows as accent colour;
 // outside (trimmed-off) shows as dimmed grey.
-export function drawWaveform(canvas, peaks, trimStartFrac = 0, trimEndFrac = 1) {
+export function drawWaveform(
+  canvas,
+  peaks,
+  trimStartFrac = 0,
+  trimEndFrac = 1,
+) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
@@ -43,7 +54,9 @@ export function drawWaveform(canvas, peaks, trimStartFrac = 0, trimEndFrac = 1) 
     const barH = Math.max(1, amplitude * h * 0.9);
     const frac = i / w;
     const inTrim = frac >= trimStartFrac && frac < trimEndFrac;
-    ctx.fillStyle = inTrim ? 'rgba(138,124,255,0.85)' : 'rgba(120,120,150,0.30)';
+    ctx.fillStyle = inTrim
+      ? 'rgba(138,124,255,0.85)'
+      : 'rgba(120,120,150,0.30)';
     ctx.fillRect(i, midY - barH / 2, 1, barH);
   }
 }

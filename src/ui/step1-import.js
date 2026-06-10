@@ -7,62 +7,90 @@ export function init() {
 
   srtFileInput.addEventListener('change', () => {
     const f = srtFileInput.files[0];
-    if (f && (f.name.toLowerCase().endsWith('.srt') || f.name.toLowerCase().endsWith('.vtt'))) loadSRTFile(f);
+    if (
+      f &&
+      (f.name.toLowerCase().endsWith('.srt') ||
+        f.name.toLowerCase().endsWith('.vtt'))
+    )
+      loadSRTFile(f);
   });
   document.getElementById('clearFileBtn').addEventListener('click', clearFile);
   document.getElementById('parseBtn').addEventListener('click', doParseBtn);
-  document.getElementById('downloadMdBtn').addEventListener('click', downloadMD);
-  document.getElementById('downloadJsonBtn').addEventListener('click', downloadJSON);
+  document
+    .getElementById('downloadMdBtn')
+    .addEventListener('click', downloadMD);
+  document
+    .getElementById('downloadJsonBtn')
+    .addEventListener('click', downloadJSON);
 
   // F1 — Whisper transcription
-  document.getElementById('browseWhisperVideoBtn').addEventListener('click', browseWhisperVideo);
-  document.getElementById('browseWhisperModelBtn').addEventListener('click', browseWhisperModel);
-  document.getElementById('whisperLanguage').addEventListener('change', e => {
+  document
+    .getElementById('browseWhisperVideoBtn')
+    .addEventListener('click', browseWhisperVideo);
+  document
+    .getElementById('browseWhisperModelBtn')
+    .addEventListener('click', browseWhisperModel);
+  document.getElementById('whisperLanguage').addEventListener('change', (e) => {
     state.whisperLanguage = e.target.value;
   });
-  document.getElementById('whisperModelPath').addEventListener('input', e => {
+  document.getElementById('whisperModelPath').addEventListener('input', (e) => {
     state.whisperModelPath = e.target.value;
     syncTranscribeBtn();
   });
-  document.getElementById('transcribeBtn').addEventListener('click', transcribeWithWhisper);
+  document
+    .getElementById('transcribeBtn')
+    .addEventListener('click', transcribeWithWhisper);
 
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop', e => {
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () =>
+    dropZone.classList.remove('drag-over'),
+  );
+  dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
-    if (file && (file.name.endsWith('.srt') || file.name.endsWith('.vtt'))) loadSRTFile(file);
+    if (file && (file.name.endsWith('.srt') || file.name.endsWith('.vtt')))
+      loadSRTFile(file);
   });
 
-  document.getElementById('fpsSelect').addEventListener('change', e => {
+  document.getElementById('fpsSelect').addEventListener('change', (e) => {
     state.fps = +e.target.value;
     if (state.sentences.length) {
       const noteEl = document.getElementById('fpsNote');
       if (noteEl) {
-        noteEl.textContent = '⚠ FPS zmieniony — kliknij „Analizuj SRT →" aby odświeżyć timekody.';
+        noteEl.textContent =
+          '⚠ FPS zmieniony — kliknij „Analizuj SRT →" aby odświeżyć timekody.';
         noteEl.style.color = 'var(--amber)';
       }
     }
     emit();
   });
-  document.getElementById('videoFilename').addEventListener('input', e => {
+  document.getElementById('videoFilename').addEventListener('input', (e) => {
     state.videoFilename = e.target.value;
     emit();
   });
-  document.getElementById('gapFrames').addEventListener('input', e => {
+  document.getElementById('gapFrames').addEventListener('input', (e) => {
     state.gapFrames = +e.target.value;
     emit();
   });
-  document.getElementById('minChars').addEventListener('input', e => {
+  document.getElementById('minChars').addEventListener('input', (e) => {
     state.minChars = +e.target.value;
     emit();
   });
 
   // Project save/load
-  document.getElementById('openProjectBtn').addEventListener('click', openProject);
-  document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
-  document.getElementById('saveProjectAsBtn').addEventListener('click', saveProjectAs);
+  document
+    .getElementById('openProjectBtn')
+    .addEventListener('click', openProject);
+  document
+    .getElementById('saveProjectBtn')
+    .addEventListener('click', saveProject);
+  document
+    .getElementById('saveProjectAsBtn')
+    .addEventListener('click', saveProjectAs);
 
   // F18 — multi-source
   document.getElementById('addSourceBtn').addEventListener('click', addSource);
@@ -71,7 +99,7 @@ export function init() {
 function loadSRTFile(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = (e) => {
     state.srtContent = e.target.result;
     state.srtName = file.name;
     state._srtIsVtt = file.name.toLowerCase().endsWith('.vtt');
@@ -83,7 +111,8 @@ function loadSRTFile(file) {
     document.getElementById('dropZone').style.display = 'none';
     document.getElementById('fileLoaded').style.display = 'flex';
     document.getElementById('fileName').textContent = file.name;
-    document.getElementById('fileMeta').textContent = (file.size / 1024).toFixed(1) + ' KB';
+    document.getElementById('fileMeta').textContent =
+      (file.size / 1024).toFixed(1) + ' KB';
     document.getElementById('parseBtn').disabled = false;
     document.getElementById('statusSrt').textContent = file.name;
     // Reset FPS note in case it was showing a stale warning
@@ -108,12 +137,17 @@ function clearFile() {
   document.getElementById('srtFile').value = '';
   document.getElementById('statusSrt').textContent = 'brak';
   const noteEl = document.getElementById('fpsNote');
-  if (noteEl) { noteEl.textContent = 'Musi zgadzać się z twoim materiałem wideo!'; noteEl.style.color = ''; }
+  if (noteEl) {
+    noteEl.textContent = 'Musi zgadzać się z twoim materiałem wideo!';
+    noteEl.style.color = '';
+  }
   emit();
 }
 
 function _parseSubtitle(content, isVtt, fps, minChars) {
-  return isVtt ? parseVTT(content, fps, minChars) : parseSRT(content, fps, minChars);
+  return isVtt
+    ? parseVTT(content, fps, minChars)
+    : parseSRT(content, fps, minChars);
 }
 
 function doParseBtn() {
@@ -122,15 +156,29 @@ function doParseBtn() {
   if (state.sources && state.sources.length > 0) {
     // F18 — multi-source: parse primary + additional sources, merge with source_idx
     state.sentences = [];
-    const primarySentences = state.srtContent ? _parseSubtitle(state.srtContent, state._srtIsVtt, state.fps, state.minChars) : [];
-    primarySentences.forEach(s => { s.source_idx = 0; });
+    const primarySentences = state.srtContent
+      ? _parseSubtitle(
+          state.srtContent,
+          state._srtIsVtt,
+          state.fps,
+          state.minChars,
+        )
+      : [];
+    primarySentences.forEach((s) => {
+      s.source_idx = 0;
+    });
     state.sentences.push(...primarySentences);
 
     let idOffset = primarySentences.length;
     for (let si = 0; si < state.sources.length; si++) {
       const src = state.sources[si];
       if (!src.srtContent) continue;
-      const srcSentences = _parseSubtitle(src.srtContent, src._isVtt, state.fps, state.minChars);
+      const srcSentences = _parseSubtitle(
+        src.srtContent,
+        src._isVtt,
+        state.fps,
+        state.minChars,
+      );
       for (const s of srcSentences) {
         s.id = idOffset + s.id;
         s.source_idx = si + 1;
@@ -141,13 +189,24 @@ function doParseBtn() {
   } else {
     // Single source (existing behavior)
     if (!state.srtContent) return;
-    state.sentences = _parseSubtitle(state.srtContent, state._srtIsVtt, state.fps, state.minChars);
-    state.sentences.forEach(s => { s.source_idx = 0; });
+    state.sentences = _parseSubtitle(
+      state.srtContent,
+      state._srtIsVtt,
+      state.fps,
+      state.minChars,
+    );
+    state.sentences.forEach((s) => {
+      s.source_idx = 0;
+    });
   }
 
   // Merge Whisper word timestamps into sentences when available (F4)
   if (state._pendingWhisperWords && state._pendingWhisperWords.length) {
-    mergeWordsIntoSentences(state.sentences, state._pendingWhisperWords, state.fps);
+    mergeWordsIntoSentences(
+      state.sentences,
+      state._pendingWhisperWords,
+      state.fps,
+    );
     state._pendingWhisperWords = null;
   }
   renderSegments();
@@ -155,7 +214,10 @@ function doParseBtn() {
   document.getElementById('segmentsCard').style.display = 'block';
   // Reset FPS note after successful parse
   const noteEl = document.getElementById('fpsNote');
-  if (noteEl) { noteEl.textContent = 'Musi zgadzać się z twoim materiałem wideo!'; noteEl.style.color = ''; }
+  if (noteEl) {
+    noteEl.textContent = 'Musi zgadzać się z twoim materiałem wideo!';
+    noteEl.style.color = '';
+  }
   emit();
 }
 
@@ -163,29 +225,40 @@ function doParseBtn() {
 // Words are only produced for the primary source (source_idx 0)
 function mergeWordsIntoSentences(sentences, words, fps) {
   for (const s of sentences) {
-    if ((s.source_idx ?? 0) !== 0) { s.words = []; continue; }
+    if ((s.source_idx ?? 0) !== 0) {
+      s.words = [];
+      continue;
+    }
     const startS = s.start_frame / fps;
     const endS = s.end_frame / fps;
-    s.words = words.filter(w => (w.start + w.end) / 2 >= startS - 0.15 && (w.start + w.end) / 2 <= endS + 0.15);
+    s.words = words.filter(
+      (w) =>
+        (w.start + w.end) / 2 >= startS - 0.15 &&
+        (w.start + w.end) / 2 <= endS + 0.15,
+    );
   }
 }
 
 function renderSegments() {
   const preview = document.getElementById('segmentsPreview');
-  preview.innerHTML = state.sentences.map(s =>
-    `<div class="segment-row">
+  preview.innerHTML = state.sentences
+    .map(
+      (s) =>
+        `<div class="segment-row">
       <div class="seg-id">#${s.id}</div>
       <div class="seg-tc">${escHtml(s.start_tc)}</div>
       <div class="seg-text">${escHtml(s.text)}</div>
-    </div>`
-  ).join('');
-  document.getElementById('segCount').textContent = state.sentences.length + ' segmentów';
+    </div>`,
+    )
+    .join('');
+  document.getElementById('segCount').textContent =
+    state.sentences.length + ' segmentów';
 }
 
 function downloadMD() {
   if (!state.sentences.length) return;
   let md = `# Segmenty SRT\n\nPlik: ${state.srtName || 'nieznany'}\nFPS: ${state.fps}\nSegmentów: ${state.sentences.length}\n\n---\n\n`;
-  state.sentences.forEach(s => {
+  state.sentences.forEach((s) => {
     md += `**#${s.id}** \`${s.start_tc} → ${s.end_tc}\` (${(s.duration_frame / state.fps).toFixed(1)}s)\n\n${s.text}\n\n---\n\n`;
   });
   downloadBlob('segmenty.md', md, 'text/markdown');
@@ -193,7 +266,11 @@ function downloadMD() {
 
 function downloadJSON() {
   if (!state.sentences.length) return;
-  downloadBlob('segments.json', JSON.stringify(state.sentences, null, 2), 'application/json');
+  downloadBlob(
+    'segments.json',
+    JSON.stringify(state.sentences, null, 2),
+    'application/json',
+  );
 }
 
 // ── Project save/load ─────────────────────────────────────────────
@@ -203,7 +280,9 @@ let currentProjectPath = null;
 async function openProject() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ filters: [{ name: 'Reelproj', extensions: ['reelproj'] }] });
+    const path = await open({
+      filters: [{ name: 'Reelproj', extensions: ['reelproj'] }],
+    });
     if (!path) return;
     const { invoke } = await import('@tauri-apps/api/core');
     const data = await invoke('load_project', { path });
@@ -226,7 +305,9 @@ async function saveProject() {
 async function saveProjectAs() {
   try {
     const { save } = await import('@tauri-apps/plugin-dialog');
-    const path = await save({ filters: [{ name: 'Reelproj', extensions: ['reelproj'] }] });
+    const path = await save({
+      filters: [{ name: 'Reelproj', extensions: ['reelproj'] }],
+    });
     if (!path) return;
     await writeProject(path);
     currentProjectPath = path;
@@ -313,20 +394,24 @@ function applyProjectData(data) {
   }
   if (state.sentences.length) {
     document.getElementById('segmentsCard').style.display = 'block';
-    document.getElementById('segCount').textContent = state.sentences.length + ' segmentów';
+    document.getElementById('segCount').textContent =
+      state.sentences.length + ' segmentów';
     const preview = document.getElementById('segmentsPreview');
-    preview.innerHTML = state.sentences.map(s =>
-      `<div class="segment-row">
+    preview.innerHTML = state.sentences
+      .map(
+        (s) =>
+          `<div class="segment-row">
         <div class="seg-id">#${s.id}</div>
         <div class="seg-tc">${escHtml(s.start_tc)}</div>
         <div class="seg-text">${escHtml(s.text)}</div>
-      </div>`
-    ).join('');
+      </div>`,
+      )
+      .join('');
   }
 
   // Render metadata list if present
   if (state.reelsMetadata && state.reelsMetadata.length) {
-    import('./step2-analyze.js').then(m => m.renderMetadataList());
+    import('./step2-analyze.js').then((m) => m.renderMetadataList());
   }
 
   // F18 — restore additional sources UI
@@ -342,7 +427,7 @@ function addRecentProject(path) {
   try {
     const key = 'edl_recent_projects';
     const list = JSON.parse(localStorage.getItem(key) || '[]');
-    const filtered = list.filter(p => p !== path);
+    const filtered = list.filter((p) => p !== path);
     filtered.unshift(path);
     localStorage.setItem(key, JSON.stringify(filtered.slice(0, 10)));
   } catch (e) {}
@@ -361,7 +446,7 @@ function downloadBlob(name, content, type) {
 
 function syncTranscribeBtn() {
   const hasVideo = !!state._whisperVideoPath;
-  const hasModel = !!(document.getElementById('whisperModelPath').value.trim());
+  const hasModel = !!document.getElementById('whisperModelPath').value.trim();
   document.getElementById('transcribeBtn').disabled = !(hasVideo && hasModel);
 }
 
@@ -369,7 +454,12 @@ async function browseWhisperVideo() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const path = await open({
-      filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'm4v', 'webm'] }],
+      filters: [
+        {
+          name: 'Wideo',
+          extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'm4v', 'webm'],
+        },
+      ],
     });
     if (!path) return;
     state._whisperVideoPath = path;
@@ -417,22 +507,33 @@ async function transcribeWithWhisper() {
   let unlisten;
   try {
     const { listen } = await import('@tauri-apps/api/event');
-    unlisten = await listen('transcribe-progress', e => {
+    unlisten = await listen('transcribe-progress', (e) => {
       const { label, percent } = e.payload;
       setWhisperProgress(label, percent);
     });
 
     const { invoke } = await import('@tauri-apps/api/core');
     // Returns { srt_content, words: [{text, start, end}] }
-    const result = await invoke('transcribe_video', { videoPath, modelPath, language });
+    const result = await invoke('transcribe_video', {
+      videoPath,
+      modelPath,
+      language,
+    });
 
-    const rawBase = videoPath.split('/').pop().split('\\').pop().replace(/\.[^.]+$/, '');
+    const rawBase = videoPath
+      .split('/')
+      .pop()
+      .split('\\')
+      .pop()
+      .replace(/\.[^.]+$/, '');
     const srtName = rawBase.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_whisper.srt';
     loadSRTContent(result.srt_content, srtName);
     // Store words for merging after parseSRT
     state._pendingWhisperWords = result.words || [];
     setWhisperProgress('Gotowe! SRT wczytany.', 100);
-    setTimeout(() => { document.getElementById('whisperProgressBox').style.display = 'none'; }, 2000);
+    setTimeout(() => {
+      document.getElementById('whisperProgressBox').style.display = 'none';
+    }, 2000);
   } catch (e) {
     setWhisperProgress('Błąd: ' + e, 0);
     alert('Transkrypcja nieudana: ' + e);
@@ -444,14 +545,20 @@ async function transcribeWithWhisper() {
 
 function setWhisperProgress(label, percent) {
   document.getElementById('whisperProgressLabel').textContent = label;
-  document.getElementById('whisperProgressFill').style.width = Math.round(percent) + '%';
+  document.getElementById('whisperProgressFill').style.width =
+    Math.round(percent) + '%';
 }
 
 // ── F18 — Multi-source ────────────────────────────────────────────────
 
 function addSource() {
   if (!state.sources) state.sources = [];
-  state.sources.push({ videoFilename: '', videoPath: '', srtName: null, srtContent: null });
+  state.sources.push({
+    videoFilename: '',
+    videoPath: '',
+    srtName: null,
+    srtContent: null,
+  });
   renderAdditionalSources();
   document.getElementById('additionalSourcesCard').style.display = '';
 }
@@ -468,7 +575,9 @@ function removeSource(idx) {
 function renderAdditionalSources() {
   const container = document.getElementById('additionalSourcesList');
   if (!container) return;
-  container.innerHTML = (state.sources || []).map((src, idx) => `
+  container.innerHTML = (state.sources || [])
+    .map(
+      (src, idx) => `
 <div class="card" style="margin-top:10px;padding:14px;" data-src-idx="${idx}">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
     <span style="font-size:13px;font-weight:600;color:var(--text2);">Źródło ${idx + 2}</span>
@@ -490,24 +599,32 @@ function renderAdditionalSources() {
       </div>
     </div>
   </div>
-</div>`).join('');
+</div>`,
+    )
+    .join('');
 
   // Event delegation for remove / browse buttons
-  container.querySelectorAll('[data-remove-src]').forEach(btn => {
+  container.querySelectorAll('[data-remove-src]').forEach((btn) => {
     btn.addEventListener('click', () => removeSource(+btn.dataset.removeSrc));
   });
-  container.querySelectorAll('[data-browse-srt]').forEach(btn => {
-    btn.addEventListener('click', () => browseSourceSRT(+btn.dataset.browseSrt));
+  container.querySelectorAll('[data-browse-srt]').forEach((btn) => {
+    btn.addEventListener('click', () =>
+      browseSourceSRT(+btn.dataset.browseSrt),
+    );
   });
-  container.querySelectorAll('[data-browse-video-src]').forEach(btn => {
-    btn.addEventListener('click', () => browseSourceVideo(+btn.dataset.browseVideoSrc));
+  container.querySelectorAll('[data-browse-video-src]').forEach((btn) => {
+    btn.addEventListener('click', () =>
+      browseSourceVideo(+btn.dataset.browseVideoSrc),
+    );
   });
 }
 
 async function browseSourceSRT(idx) {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ filters: [{ name: 'Napisy', extensions: ['srt', 'vtt'] }] });
+    const path = await open({
+      filters: [{ name: 'Napisy', extensions: ['srt', 'vtt'] }],
+    });
     if (!path) return;
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
     const content = await readTextFile(path);
@@ -526,7 +643,12 @@ async function browseSourceVideo(idx) {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const path = await open({
-      filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'r3d'] }],
+      filters: [
+        {
+          name: 'Wideo',
+          extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'r3d'],
+        },
+      ],
     });
     if (!path) return;
     if (!state.sources[idx]) return;
@@ -553,7 +675,8 @@ function loadSRTContent(content, name) {
   document.getElementById('dropZone').style.display = 'none';
   document.getElementById('fileLoaded').style.display = 'flex';
   document.getElementById('fileName').textContent = name;
-  document.getElementById('fileMeta').textContent = (content.length / 1024).toFixed(1) + ' KB';
+  document.getElementById('fileMeta').textContent =
+    (content.length / 1024).toFixed(1) + ' KB';
   document.getElementById('parseBtn').disabled = false;
   document.getElementById('statusSrt').textContent = name;
   emit();

@@ -8,7 +8,7 @@ export function buildReelSrt(reel, sentences, fps, mergeThreshold) {
 
   for (const span of spans) {
     const sentenceObjs = span.ids
-      .map(id => sentences.find(s => s.id === id))
+      .map((id) => sentences.find((s) => s.id === id))
       .filter(Boolean);
     const spanStartFrame = span.start_frame;
     for (const s of sentenceObjs) {
@@ -20,7 +20,9 @@ export function buildReelSrt(reel, sentences, fps, mergeThreshold) {
   }
 
   return cues
-    .map(c => `${c.n}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}\n`)
+    .map(
+      (c) => `${c.n}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}\n`,
+    )
     .join('\n');
 }
 
@@ -33,9 +35,12 @@ function srtTime(secs) {
   const m = totalM % 60;
   const h = Math.floor(totalM / 60);
   return (
-    String(h).padStart(2, '0') + ':' +
-    String(m).padStart(2, '0') + ':' +
-    String(s).padStart(2, '0') + ',' +
+    String(h).padStart(2, '0') +
+    ':' +
+    String(m).padStart(2, '0') +
+    ':' +
+    String(s).padStart(2, '0') +
+    ',' +
     String(ms).padStart(3, '0')
   );
 }

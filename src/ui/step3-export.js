@@ -7,8 +7,13 @@ import { buildReelSrt } from '../render/subtitles.js';
 import { expandSpansWithFillerRemoval } from '../render/fillers.js';
 import { renderMetadataList, pushUndo, snap } from './step2-analyze.js';
 import {
-  queue, initQueue, setRerenderFn,
-  enqueueAll, cancelJob, cancelAll, clearDone,
+  queue,
+  initQueue,
+  setRerenderFn,
+  enqueueAll,
+  cancelJob,
+  cancelAll,
+  clearDone,
 } from '../render/queue.js';
 import { PLATFORM_PRESETS } from '../render/settings.js';
 
@@ -20,72 +25,123 @@ function configChange(mutateFn) {
 
 export function init() {
   // Tab switching
-  document.getElementById('tabBtnEdl').addEventListener('click', () => switchTab('Edl'));
-  document.getElementById('tabBtnXml').addEventListener('click', () => switchTab('Xml'));
-  document.getElementById('tabBtnLua').addEventListener('click', () => switchTab('Lua'));
-  document.getElementById('tabBtnRender').addEventListener('click', () => switchTab('Render'));
-  document.getElementById('tabBtnMeta').addEventListener('click', () => switchTab('Meta'));
+  document
+    .getElementById('tabBtnEdl')
+    .addEventListener('click', () => switchTab('Edl'));
+  document
+    .getElementById('tabBtnXml')
+    .addEventListener('click', () => switchTab('Xml'));
+  document
+    .getElementById('tabBtnLua')
+    .addEventListener('click', () => switchTab('Lua'));
+  document
+    .getElementById('tabBtnRender')
+    .addEventListener('click', () => switchTab('Render'));
+  document
+    .getElementById('tabBtnMeta')
+    .addEventListener('click', () => switchTab('Meta'));
 
   // Video filename inputs
-  document.getElementById('videoFilename2').addEventListener('input', e => {
+  document.getElementById('videoFilename2').addEventListener('input', (e) => {
     state.videoFilename2 = e.target.value;
     emit();
   });
-  document.getElementById('videoFullPath').addEventListener('input', e => {
+  document.getElementById('videoFullPath').addEventListener('input', (e) => {
     state.videoPath = e.target.value;
     emit();
   });
-  document.getElementById('resolutionSelect').addEventListener('change', e => {
-    state.videoResolution = e.target.value;
-    emit();
-  });
-  document.getElementById('projectName').addEventListener('input', e => {
+  document
+    .getElementById('resolutionSelect')
+    .addEventListener('change', (e) => {
+      state.videoResolution = e.target.value;
+      emit();
+    });
+  document.getElementById('projectName').addEventListener('input', (e) => {
     state.projectName = e.target.value;
     emit();
   });
-  document.getElementById('mergeThreshold').addEventListener('input', e => {
+  document.getElementById('mergeThreshold').addEventListener('input', (e) => {
     state.mergeThreshold = +e.target.value;
     emit();
   });
 
   // Browse video
-  document.getElementById('browseVideoBtn').addEventListener('click', browseVideo);
+  document
+    .getElementById('browseVideoBtn')
+    .addEventListener('click', browseVideo);
 
   // EDL
-  document.getElementById('generateEdlBtn').addEventListener('click', doGenerateEDL);
+  document
+    .getElementById('generateEdlBtn')
+    .addEventListener('click', doGenerateEDL);
   document.getElementById('downloadEdlBtn').addEventListener('click', () => {
-    if (state.edlContent) downloadFile(videoBase() + '_timeline.edl', state.edlContent, 'text/plain');
+    if (state.edlContent)
+      downloadFile(
+        videoBase() + '_timeline.edl',
+        state.edlContent,
+        'text/plain',
+      );
   });
-  document.getElementById('copyEdlBtn').addEventListener('click', () => copyEl('edlOutput'));
+  document
+    .getElementById('copyEdlBtn')
+    .addEventListener('click', () => copyEl('edlOutput'));
 
   // XML
-  document.getElementById('generateXmlBtn').addEventListener('click', doGenerateXML);
+  document
+    .getElementById('generateXmlBtn')
+    .addEventListener('click', doGenerateXML);
   document.getElementById('downloadXmlBtn').addEventListener('click', () => {
-    if (state.xmlContent) downloadFile(videoBase() + '_timeline.xml', state.xmlContent, 'application/xml');
+    if (state.xmlContent)
+      downloadFile(
+        videoBase() + '_timeline.xml',
+        state.xmlContent,
+        'application/xml',
+      );
   });
-  document.getElementById('copyXmlBtn').addEventListener('click', () => copyEl('xmlOutput'));
+  document
+    .getElementById('copyXmlBtn')
+    .addEventListener('click', () => copyEl('xmlOutput'));
 
   // Lua
-  document.getElementById('generateLuaBtn').addEventListener('click', doGenerateLua);
+  document
+    .getElementById('generateLuaBtn')
+    .addEventListener('click', doGenerateLua);
   document.getElementById('downloadLuaBtn').addEventListener('click', () => {
-    if (state.luaContent) downloadFile(videoBase() + '_davinci.lua', state.luaContent, 'text/plain');
+    if (state.luaContent)
+      downloadFile(
+        videoBase() + '_davinci.lua',
+        state.luaContent,
+        'text/plain',
+      );
   });
-  document.getElementById('copyLuaBtn').addEventListener('click', () => copyEl('luaOutput'));
+  document
+    .getElementById('copyLuaBtn')
+    .addEventListener('click', () => copyEl('luaOutput'));
 
   // Render basic
-  document.getElementById('browseOutDirBtn').addEventListener('click', browseOutDir);
-  document.getElementById('renderOutDir').addEventListener('input', e => {
+  document
+    .getElementById('browseOutDirBtn')
+    .addEventListener('click', browseOutDir);
+  document.getElementById('renderOutDir').addEventListener('input', (e) => {
     state.renderConfig.outDir = e.target.value;
     emit();
   });
-  document.getElementById('renderBitrate').addEventListener('change', e => {
-    configChange(() => { state.renderConfig.videoBitrate = e.target.value || '8M'; emit(); });
+  document.getElementById('renderBitrate').addEventListener('change', (e) => {
+    configChange(() => {
+      state.renderConfig.videoBitrate = e.target.value || '8M';
+      emit();
+    });
   });
 
   // F2 — Encoder dropdown
-  document.getElementById('renderCodecSelect').addEventListener('change', e => {
-    configChange(() => { state.renderConfig.videoCodec = e.target.value; emit(); });
-  });
+  document
+    .getElementById('renderCodecSelect')
+    .addEventListener('change', (e) => {
+      configChange(() => {
+        state.renderConfig.videoCodec = e.target.value;
+        emit();
+      });
+    });
   // Block render buttons until hardware encoder detection resolves (L13)
   const renderAllBtn = document.getElementById('renderAllBtn');
   const renderPreviewBtn = document.getElementById('renderPreviewBtn');
@@ -97,22 +153,25 @@ export function init() {
   });
 
   // F4 — Filler removal
-  document.getElementById('renderRemoveFillers').addEventListener('change', e => {
-    state.renderConfig.removeFillers = e.target.checked;
-    syncStreamCopyCheckbox();
-    emit();
-  });
+  document
+    .getElementById('renderRemoveFillers')
+    .addEventListener('change', (e) => {
+      state.renderConfig.removeFillers = e.target.checked;
+      syncStreamCopyCheckbox();
+      emit();
+    });
 
   // F5 — Face tracking mode
   const ftSel = document.getElementById('renderFaceTrackingMode');
-  if (ftSel) ftSel.addEventListener('change', e => {
-    state.renderConfig.faceTrackingMode = e.target.value;
-    emit();
-  });
+  if (ftSel)
+    ftSel.addEventListener('change', (e) => {
+      state.renderConfig.faceTrackingMode = e.target.value;
+      emit();
+    });
 
   // Format radio
-  document.querySelectorAll('input[name="renderAspect"]').forEach(r => {
-    r.addEventListener('change', e => {
+  document.querySelectorAll('input[name="renderAspect"]').forEach((r) => {
+    r.addEventListener('change', (e) => {
       if (e.target.checked) {
         configChange(() => {
           state.renderConfig.aspect = e.target.value;
@@ -125,41 +184,59 @@ export function init() {
   });
 
   // Loudness
-  document.getElementById('renderLoudnorm').addEventListener('change', e => {
-    configChange(() => { state.renderConfig.loudnessNormalize = e.target.checked; syncStreamCopyCheckbox(); emit(); });
+  document.getElementById('renderLoudnorm').addEventListener('change', (e) => {
+    configChange(() => {
+      state.renderConfig.loudnessNormalize = e.target.checked;
+      syncStreamCopyCheckbox();
+      emit();
+    });
   });
 
   // Concurrency
-  document.getElementById('renderConcurrency').addEventListener('change', e => {
-    state.renderConfig.concurrency = +e.target.value;
-    queue.concurrency = +e.target.value;
-    emit();
-  });
+  document
+    .getElementById('renderConcurrency')
+    .addEventListener('change', (e) => {
+      state.renderConfig.concurrency = +e.target.value;
+      queue.concurrency = +e.target.value;
+      emit();
+    });
 
   // Burn subtitles
-  document.getElementById('renderBurnSubtitles').addEventListener('change', e => {
-    configChange(() => { state.renderConfig.burnSubtitles = e.target.checked; syncStreamCopyCheckbox(); emit(); });
-  });
+  document
+    .getElementById('renderBurnSubtitles')
+    .addEventListener('change', (e) => {
+      configChange(() => {
+        state.renderConfig.burnSubtitles = e.target.checked;
+        syncStreamCopyCheckbox();
+        emit();
+      });
+    });
 
   // Stream copy
-  document.getElementById('renderStreamCopy').addEventListener('change', e => {
-    state.renderConfig.streamCopy = e.target.checked;
-    emit();
-  });
+  document
+    .getElementById('renderStreamCopy')
+    .addEventListener('change', (e) => {
+      state.renderConfig.streamCopy = e.target.checked;
+      emit();
+    });
 
   // Logo toggle
-  document.getElementById('renderLogoEnable').addEventListener('change', e => {
-    state.renderConfig.logo = e.target.checked
-      ? { path: '', position: 'br', opacity: 1, widthPct: 15 }
-      : null;
-    syncLogoSection();
-    syncStreamCopyCheckbox();
-    emit();
-  });
-  document.getElementById('browseLogoBtn').addEventListener('click', browseLogo);
+  document
+    .getElementById('renderLogoEnable')
+    .addEventListener('change', (e) => {
+      state.renderConfig.logo = e.target.checked
+        ? { path: '', position: 'br', opacity: 1, widthPct: 15 }
+        : null;
+      syncLogoSection();
+      syncStreamCopyCheckbox();
+      emit();
+    });
+  document
+    .getElementById('browseLogoBtn')
+    .addEventListener('click', browseLogo);
 
   // Logo position buttons
-  document.querySelectorAll('.logo-pos-btn').forEach(btn => {
+  document.querySelectorAll('.logo-pos-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (!state.renderConfig.logo) return;
       state.renderConfig.logo.position = btn.dataset.pos;
@@ -169,16 +246,18 @@ export function init() {
   });
 
   // Logo opacity
-  document.getElementById('renderLogoOpacity').addEventListener('input', e => {
-    if (!state.renderConfig.logo) return;
-    const val = +e.target.value;
-    document.getElementById('renderLogoOpacityVal').textContent = val;
-    state.renderConfig.logo.opacity = val / 100;
-    emit();
-  });
+  document
+    .getElementById('renderLogoOpacity')
+    .addEventListener('input', (e) => {
+      if (!state.renderConfig.logo) return;
+      const val = +e.target.value;
+      document.getElementById('renderLogoOpacityVal').textContent = val;
+      state.renderConfig.logo.opacity = val / 100;
+      emit();
+    });
 
   // Logo width
-  document.getElementById('renderLogoWidth').addEventListener('input', e => {
+  document.getElementById('renderLogoWidth').addEventListener('input', (e) => {
     if (!state.renderConfig.logo) return;
     const val = +e.target.value;
     document.getElementById('renderLogoWidthVal').textContent = val;
@@ -187,14 +266,18 @@ export function init() {
   });
 
   // Intro / outro
-  document.getElementById('browseIntroBtn').addEventListener('click', browseIntro);
+  document
+    .getElementById('browseIntroBtn')
+    .addEventListener('click', browseIntro);
   document.getElementById('clearIntroBtn').addEventListener('click', () => {
     state.renderConfig.intro = null;
     document.getElementById('renderIntroPath').value = '';
     syncStreamCopyCheckbox();
     emit();
   });
-  document.getElementById('browseOutroBtn').addEventListener('click', browseOutro);
+  document
+    .getElementById('browseOutroBtn')
+    .addEventListener('click', browseOutro);
   document.getElementById('clearOutroBtn').addEventListener('click', () => {
     state.renderConfig.outro = null;
     document.getElementById('renderOutroPath').value = '';
@@ -203,13 +286,17 @@ export function init() {
   });
 
   // Render buttons
-  document.getElementById('renderAllBtn').addEventListener('click', () => startRender(false));
-  document.getElementById('renderPreviewBtn').addEventListener('click', () => startRender(true));
+  document
+    .getElementById('renderAllBtn')
+    .addEventListener('click', () => startRender(false));
+  document
+    .getElementById('renderPreviewBtn')
+    .addEventListener('click', () => startRender(true));
 
   // Queue controls (event delegation on rows + top buttons)
   document.getElementById('cancelAllBtn').addEventListener('click', cancelAll);
   document.getElementById('clearDoneBtn').addEventListener('click', clearDone);
-  document.getElementById('renderQueueRows').addEventListener('click', e => {
+  document.getElementById('renderQueueRows').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const id = btn.dataset.id;
@@ -227,12 +314,24 @@ export function init() {
   syncFaceTrackingRow();
 
   // F12/F17 — preset UI
-  document.getElementById('applyPlatformPresetBtn').addEventListener('click', applyPlatformPreset);
-  document.getElementById('saveGlobalPresetBtn').addEventListener('click', saveGlobalPreset);
-  document.getElementById('deleteGlobalPresetBtn').addEventListener('click', deleteGlobalPreset);
-  document.getElementById('saveProjectPresetBtn').addEventListener('click', saveProjectPreset);
-  document.getElementById('deleteProjectPresetBtn').addEventListener('click', deleteProjectPreset);
-  document.getElementById('presetSelect').addEventListener('change', onPresetSelectChange);
+  document
+    .getElementById('applyPlatformPresetBtn')
+    .addEventListener('click', applyPlatformPreset);
+  document
+    .getElementById('saveGlobalPresetBtn')
+    .addEventListener('click', saveGlobalPreset);
+  document
+    .getElementById('deleteGlobalPresetBtn')
+    .addEventListener('click', deleteGlobalPreset);
+  document
+    .getElementById('saveProjectPresetBtn')
+    .addEventListener('click', saveProjectPreset);
+  document
+    .getElementById('deleteProjectPresetBtn')
+    .addEventListener('click', deleteProjectPreset);
+  document
+    .getElementById('presetSelect')
+    .addEventListener('change', onPresetSelectChange);
   loadGlobalPresets();
 
   // F16 — sync UI when undo/redo restores renderConfig
@@ -241,8 +340,10 @@ export function init() {
 
 export function updateSummary() {
   const totalClips = state.reelsData.reduce((a, r) => a + r.clip_ids.length, 0);
-  document.getElementById('sumSegs').textContent = state.sentences.length + ' segmentów';
-  document.getElementById('sumReels').textContent = state.reelsData.length + ' reelsów';
+  document.getElementById('sumSegs').textContent =
+    state.sentences.length + ' segmentów';
+  document.getElementById('sumReels').textContent =
+    state.reelsData.length + ' reelsów';
   document.getElementById('sumClips').textContent = totalClips + ' klipów';
   document.getElementById('videoFilename2').value = state.videoFilename2 || '';
   document.getElementById('videoFullPath').value = state.videoPath || '';
@@ -252,7 +353,7 @@ export function updateSummary() {
   const rc = state.renderConfig;
   document.getElementById('renderOutDir').value = rc.outDir || '';
   document.getElementById('renderBitrate').value = rc.videoBitrate || '8M';
-  document.querySelectorAll('input[name="renderAspect"]').forEach(r => {
+  document.querySelectorAll('input[name="renderAspect"]').forEach((r) => {
     r.checked = r.value === (rc.aspect || 'source');
   });
   document.getElementById('renderLoudnorm').checked = !!rc.loudnessNormalize;
@@ -314,26 +415,30 @@ async function detectHwEncoder() {
     const codec = await invoke('detect_hw_encoder');
     state.detectedHwEncoder = codec;
     if (label) {
-      label.textContent = codec === 'libx264'
-        ? 'Wykryto: libx264 (CPU, brak akceleracji sprzętowej)'
-        : `Wykryto: ${codec} ✓`;
+      label.textContent =
+        codec === 'libx264'
+          ? 'Wykryto: libx264 (CPU, brak akceleracji sprzętowej)'
+          : `Wykryto: ${codec} ✓`;
     }
   } catch (e) {
     state.detectedHwEncoder = 'libx264';
-    if (label) label.textContent = 'Nie udało się wykryć enkodera — użyję libx264';
+    if (label)
+      label.textContent = 'Nie udało się wykryć enkodera — użyję libx264';
   }
 }
 
 // ── helpers ────────────────────────────────────────────────────────
 
 function syncLogoSection() {
-  const show = !!(state.renderConfig.logo);
-  document.getElementById('renderLogoSection').style.display = show ? '' : 'none';
+  const show = !!state.renderConfig.logo;
+  document.getElementById('renderLogoSection').style.display = show
+    ? ''
+    : 'none';
 }
 
 function syncLogoPosButtons() {
   const pos = state.renderConfig.logo?.position || 'br';
-  document.querySelectorAll('.logo-pos-btn').forEach(b => {
+  document.querySelectorAll('.logo-pos-btn').forEach((b) => {
     const active = b.dataset.pos === pos;
     b.style.borderColor = active ? 'var(--accent)' : '';
     b.style.color = active ? 'var(--accent2)' : '';
@@ -342,13 +447,14 @@ function syncLogoPosButtons() {
 
 function syncStreamCopyCheckbox() {
   const rc = state.renderConfig;
-  const eligible = rc.aspect === 'source'
-    && !rc.logo
-    && !rc.intro
-    && !rc.outro
-    && !rc.burnSubtitles
-    && !rc.loudnessNormalize
-    && !rc.removeFillers;
+  const eligible =
+    rc.aspect === 'source' &&
+    !rc.logo &&
+    !rc.intro &&
+    !rc.outro &&
+    !rc.burnSubtitles &&
+    !rc.loudnessNormalize &&
+    !rc.removeFillers;
   const checkbox = document.getElementById('renderStreamCopy');
   if (!checkbox) return;
   checkbox.disabled = !eligible;
@@ -367,8 +473,12 @@ function syncFaceTrackingRow() {
 }
 
 function switchTab(name) {
-  document.querySelectorAll('.export-tab').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.export-panel').forEach(p => p.classList.remove('active'));
+  document
+    .querySelectorAll('.export-tab')
+    .forEach((b) => b.classList.remove('active'));
+  document
+    .querySelectorAll('.export-panel')
+    .forEach((p) => p.classList.remove('active'));
   document.getElementById('tabBtn' + name).classList.add('active');
   document.getElementById('tab' + name).classList.add('active');
 }
@@ -379,7 +489,7 @@ function spansFor(reel) {
   if (state.renderConfig.removeFillers) {
     return expandSpansWithFillerRemoval(merged, state.sentences, state.fps);
   }
-  return merged.map(s => ({
+  return merged.map((s) => ({
     in_s: s.start_frame / state.fps,
     out_s: s.end_frame / state.fps,
     source_idx: s.source_idx ?? 0,
@@ -389,7 +499,10 @@ function spansFor(reel) {
 // ── exporters ──────────────────────────────────────────────────────
 
 function doGenerateEDL() {
-  if (!state.reelsData.length) { alert('Brak danych reelsów! Wróć do kroku 2.'); return; }
+  if (!state.reelsData.length) {
+    alert('Brak danych reelsów! Wróć do kroku 2.');
+    return;
+  }
   const videoFile = state.videoFilename2 || 'source_video.mp4';
   state.edlContent = generateEDL({
     reelsData: state.reelsData,
@@ -407,7 +520,10 @@ function doGenerateEDL() {
 }
 
 function doGenerateXML() {
-  if (!state.reelsData.length) { alert('Brak danych reelsów!'); return; }
+  if (!state.reelsData.length) {
+    alert('Brak danych reelsów!');
+    return;
+  }
   const videoFile = state.videoFilename2 || 'source_video.mp4';
   const videoPath = state.videoPath || videoFile;
   state.xmlContent = generateXML({
@@ -420,19 +536,27 @@ function doGenerateXML() {
     projectName: state.projectName,
     mergeThreshold: state.mergeThreshold,
   });
-  const preview = state.xmlContent.substring(0, 3000) +
+  const preview =
+    state.xmlContent.substring(0, 3000) +
     (state.xmlContent.length > 3000 ? '\n… (skrócono podgląd)' : '');
   document.getElementById('xmlOutput').textContent = preview;
   document.getElementById('xmlCard').style.display = 'block';
-  document.getElementById('xmlSeqCount').textContent = state.reelsData.length + ' sekwencji';
+  document.getElementById('xmlSeqCount').textContent =
+    state.reelsData.length + ' sekwencji';
   updateSummary();
   emit();
 }
 
 function doGenerateLua() {
-  if (!state.reelsData.length) { alert('Brak danych reelsów!'); return; }
+  if (!state.reelsData.length) {
+    alert('Brak danych reelsów!');
+    return;
+  }
   const videoPath = state.videoPath;
-  if (!videoPath) { alert('Wpisz pełną ścieżkę do pliku wideo (pole "Pełna ścieżka" powyżej)!'); return; }
+  if (!videoPath) {
+    alert('Wpisz pełną ścieżkę do pliku wideo (pole "Pełna ścieżka" powyżej)!');
+    return;
+  }
   state.luaContent = generateLua({
     reelsData: state.reelsData,
     sentences: state.sentences,
@@ -446,7 +570,11 @@ function doGenerateLua() {
   document.getElementById('luaCard').style.display = 'block';
   const totalClips = state.reelsData.reduce((a, r) => a + r.clip_ids.length, 0);
   document.getElementById('luaInfo').textContent =
-    '1 timeline · ' + totalClips + ' klipów · ' + state.reelsData.length + ' reelsów';
+    '1 timeline · ' +
+    totalClips +
+    ' klipów · ' +
+    state.reelsData.length +
+    ' reelsów';
   updateSummary();
   emit();
 }
@@ -457,7 +585,12 @@ async function browseVideo() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const path = await open({
-      filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'r3d'] }],
+      filters: [
+        {
+          name: 'Wideo',
+          extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'r3d'],
+        },
+      ],
     });
     if (!path) return;
     state.videoPath = path;
@@ -488,10 +621,17 @@ async function browseOutDir() {
 async function browseLogo() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ filters: [{ name: 'PNG', extensions: ['png'] }] });
+    const path = await open({
+      filters: [{ name: 'PNG', extensions: ['png'] }],
+    });
     if (!path) return;
     if (!state.renderConfig.logo) {
-      state.renderConfig.logo = { path: '', position: 'br', opacity: 1, widthPct: 15 };
+      state.renderConfig.logo = {
+        path: '',
+        position: 'br',
+        opacity: 1,
+        widthPct: 15,
+      };
     }
     state.renderConfig.logo.path = path;
     document.getElementById('renderLogoPath').value = path;
@@ -504,7 +644,9 @@ async function browseLogo() {
 async function browseIntro() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv'] }] });
+    const path = await open({
+      filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv'] }],
+    });
     if (!path) return;
     state.renderConfig.intro = { path };
     document.getElementById('renderIntroPath').value = path;
@@ -518,7 +660,9 @@ async function browseIntro() {
 async function browseOutro() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({ filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv'] }] });
+    const path = await open({
+      filters: [{ name: 'Wideo', extensions: ['mp4', 'mov', 'mkv'] }],
+    });
     if (!path) return;
     state.renderConfig.outro = { path };
     document.getElementById('renderOutroPath').value = path;
@@ -535,7 +679,9 @@ function remapKeyframes(allKfs, spans) {
   const result = [];
   let outputTime = 0;
   for (const span of spans) {
-    const spanKfs = allKfs.filter(kf => kf.t >= span.in_s - 0.5 && kf.t <= span.out_s + 0.5);
+    const spanKfs = allKfs.filter(
+      (kf) => kf.t >= span.in_s - 0.5 && kf.t <= span.out_s + 0.5,
+    );
     for (const kf of spanKfs) {
       result.push({ t: outputTime + Math.max(0, kf.t - span.in_s), x: kf.x });
     }
@@ -553,41 +699,61 @@ function buildJobs(preview, faceKfsRaw = null) {
   const sourcePath = state.videoPath;
   const isWindows = /win/i.test(navigator.platform);
   const sep = isWindows ? '\\' : '/';
-  const projBase = (state.projectName || 'reels').replace(/[^a-zA-Z0-9_\-]/g, '_');
-  const slug = s => s.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 30);
-  const srcW = parseInt((state.videoResolution || '1920x1080').split('x')[0]) || 1920;
+  const projBase = (state.projectName || 'reels').replace(
+    /[^a-zA-Z0-9_\-]/g,
+    '_',
+  );
+  const slug = (s) => s.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 30);
+  const srcW =
+    parseInt((state.videoResolution || '1920x1080').split('x')[0]) || 1920;
 
   const resolvedCodec = preview
-    ? (state.detectedHwEncoder === 'h264_videotoolbox' ? 'h264_videotoolbox' : 'libx264')
-    : rc.videoCodec === 'auto' ? (state.detectedHwEncoder || 'libx264')
-    : (rc.videoCodec || 'libx264');
+    ? state.detectedHwEncoder === 'h264_videotoolbox'
+      ? 'h264_videotoolbox'
+      : 'libx264'
+    : rc.videoCodec === 'auto'
+      ? state.detectedHwEncoder || 'libx264'
+      : rc.videoCodec || 'libx264';
 
   // F18 — build source_paths array: [primaryVideo, ...additionalSources]
-  const sourcePaths = state.sources && state.sources.length > 0
-    ? [sourcePath, ...state.sources.map(s => s.videoPath || '').filter(Boolean)]
-    : [];
+  const sourcePaths =
+    state.sources && state.sources.length > 0
+      ? [
+          sourcePath,
+          ...state.sources.map((s) => s.videoPath || '').filter(Boolean),
+        ]
+      : [];
 
   const makeReq = (reel, aspect, outPath, reelId, outputW) => {
     const spans = spansFor(reel);
-    const logoArg = rc.logo ? {
-      path: rc.logo.path,
-      position: rc.logo.position,
-      opacity: rc.logo.opacity,
-      width_pct: rc.logo.widthPct,
-    } : null;
-
-    const srtContent = (!preview && rc.burnSubtitles)
-      ? buildReelSrt(reel, state.sentences, state.fps, reel.mergeThreshold ?? state.mergeThreshold)
+    const logoArg = rc.logo
+      ? {
+          path: rc.logo.path,
+          position: rc.logo.position,
+          opacity: rc.logo.opacity,
+          width_pct: rc.logo.widthPct,
+        }
       : null;
 
-    const faceKeyframes = (!preview && aspect === 'vertical_9_16' && faceKfsRaw)
-      ? remapKeyframes(faceKfsRaw, spans)
-      : null;
+    const srtContent =
+      !preview && rc.burnSubtitles
+        ? buildReelSrt(
+            reel,
+            state.sentences,
+            state.fps,
+            reel.mergeThreshold ?? state.mergeThreshold,
+          )
+        : null;
+
+    const faceKeyframes =
+      !preview && aspect === 'vertical_9_16' && faceKfsRaw
+        ? remapKeyframes(faceKfsRaw, spans)
+        : null;
 
     return {
       reel_id: reelId,
       source_path: sourcePath,
-      source_paths: sourcePaths,     // F18
+      source_paths: sourcePaths, // F18
       spans,
       out_path: outPath,
       video_bitrate: rc.videoBitrate || '8M',
@@ -616,17 +782,35 @@ function buildJobs(preview, faceKfsRaw = null) {
     if (rc.aspect === 'source' || rc.aspect === 'both') {
       const id = `${ri}__source`;
       jobs.push({
-        id, reelIdx: ri, reelName: reel.reel_name, aspect: 'source',
-        status: 'pending', percent: 0, error: null, outPath: null,
+        id,
+        reelIdx: ri,
+        reelName: reel.reel_name,
+        aspect: 'source',
+        status: 'pending',
+        percent: 0,
+        error: null,
+        outPath: null,
         req: makeReq(reel, 'source', `${base}${suffix}.mp4`, id, srcW),
       });
     }
     if (rc.aspect === 'vertical_9_16' || rc.aspect === 'both') {
       const id = `${ri}__vertical_9_16`;
       jobs.push({
-        id, reelIdx: ri, reelName: reel.reel_name, aspect: 'vertical_9_16',
-        status: 'pending', percent: 0, error: null, outPath: null,
-        req: makeReq(reel, 'vertical_9_16', `${base}${suffix}_9x16.mp4`, id, 1080),
+        id,
+        reelIdx: ri,
+        reelName: reel.reel_name,
+        aspect: 'vertical_9_16',
+        status: 'pending',
+        percent: 0,
+        error: null,
+        outPath: null,
+        req: makeReq(
+          reel,
+          'vertical_9_16',
+          `${base}${suffix}_9x16.mp4`,
+          id,
+          1080,
+        ),
       });
     }
   });
@@ -634,23 +818,34 @@ function buildJobs(preview, faceKfsRaw = null) {
 }
 
 async function startRender(preview) {
-  if (!state.reelsData.length) { alert('Brak danych reelsów!'); return; }
-  if (!state.videoPath) { alert('Wybierz plik wideo (pole "Pełna ścieżka")!'); return; }
-  if (!state.renderConfig.outDir) { alert('Wybierz katalog wyjściowy!'); return; }
+  if (!state.reelsData.length) {
+    alert('Brak danych reelsów!');
+    return;
+  }
+  if (!state.videoPath) {
+    alert('Wybierz plik wideo (pole "Pełna ścieżka")!');
+    return;
+  }
+  if (!state.renderConfig.outDir) {
+    alert('Wybierz katalog wyjściowy!');
+    return;
+  }
   if (state.renderConfig.logo && !state.renderConfig.logo.path) {
-    alert('Wybierz plik logo PNG!'); return;
+    alert('Wybierz plik logo PNG!');
+    return;
   }
 
   const rc = state.renderConfig;
   let faceKfsRaw = null;
   const needsVertical = rc.aspect === 'vertical_9_16' || rc.aspect === 'both';
 
-
   if (!preview && needsVertical && rc.faceTrackingMode === 'auto') {
     setFaceTrackingProgress(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      faceKfsRaw = await invoke('detect_face_keyframes', { sourcePath: state.videoPath });
+      faceKfsRaw = await invoke('detect_face_keyframes', {
+        sourcePath: state.videoPath,
+      });
       state._faceKfsCache = faceKfsRaw;
     } catch (e) {
       console.warn('Face detection failed, using center crop:', e);
@@ -689,26 +884,31 @@ function rerenderQueueUI() {
   if (!container) return;
 
   if (!queue.jobs.length) {
-    container.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px;">Brak zadań.</div>';
+    container.innerHTML =
+      '<div style="padding:12px;color:var(--text3);font-size:12px;">Brak zadań.</div>';
     return;
   }
 
-  container.innerHTML = queue.jobs.map(job => {
-    const statusLabel = STATUS_LABEL[job.status] || job.status;
-    const aspectLabel = ASPECT_LABEL[job.aspect] || job.aspect;
-    const pct = (job.percent || 0).toFixed(0);
+  container.innerHTML = queue.jobs
+    .map((job) => {
+      const statusLabel = STATUS_LABEL[job.status] || job.status;
+      const aspectLabel = ASPECT_LABEL[job.aspect] || job.aspect;
+      const pct = (job.percent || 0).toFixed(0);
 
-    const cancelBtn = job.status === 'running'
-      ? `<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;" data-action="cancel" data-id="${job.id}">Anuluj</button>`
-      : '';
-    const openBtn = job.status === 'done'
-      ? `<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;" data-action="open-folder" data-id="${job.id}">Otwórz folder</button>`
-      : '';
-    const errorMsg = job.status === 'error'
-      ? `<div style="font-size:10px;color:var(--red);margin-top:4px;">${escHtml(job.error || '')}</div>`
-      : '';
+      const cancelBtn =
+        job.status === 'running'
+          ? `<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;" data-action="cancel" data-id="${job.id}">Anuluj</button>`
+          : '';
+      const openBtn =
+        job.status === 'done'
+          ? `<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;" data-action="open-folder" data-id="${job.id}">Otwórz folder</button>`
+          : '';
+      const errorMsg =
+        job.status === 'error'
+          ? `<div style="font-size:10px;color:var(--red);margin-top:4px;">${escHtml(job.error || '')}</div>`
+          : '';
 
-    return `
+      return `
 <div class="render-reel-row">
   <div class="render-reel-meta">
     <span class="render-reel-label">Reel ${job.reelIdx + 1}: ${escHtml(job.reelName)}</span>
@@ -725,11 +925,12 @@ function rerenderQueueUI() {
   </div>
   ${errorMsg}
 </div>`;
-  }).join('');
+    })
+    .join('');
 }
 
 async function openJobFolder(id) {
-  const job = queue.jobs.find(j => j.id === id);
+  const job = queue.jobs.find((j) => j.id === id);
   if (!job || !job.outPath) return;
   try {
     const { open } = await import('@tauri-apps/plugin-shell');
@@ -757,21 +958,37 @@ export function initMetadataTab() {
 }
 
 function downloadMetadataJSON() {
-  if (!state.reelsMetadata.length) { alert('Brak metadanych — wygeneruj w Kroku 2!'); return; }
+  if (!state.reelsMetadata.length) {
+    alert('Brak metadanych — wygeneruj w Kroku 2!');
+    return;
+  }
   const filename = videoBase() + '_metadata.json';
-  downloadFile(filename, JSON.stringify(state.reelsMetadata, null, 2), 'application/json');
+  downloadFile(
+    filename,
+    JSON.stringify(state.reelsMetadata, null, 2),
+    'application/json',
+  );
 }
 
 async function extractAllThumbnails() {
-  if (!state.reelsMetadata.length) { alert('Brak metadanych!'); return; }
-  if (!state.renderConfig.outDir) { alert('Ustaw katalog wyjściowy w zakładce Render MP4!'); return; }
+  if (!state.reelsMetadata.length) {
+    alert('Brak metadanych!');
+    return;
+  }
+  if (!state.renderConfig.outDir) {
+    alert('Ustaw katalog wyjściowy w zakładce Render MP4!');
+    return;
+  }
   const { invoke } = await import('@tauri-apps/api/core');
   const isWindows = /win/i.test(navigator.platform);
   const sep = isWindows ? '\\' : '/';
-  const projBase = (state.projectName || 'reels').replace(/[^a-zA-Z0-9_\-]/g, '_');
-  const slug = s => s.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 30);
+  const projBase = (state.projectName || 'reels').replace(
+    /[^a-zA-Z0-9_\-]/g,
+    '_',
+  );
+  const slug = (s) => s.replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 30);
 
-  const doneJobs = queue.jobs.filter(j => j.status === 'done' && j.outPath);
+  const doneJobs = queue.jobs.filter((j) => j.status === 'done' && j.outPath);
 
   let extracted = 0;
   let skipped = 0;
@@ -780,12 +997,19 @@ async function extractAllThumbnails() {
     const ts = meta.thumbnailTimestamp ?? 0;
     const reelName = meta.reelName || '';
     // Collect all done jobs for this reel (may be >1 when aspect='both')
-    const reelJobs = doneJobs.filter(j => j.reelIdx === ri);
-    if (!reelJobs.length) { skipped++; continue; }
+    const reelJobs = doneJobs.filter((j) => j.reelIdx === ri);
+    if (!reelJobs.length) {
+      skipped++;
+      continue;
+    }
     for (const job of reelJobs) {
-      const outPath = `${state.renderConfig.outDir}${sep}${projBase}_${ri+1}_${slug(reelName)}_${job.aspect}_thumb.jpg`;
+      const outPath = `${state.renderConfig.outDir}${sep}${projBase}_${ri + 1}_${slug(reelName)}_${job.aspect}_thumb.jpg`;
       try {
-        await invoke('extract_thumbnail', { videoPath: job.outPath, timestamp: ts, outPath });
+        await invoke('extract_thumbnail', {
+          videoPath: job.outPath,
+          timestamp: ts,
+          outPath,
+        });
         extracted++;
       } catch (e) {
         console.warn('Thumbnail failed for reel', ri, e);
@@ -793,7 +1017,9 @@ async function extractAllThumbnails() {
     }
   }
   if (skipped > 0) {
-    alert(`Miniatury wyodrębnione: ${extracted}. Pominięto ${skipped} reelsów bez wyrenderowanego MP4.`);
+    alert(
+      `Miniatury wyodrębnione: ${extracted}. Pominięto ${skipped} reelsów bez wyrenderowanego MP4.`,
+    );
   } else {
     alert('Miniatury wyodrębnione do katalogu wyjściowego.');
   }
@@ -825,16 +1051,24 @@ function syncPresetDropdown() {
 
   // Global user presets
   const globalOpts = _globalPresetNames.length
-    ? _globalPresetNames.map(n => `<option value="global:${n}">💾 ${escHtml(n)}</option>`).join('')
+    ? _globalPresetNames
+        .map((n) => `<option value="global:${n}">💾 ${escHtml(n)}</option>`)
+        .join('')
     : '';
 
   // Project presets (F17)
   const projectOpts = Object.keys(state.namedPresets || {}).length
-    ? Object.keys(state.namedPresets).map(n => `<option value="project:${n}">📁 ${escHtml(n)}</option>`).join('')
+    ? Object.keys(state.namedPresets)
+        .map((n) => `<option value="project:${n}">📁 ${escHtml(n)}</option>`)
+        .join('')
     : '';
 
-  const divider1 = globalOpts ? '<option disabled>── Własne globalne ──</option>' : '';
-  const divider2 = projectOpts ? '<option disabled>── Presetów projektu ──</option>' : '';
+  const divider1 = globalOpts
+    ? '<option disabled>── Własne globalne ──</option>'
+    : '';
+  const divider2 = projectOpts
+    ? '<option disabled>── Presetów projektu ──</option>'
+    : '';
 
   sel.innerHTML = `<option value="">— wybierz preset —</option>
 ${platformOpts}
@@ -897,10 +1131,16 @@ async function applyGlobalPresetAsync(name) {
 
 async function saveGlobalPreset() {
   const name = document.getElementById('globalPresetName')?.value.trim();
-  if (!name) { alert('Podaj nazwę presetu!'); return; }
+  if (!name) {
+    alert('Podaj nazwę presetu!');
+    return;
+  }
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('save_render_preset', { name, content: JSON.stringify(state.renderConfig) });
+    await invoke('save_render_preset', {
+      name,
+      content: JSON.stringify(state.renderConfig),
+    });
     if (!_globalPresetNames.includes(name)) _globalPresetNames.push(name);
     syncPresetDropdown();
     document.getElementById('globalPresetName').value = '';
@@ -918,7 +1158,7 @@ async function deleteGlobalPreset() {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('delete_render_preset', { name });
-    _globalPresetNames = _globalPresetNames.filter(n => n !== name);
+    _globalPresetNames = _globalPresetNames.filter((n) => n !== name);
     syncPresetDropdown();
   } catch (e) {
     alert('Nie udało się usunąć presetu: ' + e);
@@ -927,7 +1167,10 @@ async function deleteGlobalPreset() {
 
 function saveProjectPreset() {
   const name = document.getElementById('projectPresetName')?.value.trim();
-  if (!name) { alert('Podaj nazwę presetu projektu!'); return; }
+  if (!name) {
+    alert('Podaj nazwę presetu projektu!');
+    return;
+  }
   if (!state.namedPresets) state.namedPresets = {};
   state.namedPresets[name] = JSON.parse(JSON.stringify(state.renderConfig));
   syncPresetDropdown();
@@ -966,12 +1209,15 @@ function downloadFile(name, content, type) {
 
 function copyEl(elId) {
   const el = document.getElementById(elId);
-  navigator.clipboard.writeText(el.textContent).then(() => {
-    const btn = document.activeElement;
-    const orig = btn.textContent;
-    btn.textContent = '✓ Skopiowano!';
-    setTimeout(() => (btn.textContent = orig), 1800);
-  }).catch(() => alert('Nie udało się skopiować — zaznacz i skopiuj ręcznie.'));
+  navigator.clipboard
+    .writeText(el.textContent)
+    .then(() => {
+      const btn = document.activeElement;
+      const orig = btn.textContent;
+      btn.textContent = '✓ Skopiowano!';
+      setTimeout(() => (btn.textContent = orig), 1800);
+    })
+    .catch(() => alert('Nie udało się skopiować — zaznacz i skopiuj ręcznie.'));
 }
 
 function escHtml(str) {
