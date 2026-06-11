@@ -132,4 +132,27 @@ Sygnatury potwierdzone w Scripting `README.txt`:
 > Wypełniane w Fazie 2. Ścieżka instalacji throwaway PoC (poza drzewem źródeł repo):
 
 - **PoC path:** `/Library/Application Support/Blackmagic Design/DaVinci Resolve/Workflow Integration Plugins/com.reels.edl.spike/`
-  (do utworzenia w Fazie 2; usuwany w Fazie 4. NIE pod `src/` ani `src-tauri/`.)
+  (utworzony w Fazie 2; usuwany w Fazie 4. NIE pod `src/` ani `src-tauri/`.)
+
+### Status budowy PoC (Faza 2)
+
+- **Zbudowany ✓** — minimalny plugin w modelu sandboxed (zgodny z `SamplePlugin`):
+  - `manifest.xml` (Id `com.reels.edl.spike`, FilePath `main.js`)
+  - `main.js` (proces główny: `Initialize` → `GetResolve` → `GetCurrentProject` → `GetMediaPool` → `GetRootFolder` → `AddSubFolder` → `SetCurrentFolder` → `CreateEmptyTimeline`)
+  - `preload.js` (`contextBridge.exposeInMainWorld('spikeAPI', …)` + `ipcRenderer.invoke`)
+  - `index.html` + `renderer.js` (panel: przyciski „Sprawdź połączenie" i „Utwórz bin + timeline")
+  - `WorkflowIntegration.node` (skopiowany z SDK SamplePlugin)
+- **Walidacja statyczna:** `node --check` przechodzi dla `main.js`, `preload.js`, `renderer.js`.
+- **Ograniczenie:** uruchomienie panelu i kliknięcie przycisku wymaga GUI Resolve Studio (krok human-in-the-loop) — agent nie steruje GUI. Instrukcja testu poniżej.
+
+### Instrukcja testu manualnego (operator) — kroki 2.2/2.3/2.4
+
+1. Uruchom (lub zrestartuj) **DaVinci Resolve Studio**, otwórz dowolny projekt.
+2. Menu **`Workspace → Workflow Integrations → Reels EDL Spike (F-02 throwaway)`** — panel powinien się pojawić w osobnym oknie. → **kryterium 2.2 (panel ładuje się)**.
+3. Kliknij **„Sprawdź połączenie (GetInfo)"** — log powinien pokazać nazwę bieżącego projektu + wersję modułu WorkflowIntegration.
+4. Kliknij **„Utwórz bin + timeline w projekcie"** — w **Media Pool** powinien pojawić się nowy bin `Reels_Spike_<timestamp>` (i, jeśli osiągalne, pusty timeline `…_TL`). → **kryterium 2.3 (widoczny nowy bin)**.
+5. Zapisz tu werbalnie **wynik / blokery / quirki** (np. czy `CreateEmptyTimeline` bez klipów się powiodło, komunikaty sandbox/CSP). → **kryterium 2.4**.
+
+> **Dowód wtórny (silny), niezależny od kroku GUI:** w tym samym katalogu pluginów działa już realny, komercyjny plugin **Snap-Captions** (`com.mediable.SnapCaptions`, Electron 36) — co dowodzi, że runtime WI w tej instalacji Studio **ładuje custom panele HTML/JS i sięga do API Resolve**. PoC F-02 używa dokładnie tego samego modelu (sandboxed Electron + `WorkflowIntegration.node`), więc ryzyko „nie załaduje się" jest empirycznie niskie.
+
+> **Wynik operatora (do uzupełnienia):** _<panel: ? / bin: ? / timeline: ? / blokery: ?>_

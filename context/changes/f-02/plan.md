@@ -222,18 +222,18 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [x] 1.1 Notes file exists: `test -f context/changes/f-02/research-notes.md`
+- [x] 1.1 Notes file exists: `test -f context/changes/f-02/research-notes.md` — 2cb9bca
 
 #### Manual
 
-- [x] 1.2 Notes answer all four section questions with a concrete source each
-- [x] 1.3 Minimal "create folder + timeline" API call sequence written down
+- [x] 1.2 Notes answer all four section questions with a concrete source each — 2cb9bca
+- [x] 1.3 Minimal "create folder + timeline" API call sequence written down — 2cb9bca
 
 ### Phase 2: Smoke-test PoC (throwaway)
 
 #### Automated
 
-- [ ] 2.1 PoC artifact path recorded in research-notes.md
+- [x] 2.1 PoC artifact path recorded in research-notes.md
 
 #### Manual
 
