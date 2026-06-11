@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-10
+updated: 2026-06-11
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -29,7 +29,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 
 | ID    | Change ID                   | Outcome (user can …)                                          | Prerequisites      | PRD refs                                      | Status   |
 | ----- | --------------------------- | ------------------------------------------------------------ | ------------------ | --------------------------------------------- | -------- |
-| F-01  | remove-render-path          | (foundation) FFmpeg render path deleted; regression fence green | —               | FR-038                                        | ready    |
+| F-01  | remove-render-path          | (foundation) FFmpeg render path deleted; regression fence green | —               | FR-038                                        | done     |
 | F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | ready    |
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | proposed |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
@@ -87,7 +87,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Large deletion — the danger is silently breaking the export pipeline or `.reelproj` load. Run `node --experimental-vm-modules test/regression.js` before and after; the suite is the only automated guard. Sequenced first so quality-critical work lands on a slimmed, fenced codebase.
-- **Status:** ready
+- **Status:** done
 
 ### F-02: Resolve plugin runtime spike
 
@@ -340,3 +340,5 @@ Foundations below assume these are present and do NOT re-scaffold them.
 ## Done
 
 (Empty on first generation. `/10x-archive` appends here — and flips the matching item's `Status` to `done` — when a change whose `Change ID` matches a roadmap item is archived. Do NOT pre-populate.)
+
+- **F-01: (foundation) FFmpeg render path deleted; regression fence green** — Archived 2026-06-11 → `context/archive/2026-06-10-f-01/`. Lesson: —.
