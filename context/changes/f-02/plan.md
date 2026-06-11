@@ -245,22 +245,22 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [x] 3.1 Notes contain a reuse evaluation section
+- [x] 3.1 Notes contain a reuse evaluation section — 0791db0
 
 #### Manual
 
-- [x] 3.2 All three strategies addressed; one explicitly recommended
-- [x] 3.3 invoke()→bridge mapping covers every post-F-01 surviving command
+- [x] 3.2 All three strategies addressed; one explicitly recommended — 0791db0
+- [x] 3.3 invoke()→bridge mapping covers every post-F-01 surviving command — 0791db0
 
 ### Phase 4: Decision doc + cleanup
 
 #### Automated
 
-- [ ] 4.1 Decision doc exists and names a verdict
-- [ ] 4.2 Repo source tree untouched (`git status --porcelain src src-tauri` empty)
+- [x] 4.1 Decision doc exists and names a verdict
+- [x] 4.2 Repo source tree untouched (`git status --porcelain src src-tauri` empty)
 
 #### Manual
 
-- [ ] 4.3 decision.md states exactly one verdict unambiguously
-- [ ] 4.4 If not Park, integration contract is concrete enough for S-09
-- [ ] 4.5 PoC artifacts confirmed deleted from the Resolve plugin path
+- [x] 4.3 decision.md states exactly one verdict unambiguously
+- [x] 4.4 If not Park, integration contract is concrete enough for S-09
+- [x] 4.5 PoC artifacts confirmed deleted from the Resolve plugin path
