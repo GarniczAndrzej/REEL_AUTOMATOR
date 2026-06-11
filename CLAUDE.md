@@ -25,9 +25,25 @@ npm run tauri build
 
 # Run regression tests (parser + exporter correctness)
 node --experimental-vm-modules test/regression.js
+
+# Format (Prettier — no npm script wired up; run directly)
+npx prettier --write "src/**/*.{js,css,html}"
 ```
 
-There is no linter configured.
+Prettier is configured (`.prettierrc` → `{ "singleQuote": true }`) but there is no
+lint/format npm script and no CI gate — run it manually as above. No ESLint.
+
+## Key invariants
+
+**Frame math** — all timeline arithmetic uses integer frames. `parseTime()` → seconds → `Math.round(seconds * fps)` → frames. Never round to seconds mid-pipeline. EDL record timecode starts at `3600 * fps` (1-hour offset, CMX 3600 convention).
+
+**`mergeAdjacentClips` is the render span source** — it converts `reel.clip_ids` → merged `{start_frame, end_frame}` spans → `{in_s, out_s}` for the Rust `Span` struct. The merge threshold defaults to 12 frames (~0.5s at 24fps); 0 disables merging.
+
+**Logo input index** — the logo PNG must be the second `-i` input (`[1:v]`). If a logo is present, it is inserted before `-filter_complex` in the args array. Audio and loudnorm always reference `[ac]`/`[an]`, never the video chain.
+
+**`output_w` must be passed from JS** — Rust doesn't probe the source video. For `aspect=source`, `output_w` comes from `state.videoResolution` (parsed as integer width). For `aspect=vertical_9_16`, it is always `1080`.
+
+**Subtitle temp file naming** — includes both `reel_id` and `aspect` (`reel_<id>_<aspect>.srt`) to avoid collisions when `aspect: "both"` triggers two concurrent renders of the same reel.
 
 ## Architecture
 
@@ -35,7 +51,7 @@ There is no linter configured.
 
 ES module app served by Vite. Entry point is `src/index.html` → `src/main.js`.
 
-**State** lives in `src/state.js` as a single mutable object exported as `state`. Changes are broadcast via a minimal pub-sub: `emit()` notifies all `subscribe(fn)` listeners. Nothing is reactive beyond this — components read `state` directly and call `emit()` after mutations.
+**State** lives in `src/state.js` as a single mutable object exported as `state`. Changes are broadcast via a minimal pub-sub: `emit()` notifies all `subscribe(fn)` listeners. Nothing is reactive beyond this — components read `state` directly. (The "call `emit()` after every mutation" rule lives in *Frontend state & module conventions* below.)
 
 **Three-step pipeline** driven by `goStep(n)` in `main.js`:
 1. `src/ui/step1-import.js` — SRT/video file drop/parse, Whisper transcription trigger, project save/load
@@ -53,8 +69,14 @@ ES module app served by Vite. Entry point is `src/index.html` → `src/main.js`.
 - `queue.js` — concurrent render queue (concurrency=2). `enqueueAll(jobs)` drives `invoke('run_render', ...)` calls; `cancelJob(id)` / `cancelAll()` invoke `cancel_render`.
 - `subtitles.js` — `buildReelSrt(reel, sentences, fps, mergeThreshold)` re-maps sentence timecodes to the reel's output timeline for subtitle burn-in.
 - `fillers.js` — Polish filler word sets (`ALWAYS_FILLERS`, `CONTEXT_FILLERS`) and `expandSpansWithFillerRemoval(mergedSpans, sentences, fps)` which converts word-level spans into micro-spans skipping fillers.
+- `timeline.js` — `drawTimeline(canvas, reel, sentences, fps, playheadFrame)` renders a reel's source-timeline (per-clip blocks + playhead) onto a 2D canvas. Pure draw; caller sets canvas intrinsic width first.
+- `waveform.js` — in-memory RMS-peak cache (`sentenceId → Float32Array`). `loadWaveform(...)` lazily `invoke`s the `extract_waveform` backend command; `cachedPeaks` / `invalidateWaveform` manage the cache.
 
-**AI providers** (`src/ai/providers.js`) — `callGemini`, `callClaude`, `callOpenRouter` each return a raw string; the caller strips ` ```json ` fences and `JSON.parse`s. The LLM schema is fixed in `src/ai/prompt.js` — changing it requires updating every consumer. Model names are constants in `src/ai/models.js` (`GEMINI_MODEL`, `CLAUDE_MODEL`).
+**AI providers** (`src/ai/providers.js`) — `callGemini`, `callClaude`, `callOpenRouter` each return a raw string; the caller strips ` ```json ` fences and `JSON.parse`s. The LLM schema is fixed in `src/ai/prompt.js` — changing it requires updating every consumer. Model names are constants in `src/ai/models.js` (`GEMINI_MODEL`, `CLAUDE_MODEL = 'claude-opus-4-7'`).
+
+**LLM disk cache** (`src/ai/cache.js`) — `withLlmCache(cacheKey, callFn)` wraps any provider call with a Tauri-backed disk cache keyed by SHA-256 of `cacheKey`, returning `{ result, fromCache, hashShort }`. Outside Tauri it falls through and calls `callFn` directly (no cache).
+
+**OpenRouter model picker** (`src/ai/openrouter-picker.js`) — searchable dropdown UI for the OpenRouter model list; loads/filters models and writes the selection back to `state`. Model list cached under `edl_or_models_cache`.
 
 ### Backend (`src-tauri/src/`)
 
@@ -70,6 +92,7 @@ Rust modules registered as Tauri commands in `lib.rs`:
 | `load_project` | `project.rs` | Read `.reelproj` JSON file |
 | `transcribe_video` | `whisper.rs` | Extract audio + run `whisper-cli`, return SRT + word timestamps |
 | `detect_face_keyframes` | `face_detect.rs` | Sample frames via FFmpeg sidecar, gradient-based edge tracking, return smoothed `{t, x}` keyframes for 9:16 crop |
+| `extract_waveform` | `waveform.rs` | Decode a span to mono PCM via FFmpeg sidecar, return `Vec<f32>` RMS peaks (`num_samples` buckets) for the clip-trim waveform UI; disk-cached as `<key>.bin` |
 
 **FFmpeg sidecar** lives at `src-tauri/binaries/ffmpeg-aarch64-apple-darwin`. Bundled via `tauri.conf.json → bundle.externalBin`. The `ffmpeg.rs` module spawns it via `tauri-plugin-shell`, parses `frame=N` progress lines from stderr, and emits `render-progress` events with `{reel_id, percent}`.
 
@@ -102,21 +125,9 @@ Video codec selected by `video_codec` field: `h264_videotoolbox`, `h264_nvenc` (
 
 Plain JSON written by `save_project` / read by `load_project`. Current schema version: 2. Contains the full `state` snapshot: `srtContent`, `sentences`, `reelsData`, `renderConfig`, and metadata. `renderConfig` uses serde defaults so v1 files (missing Phase 2 fields) load cleanly.
 
-## Key invariants
-
-**Frame math** — all timeline arithmetic uses integer frames. `parseTime()` → seconds → `Math.round(seconds * fps)` → frames. Never round to seconds mid-pipeline. EDL record timecode starts at `3600 * fps` (1-hour offset, CMX 3600 convention).
-
-**`mergeAdjacentClips` is the render span source** — it converts `reel.clip_ids` → merged `{start_frame, end_frame}` spans → `{in_s, out_s}` for the Rust `Span` struct. The merge threshold defaults to 12 frames (~0.5s at 24fps); 0 disables merging.
-
-**Logo input index** — the logo PNG must be the second `-i` input (`[1:v]`). If a logo is present, it is inserted before `-filter_complex` in the args array. Audio and loudnorm always reference `[ac]`/`[an]`, never the video chain.
-
-**`output_w` must be passed from JS** — Rust doesn't probe the source video. For `aspect=source`, `output_w` comes from `state.videoResolution` (parsed as integer width). For `aspect=vertical_9_16`, it is always `1080`.
-
-**Subtitle temp file naming** — includes both `reel_id` and `aspect` (`reel_<id>_<aspect>.srt`) to avoid collisions when `aspect: "both"` triggers two concurrent renders of the same reel.
-
 ## Things to know before editing
 
-- Model names live in `src/ai/models.js` (`CLAUDE_MODEL = 'claude-opus-4-5'`, `GEMINI_MODEL = 'gemini-2.0-flash'`). Update there when new models ship.
+- Model names live in `src/ai/models.js` (`CLAUDE_MODEL = 'claude-opus-4-7'`, `GEMINI_MODEL = 'gemini-2.0-flash'`). Update there when new models ship.
 - `callClaude` calls `api.anthropic.com` directly from the browser (CORS is allowed by Anthropic).
 - XML output targets FCP7 xmeml v4 (`<sequence>` per reel, shared `<file>` reference). The structure is fragile — test imports in Premiere/Resolve when changing it.
 - Lua output uses `mediaPool:AppendToTimeline()` in a single batch call, meant to be pasted into DaVinci Resolve's Console.
@@ -148,8 +159,8 @@ Plain JSON written by `save_project` / read by `load_project`. Current schema ve
   under `src/ui/stepN-*.js`, one file per pipeline step.
 - Exporters in `src/exporters/` are PURE functions of (`sentences`, `reelsData`) → string.
   No DOM access, no `state` import, no I/O. Keep them pure so regression tests stay simple.
-- Timeline math is integer-frame only: seconds → `Math.round(s * fps)` → frames. Never round
-  to seconds mid-pipeline. EDL record TC keeps the CMX-3600 1-hour offset (`3600 * fps`).
+- Timeline math is integer-frame only — see **Key invariants → Frame math** (top of file) for
+  the canonical rule (`Math.round(s * fps)`, no mid-pipeline rounding, CMX-3600 offset).
 
 ## Tests (bespoke runner — no CI gate exists)
 
