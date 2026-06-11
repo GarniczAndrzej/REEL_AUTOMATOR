@@ -334,29 +334,29 @@ Pure deletion — strictly reduces bundle size, command surface, and backend bin
 
 #### Automated
 
-- [x] 1.1 Rust type-checks: `cargo check --manifest-path src-tauri/Cargo.toml`
-- [x] 1.2 No render references remain in `src-tauri/src/` (grep clean)
-- [x] 1.3 Sidecar `externalBin` entry intact in `tauri.conf.json`
+- [x] 1.1 Rust type-checks: `cargo check --manifest-path src-tauri/Cargo.toml` — 6640609
+- [x] 1.2 No render references remain in `src-tauri/src/` (grep clean) — 6640609
+- [x] 1.3 Sidecar `externalBin` entry intact in `tauri.conf.json` — 6640609
 
 #### Manual
 
-- [x] 1.4 App launches via `npm run tauri dev` (backend boots without render commands)
-- [x] 1.5 Whisper path still invokes the sidecar (audio extraction works)
+- [x] 1.4 App launches via `npm run tauri dev` (backend boots without render commands) — 6640609
+- [x] 1.5 Whisper path still invokes the sidecar (audio extraction works) — 6640609
 
 ### Phase 2: Frontend render removal + relocate survivors
 
 #### Automated
 
-- [ ] 2.1 Production build succeeds: `npm run tauri build` (or `npx vite build`)
-- [ ] 2.2 Regression suite green: `node --experimental-vm-modules test/regression.js`
-- [ ] 2.3 No render references remain in `src/` (grep clean)
-- [ ] 2.4 `src/render/` gone; `src/selection/` holds fillers/timeline/waveform
+- [x] 2.1 Production build succeeds: `npm run tauri build` (or `npx vite build`)
+- [x] 2.2 Regression suite green: `node --experimental-vm-modules test/regression.js`
+- [x] 2.3 No render references remain in `src/` (grep clean)
+- [x] 2.4 `src/render/` gone; `src/selection/` holds fillers/timeline/waveform
 
 #### Manual
 
-- [ ] 2.5 App boots, no missing-module console errors
-- [ ] 2.6 SRT import → EDL/XML/Lua tabs each generate output
-- [ ] 2.7 No Render tab; step-2 timeline canvas still draws (horizontal)
+- [x] 2.5 App boots, no missing-module console errors
+- [x] 2.6 SRT import → EDL/XML/Lua tabs each generate output
+- [x] 2.7 No Render tab; step-2 timeline canvas still draws (horizontal)
 
 ### Phase 3: Remove the Metadata feature
 

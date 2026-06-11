@@ -1014,25 +1014,6 @@ textarea::placeholder { color: var(--text3); }
   box-shadow: 0 0 0 2px rgba(124,109,250,0.25);
 }
 
-/* ── F13 — resume banner ─────────────────────────────────────────── */
-#resumeBanner {
-  position: fixed;
-  top: 72px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 900;
-  background: var(--surface2);
-  border: 1px solid var(--amber);
-  border-radius: 8px;
-  padding: 10px 18px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
-  white-space: nowrap;
-}
-
 /* ── F8 — comparison modal ───────────────────────────────────────── */
 .modal-overlay {
   position: fixed;

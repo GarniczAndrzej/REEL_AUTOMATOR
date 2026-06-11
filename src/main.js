@@ -97,40 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       step2.redo();
     }
   });
-
-  // ── F13 — Resume interrupted renders ──────────────────────────────
-  await checkResumeQueue();
 });
-
-// ── F13 helpers ───────────────────────────────────────────────────────
-
-async function checkResumeQueue() {
-  try {
-    const { loadSavedQueue, resumeQueue, clearSavedQueue } =
-      await import('./render/queue.js');
-    const pendingJobs = await loadSavedQueue();
-    if (!pendingJobs) return;
-
-    const banner = document.getElementById('resumeBanner');
-    if (!banner) return;
-    const countEl = banner.querySelector('#resumeCount');
-    if (countEl) countEl.textContent = pendingJobs.length;
-    banner.style.display = '';
-
-    banner.querySelector('#resumeYesBtn').onclick = async () => {
-      banner.style.display = 'none';
-      goStep(3);
-      document.getElementById('tabBtnRender').click();
-      document.getElementById('renderQueuePanel').style.display = 'block';
-      resumeQueue(pendingJobs);
-    };
-
-    banner.querySelector('#resumeNoBtn').onclick = async () => {
-      banner.style.display = 'none';
-      await clearSavedQueue();
-    };
-  } catch {}
-}
 
 function saveApiKey() {
   const key = document.getElementById('apiKeyInput').value.trim();

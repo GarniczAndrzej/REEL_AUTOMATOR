@@ -3,20 +3,20 @@ import { buildPrompt, buildMetadataPrompt } from '../ai/prompt.js';
 import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
 import { framesToTC } from '../parser/srt.js';
-import { isFiller } from '../render/fillers.js';
+import { isFiller } from '../selection/fillers.js';
 import {
   loadWaveform,
   drawWaveform,
   cachedPeaks,
   invalidateWaveform,
-} from '../render/waveform.js';
+} from '../selection/waveform.js';
 import {
   drawTimeline,
   frameFromX,
   reelSourceSpan,
-} from '../render/timeline.js';
+} from '../selection/timeline.js';
 
-// ── Undo / redo (F16 — covers reelsData, sentences, renderConfig) ──────
+// ── Undo / redo (F16 — covers reelsData, sentences) ────────────────────
 
 const undoStack = [];
 const redoStack = [];
@@ -28,7 +28,6 @@ export function snap() {
       clip_ids: [...r.clip_ids],
     })),
     sentences: state.sentences.map((s) => ({ ...s })),
-    renderConfig: JSON.parse(JSON.stringify(state.renderConfig)),
     reelsMetadata: (state.reelsMetadata || []).map((m) => (m ? { ...m } : m)),
   };
 }
@@ -46,10 +45,6 @@ export function undo() {
   state.reelsData = prev.reelsData;
   state.sentences = prev.sentences;
   state.reelsMetadata = prev.reelsMetadata ?? [];
-  if (prev.renderConfig) {
-    state.renderConfig = prev.renderConfig;
-    document.dispatchEvent(new CustomEvent('reel:syncRenderConfig'));
-  }
   renderReels();
   emit();
 }
@@ -61,10 +56,6 @@ export function redo() {
   state.reelsData = next.reelsData;
   state.sentences = next.sentences;
   state.reelsMetadata = next.reelsMetadata ?? [];
-  if (next.renderConfig) {
-    state.renderConfig = next.renderConfig;
-    document.dispatchEvent(new CustomEvent('reel:syncRenderConfig'));
-  }
   renderReels();
   emit();
 }
@@ -191,8 +182,7 @@ function hidePreviewPanel() {
 
 function updatePreviewPanelSize() {
   if (!previewVideoEl) return;
-  const isVertical = state.renderConfig?.aspect === 'vertical_9_16';
-  previewVideoEl.style.width = isVertical ? '101px' : '320px';
+  previewVideoEl.style.width = '320px';
   previewVideoEl.style.height = '180px';
 }
 

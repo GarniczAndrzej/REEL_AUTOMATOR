@@ -339,8 +339,6 @@ async function writeProject(path) {
       sentences: state.sentences,
       reelsData: state.reelsData,
       reelsMetadata: state.reelsMetadata,
-      renderConfig: state.renderConfig,
-      namedPresets: state.namedPresets || {},
       sources: state.sources || [],
     };
     await invoke('save_project', { path, payload });
@@ -367,8 +365,6 @@ function applyProjectData(data) {
   if (data.sentences) state.sentences = data.sentences;
   if (data.reelsData) state.reelsData = data.reelsData;
   if (data.reelsMetadata) state.reelsMetadata = data.reelsMetadata;
-  if (data.renderConfig) Object.assign(state.renderConfig, data.renderConfig);
-  if (data.namedPresets) state.namedPresets = data.namedPresets;
   if (data.sources) state.sources = data.sources;
 
   // Sync DOM — Step 1 fields
