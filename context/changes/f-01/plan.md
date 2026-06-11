@@ -376,12 +376,12 @@ Pure deletion — strictly reduces bundle size, command surface, and backend bin
 
 #### Automated
 
-- [x] 4.1 Regression suite green incl. new back-compat case
-- [x] 4.2 Production build succeeds
-- [x] 4.3 Saved `.reelproj` is `version: 3` with no `renderConfig`/`reelsMetadata`
+- [x] 4.1 Regression suite green incl. new back-compat case — 08d5349
+- [x] 4.2 Production build succeeds — 08d5349
+- [x] 4.3 Saved `.reelproj` is `version: 3` with no `renderConfig`/`reelsMetadata` — 08d5349
 
 #### Manual
 
-- [x] 4.4 Old v2 `.reelproj` (with `renderConfig`) loads without error
-- [x] 4.5 EDL/XML/Lua export from the loaded project; spot-check NLE import
-- [x] 4.6 Re-saved project is v3 with dead blobs gone
+- [x] 4.4 Old v2 `.reelproj` (with `renderConfig`) loads without error — 08d5349
+- [x] 4.5 EDL/XML/Lua export from the loaded project; spot-check NLE import — 08d5349
+- [x] 4.6 Re-saved project is v3 with dead blobs gone — 08d5349
