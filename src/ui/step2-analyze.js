@@ -1,5 +1,5 @@
 import { state, emit, subscribe } from '../state.js';
-import { buildPrompt, buildMetadataPrompt } from '../ai/prompt.js';
+import { buildPrompt } from '../ai/prompt.js';
 import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
 import { framesToTC } from '../parser/srt.js';
@@ -28,7 +28,6 @@ export function snap() {
       clip_ids: [...r.clip_ids],
     })),
     sentences: state.sentences.map((s) => ({ ...s })),
-    reelsMetadata: (state.reelsMetadata || []).map((m) => (m ? { ...m } : m)),
   };
 }
 
@@ -44,7 +43,6 @@ export function undo() {
   const prev = undoStack.pop();
   state.reelsData = prev.reelsData;
   state.sentences = prev.sentences;
-  state.reelsMetadata = prev.reelsMetadata ?? [];
   renderReels();
   emit();
 }
@@ -55,7 +53,6 @@ export function redo() {
   const next = redoStack.pop();
   state.reelsData = next.reelsData;
   state.sentences = next.sentences;
-  state.reelsMetadata = next.reelsMetadata ?? [];
   renderReels();
   emit();
 }
@@ -365,10 +362,6 @@ export function init() {
   document.getElementById('goStep3Btn').addEventListener('click', () => {
     document.dispatchEvent(new CustomEvent('reel:goStep', { detail: 3 }));
   });
-
-  document
-    .getElementById('genMetaBtn')
-    .addEventListener('click', generateMetadata);
 
   initPreviewVideo();
 
@@ -1034,7 +1027,6 @@ function applyManualJSON() {
   try {
     const before = snap();
     state.reelsData = JSON.parse(document.getElementById('jsonEditor').value);
-    state.reelsMetadata = [];
     pushUndo(before);
     renderReels();
     document.getElementById('statusReels').textContent = state.reelsData.length;
@@ -1064,7 +1056,6 @@ function applyPastedJSON() {
     if (!parsed[0].clip_ids) throw new Error('Brak pola clip_ids w obiektach');
     const before = snap();
     state.reelsData = parsed;
-    state.reelsMetadata = [];
     pushUndo(before);
     renderReels();
     document.getElementById('statusReels').textContent = state.reelsData.length;
@@ -1083,112 +1074,6 @@ function clearPastedJSON() {
   document.getElementById('pasteJsonInput').value = '';
   document.getElementById('pasteJsonStatus').textContent = '';
 }
-
-// ── F6 Metadata generation ─────────────────────────────────────────
-
-async function generateMetadata() {
-  if (!state.reelsData.length) {
-    alert('Najpierw wygeneruj reelsy (Krok 2)!');
-    return;
-  }
-  const apiKey =
-    document.getElementById('apiKeyInput').value.trim() ||
-    localStorage.getItem('edl_apikey_' + state.currentProvider) ||
-    '';
-  if (!apiKey) {
-    alert('Wklej API key w nagłówku!');
-    return;
-  }
-  if (state.currentProvider === 'openrouter' && !state.orSelectedModel) {
-    alert('Wybierz model OpenRouter!');
-    return;
-  }
-
-  const btn = document.getElementById('genMetaBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Generuję metadane…';
-  state.reelsMetadata = [];
-  document.getElementById('metadataCard').style.display = 'block';
-
-  for (const [ri, reel] of state.reelsData.entries()) {
-    const prompt = buildMetadataPrompt(reel, state.sentences);
-    const placeholder = {
-      reelIdx: ri,
-      reelName: reel.reel_name,
-      loading: true,
-    };
-    state.reelsMetadata[ri] = placeholder;
-    renderMetadataList();
-
-    try {
-      let responseText = '';
-      if (state.currentProvider === 'gemini') {
-        responseText = await callGemini(apiKey, prompt);
-      } else if (state.currentProvider === 'claude') {
-        responseText = await callClaude(apiKey, prompt);
-      } else {
-        responseText = await callOpenRouter(
-          apiKey,
-          prompt,
-          state.orSelectedModel,
-        );
-      }
-      const cleaned = responseText.replace(/```json|```/g, '').trim();
-      const meta = JSON.parse(cleaned);
-      state.reelsMetadata[ri] = {
-        reelIdx: ri,
-        reelName: reel.reel_name,
-        ...meta,
-      };
-    } catch (e) {
-      state.reelsMetadata[ri] = {
-        reelIdx: ri,
-        reelName: reel.reel_name,
-        error: e.message,
-      };
-    }
-    renderMetadataList();
-  }
-
-  btn.disabled = false;
-  btn.textContent = '🪄 Generuj metadane';
-  emit();
-}
-
-export function renderMetadataList() {
-  const html = buildMetadataHTML();
-  const c1 = document.getElementById('metadataList');
-  const c2 = document.getElementById('metadataTabList');
-  if (c1) c1.innerHTML = html;
-  if (c2) c2.innerHTML = html;
-}
-
-function buildMetadataHTML() {
-  if (!state.reelsMetadata.length) return '';
-  return state.reelsMetadata
-    .map((m, i) => {
-      if (!m) return '';
-      if (m.loading)
-        return `<div style="padding:12px;color:var(--text3);font-size:12px;">Reel ${i + 1}: ładowanie…</div>`;
-      if (m.error)
-        return `<div style="padding:12px;color:var(--red);font-size:12px;">Reel ${i + 1} — Błąd: ${esc(m.error)}</div>`;
-      const tags = (m.hashtags || [])
-        .map(
-          (h) =>
-            `<span style="background:var(--surface2);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--accent2);">${esc(h)}</span>`,
-        )
-        .join(' ');
-      return `<div class="card" style="margin-bottom:12px;padding:14px;">
-  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Reel ${i + 1}: ${esc(m.reel_name)}</div>
-  <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">${esc(m.title || '—')}</div>
-  <div style="font-size:12px;color:var(--text2);font-style:italic;margin-bottom:8px;">${esc(m.hook || '')}</div>
-  <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">${esc(m.description || '')}</div>
-  <div style="display:flex;flex-wrap:wrap;gap:4px;">${tags}</div>
-  ${m.thumbnailTimestamp != null ? `<div style="font-size:11px;color:var(--text3);margin-top:8px;">📸 Miniatura: ${m.thumbnailTimestamp}s</div>` : ''}
-</div>`;
-    })
-    .join('');
-} // end buildMetadataHTML
 
 // ── F8 — Compare two AI runs ───────────────────────────────────────
 
@@ -1353,7 +1238,6 @@ function applyCompareResult(which) {
   if (!result) return;
   pushUndo(snap());
   state.reelsData = result;
-  state.reelsMetadata = [];
   renderReels();
   document.getElementById('statusReels').textContent = state.reelsData.length;
   document.getElementById('reelsCard').style.display = 'block';

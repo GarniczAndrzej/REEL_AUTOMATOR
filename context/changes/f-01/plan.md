@@ -347,30 +347,30 @@ Pure deletion — strictly reduces bundle size, command surface, and backend bin
 
 #### Automated
 
-- [x] 2.1 Production build succeeds: `npm run tauri build` (or `npx vite build`)
-- [x] 2.2 Regression suite green: `node --experimental-vm-modules test/regression.js`
-- [x] 2.3 No render references remain in `src/` (grep clean)
-- [x] 2.4 `src/render/` gone; `src/selection/` holds fillers/timeline/waveform
+- [x] 2.1 Production build succeeds: `npm run tauri build` (or `npx vite build`) — babdf2f
+- [x] 2.2 Regression suite green: `node --experimental-vm-modules test/regression.js` — babdf2f
+- [x] 2.3 No render references remain in `src/` (grep clean) — babdf2f
+- [x] 2.4 `src/render/` gone; `src/selection/` holds fillers/timeline/waveform — babdf2f
 
 #### Manual
 
-- [x] 2.5 App boots, no missing-module console errors
-- [x] 2.6 SRT import → EDL/XML/Lua tabs each generate output
-- [x] 2.7 No Render tab; step-2 timeline canvas still draws (horizontal)
+- [x] 2.5 App boots, no missing-module console errors — babdf2f
+- [x] 2.6 SRT import → EDL/XML/Lua tabs each generate output — babdf2f
+- [x] 2.7 No Render tab; step-2 timeline canvas still draws (horizontal) — babdf2f
 
 ### Phase 3: Remove the Metadata feature
 
 #### Automated
 
-- [ ] 3.1 Production build succeeds
-- [ ] 3.2 Regression suite green
-- [ ] 3.3 No metadata references remain in `src/` (grep clean)
+- [x] 3.1 Production build succeeds
+- [x] 3.2 Regression suite green
+- [x] 3.3 No metadata references remain in `src/` (grep clean)
 
 #### Manual
 
-- [ ] 3.4 App boots; AI selection still produces reels
-- [ ] 3.5 No Metadata tab / "Generuj metadane" button; no console errors
-- [ ] 3.6 Undo/redo in step 2 still works
+- [x] 3.4 App boots; AI selection still produces reels
+- [x] 3.5 No Metadata tab / "Generuj metadane" button; no console errors
+- [x] 3.6 Undo/redo in step 2 still works
 
 ### Phase 4: `.reelproj` v3 migration + regression fence
 

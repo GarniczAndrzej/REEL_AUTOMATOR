@@ -3,7 +3,6 @@ import { generateEDL } from '../exporters/edl.js';
 import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
 import { mergeAdjacentClips } from '../parser/segments.js';
-import { renderMetadataList } from './step2-analyze.js';
 
 export function init() {
   // Tab switching
@@ -16,9 +15,6 @@ export function init() {
   document
     .getElementById('tabBtnLua')
     .addEventListener('click', () => switchTab('Lua'));
-  document
-    .getElementById('tabBtnMeta')
-    .addEventListener('click', () => switchTab('Meta'));
 
   // Video filename inputs
   document.getElementById('videoFilename2').addEventListener('input', (e) => {
@@ -96,9 +92,6 @@ export function init() {
   document
     .getElementById('copyLuaBtn')
     .addEventListener('click', () => copyEl('luaOutput'));
-
-  // F6 metadata tab
-  initMetadataTab();
 }
 
 export function updateSummary() {
@@ -112,10 +105,6 @@ export function updateSummary() {
   document.getElementById('videoFullPath').value = state.videoPath || '';
   document.getElementById('mergeThreshold').value = state.mergeThreshold;
   document.getElementById('projectName').value = state.projectName;
-
-  // F6 — metadata tab
-  if (state.reelsMetadata.length) renderMetadataList();
-  syncMetadataExportBtn();
 }
 
 // ── helpers ────────────────────────────────────────────────────────
@@ -238,31 +227,6 @@ async function browseVideo() {
   } catch (e) {
     alert('Nie udało się wybrać pliku: ' + e);
   }
-}
-
-// ── F6 Metadata export ───────────────────────────────────────────────
-
-function syncMetadataExportBtn() {
-  const btn = document.getElementById('downloadMetadataBtn');
-  if (btn) btn.disabled = !state.reelsMetadata.length;
-}
-
-export function initMetadataTab() {
-  const dlBtn = document.getElementById('downloadMetadataBtn');
-  if (dlBtn) dlBtn.addEventListener('click', downloadMetadataJSON);
-}
-
-function downloadMetadataJSON() {
-  if (!state.reelsMetadata.length) {
-    alert('Brak metadanych — wygeneruj w Kroku 2!');
-    return;
-  }
-  const filename = videoBase() + '_metadata.json';
-  downloadFile(
-    filename,
-    JSON.stringify(state.reelsMetadata, null, 2),
-    'application/json',
-  );
 }
 
 // ── utilities ──────────────────────────────────────────────────────

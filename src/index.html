@@ -239,14 +239,7 @@
         <div class="reels-list" id="reelsList"></div>
         <div style="margin-top:14px;" class="btn-row">
           <button class="btn btn-secondary" id="editJsonBtn">✏ Edytuj JSON ręcznie</button>
-          <button class="btn btn-secondary" id="genMetaBtn">🪄 Generuj metadane</button>
         </div>
-      </div>
-
-      <!-- F6 — metadata card -->
-      <div class="card" id="metadataCard" style="display:none">
-        <div class="card-title">Metadane reelsów</div>
-        <div id="metadataList"></div>
       </div>
 
       <div class="card" id="jsonEditorCard" style="display:none">
@@ -360,11 +353,6 @@
           <span class="tab-label">Skrypt DaVinci</span>
           <span class="tab-sub">1 klik → gotowy timeline</span>
         </button>
-        <button class="export-tab" id="tabBtnMeta">
-          <span class="tab-icon">📊</span>
-          <span class="tab-label">Metadane</span>
-          <span class="tab-sub">Tytuły, hashtagi, miniatury</span>
-        </button>
       </div>
 
       <!-- EDL tab -->
@@ -432,21 +420,6 @@
             <button class="btn btn-success" id="copyLuaBtn">📋 Kopiuj skrypt (wklej do DaVinci Console)</button>
             <button class="btn btn-secondary" id="downloadLuaBtn">⬇ Pobierz .lua</button>
           </div>
-        </div>
-      </div>
-
-      <!-- F6 — Metadane tab panel -->
-      <div class="export-panel" id="tabMeta">
-        <div class="info-box" style="margin-bottom:14px;">
-          <strong>Metadane reelsów</strong> — Tytuły, hooki, opisy i hashtagi wygenerowane przez AI w Kroku 2. Można też wyodrębnić miniatury z wyrenderowanych plików MP4.
-        </div>
-        <div id="metadataTabList"></div>
-        <div class="btn-row" style="margin-top:14px;">
-          <button class="btn btn-success" id="downloadMetadataBtn" disabled>⬇ Eksportuj metadane .json</button>
-          <button class="btn btn-secondary" id="extractThumbsBtn" disabled>📸 Wytnij miniatury z MP4</button>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:8px;">
-          Miniatury wymagają wyrenderowanych plików MP4 w kolejce (zakładka Render MP4) i ustawionego katalogu wyjściowego.
         </div>
       </div>
 

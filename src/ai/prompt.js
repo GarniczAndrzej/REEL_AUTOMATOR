@@ -1,28 +1,3 @@
-export function buildMetadataPrompt(reel, sentences) {
-  const reelText = reel.clip_ids
-    .map((id) => sentences.find((s) => s.id === id)?.text || '')
-    .filter(Boolean)
-    .join(' ');
-  return `Otrzymujesz pełen tekst Reelu i jego nazwę. Zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
-{
-  "title": "...",
-  "hook": "...",
-  "description": "...",
-  "hashtags": ["#...", ...],
-  "thumbnailTimestamp": 0
-}
-Reguły:
-- title: max 60 znaków, hookujący tytuł
-- hook: pierwsze mocne zdanie, max 100 znaków
-- description: 2–3 zdania, wiralowy ton
-- hashtags: 8–12 elementów, polskie + angielskie
-- thumbnailTimestamp: czas (sekundy od 0) najbardziej emocjonalnego momentu w reelu
-
-Nazwa Reelu: ${reel.reel_name}
-Tekst Reelu:
-${reelText}`;
-}
-
 export function buildPrompt(
   userPrompt,
   sentences,

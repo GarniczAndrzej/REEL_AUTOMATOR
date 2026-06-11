@@ -338,7 +338,6 @@ async function writeProject(path) {
       whisperModelPath: state.whisperModelPath,
       sentences: state.sentences,
       reelsData: state.reelsData,
-      reelsMetadata: state.reelsMetadata,
       sources: state.sources || [],
     };
     await invoke('save_project', { path, payload });
@@ -364,7 +363,6 @@ function applyProjectData(data) {
   if (data.whisperModelPath) state.whisperModelPath = data.whisperModelPath;
   if (data.sentences) state.sentences = data.sentences;
   if (data.reelsData) state.reelsData = data.reelsData;
-  if (data.reelsMetadata) state.reelsMetadata = data.reelsMetadata;
   if (data.sources) state.sources = data.sources;
 
   // Sync DOM — Step 1 fields
@@ -403,11 +401,6 @@ function applyProjectData(data) {
       </div>`,
       )
       .join('');
-  }
-
-  // Render metadata list if present
-  if (state.reelsMetadata && state.reelsMetadata.length) {
-    import('./step2-analyze.js').then((m) => m.renderMetadataList());
   }
 
   // F18 — restore additional sources UI
