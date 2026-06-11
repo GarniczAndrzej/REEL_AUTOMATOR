@@ -222,12 +222,12 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [ ] 1.1 Notes file exists: `test -f context/changes/f-02/research-notes.md`
+- [x] 1.1 Notes file exists: `test -f context/changes/f-02/research-notes.md`
 
 #### Manual
 
-- [ ] 1.2 Notes answer all four section questions with a concrete source each
-- [ ] 1.3 Minimal "create folder + timeline" API call sequence written down
+- [x] 1.2 Notes answer all four section questions with a concrete source each
+- [x] 1.3 Minimal "create folder + timeline" API call sequence written down
 
 ### Phase 2: Smoke-test PoC (throwaway)
 
