@@ -1,7 +1,7 @@
 ---
 change_id: f-01
 title: Render-path removal + regression fence
-status: implemented
+status: impl_reviewed
 created: 2026-06-10
 updated: 2026-06-11
 archived_at: null

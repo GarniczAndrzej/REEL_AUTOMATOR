@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Reels EDL Automator** — a Tauri 2 desktop app (Vite + vanilla JS frontend, Rust backend) that converts SRT subtitle files into edit timelines (EDL / FCP XML / DaVinci Resolve Lua) using an LLM, and optionally renders final MP4 reels directly via a bundled FFmpeg sidecar. All user-facing strings are Polish.
+**Reels EDL Automator** — a Tauri 2 desktop app (Vite + vanilla JS frontend, Rust backend) that converts SRT subtitle files into edit timelines (EDL / FCP XML / DaVinci Resolve Lua) using an LLM. The in-app MP4 render path was removed in F-01; the bundled FFmpeg sidecar remains, now used only for Whisper audio extraction and the waveform UI. All user-facing strings are Polish.
 
 `legacy/ReelAutomatorAI.html` and `ReelAutomatorAI.html` are the original single-file browser prototypes — kept for reference but not the active app.
 
@@ -37,13 +37,7 @@ lint/format npm script and no CI gate — run it manually as above. No ESLint.
 
 **Frame math** — all timeline arithmetic uses integer frames. `parseTime()` → seconds → `Math.round(seconds * fps)` → frames. Never round to seconds mid-pipeline. EDL record timecode starts at `3600 * fps` (1-hour offset, CMX 3600 convention).
 
-**`mergeAdjacentClips` is the render span source** — it converts `reel.clip_ids` → merged `{start_frame, end_frame}` spans → `{in_s, out_s}` for the Rust `Span` struct. The merge threshold defaults to 12 frames (~0.5s at 24fps); 0 disables merging.
-
-**Logo input index** — the logo PNG must be the second `-i` input (`[1:v]`). If a logo is present, it is inserted before `-filter_complex` in the args array. Audio and loudnorm always reference `[ac]`/`[an]`, never the video chain.
-
-**`output_w` must be passed from JS** — Rust doesn't probe the source video. For `aspect=source`, `output_w` comes from `state.videoResolution` (parsed as integer width). For `aspect=vertical_9_16`, it is always `1080`.
-
-**Subtitle temp file naming** — includes both `reel_id` and `aspect` (`reel_<id>_<aspect>.srt`) to avoid collisions when `aspect: "both"` triggers two concurrent renders of the same reel.
+**`mergeAdjacentClips` is the export span source** — it converts `reel.clip_ids` → merged `{start_frame, end_frame}` spans, consumed by the EDL/XML/Lua exporters. The merge threshold defaults to 12 frames (~0.5s at 24fps); 0 disables merging.
 
 ## Architecture
 
@@ -56,19 +50,16 @@ ES module app served by Vite. Entry point is `src/index.html` → `src/main.js`.
 **Three-step pipeline** driven by `goStep(n)` in `main.js`:
 1. `src/ui/step1-import.js` — SRT/video file drop/parse, Whisper transcription trigger, project save/load
 2. `src/ui/step2-analyze.js` — AI analysis, reel JSON editor
-3. `src/ui/step3-export.js` — EDL/XML/Lua export tabs + MP4 render tab
+3. `src/ui/step3-export.js` — EDL/XML/Lua export tabs
 
 **Exporters** (`src/exporters/`) are pure functions: `generateEDL(opts)`, `generateXML(opts)`, `generateLua(opts)`. They read `sentences` + `reelsData` and return strings.
 
 **Parser** (`src/parser/`):
 - `srt.js` — `parseSRT(text, fps, minChars)` merges SRT cues into full sentences (punctuation-terminated), returns `sentences[]` with `{id, text, start_frame, end_frame, duration_frame, start_tc, end_tc}`.
-- `segments.js` — `mergeAdjacentClips(clipIds, sentences, thresholdFrames)` collapses adjacent sentence IDs whose gap is ≤ threshold into merged spans. This is the input to the FFmpeg render.
+- `segments.js` — `mergeAdjacentClips(clipIds, sentences, thresholdFrames)` collapses adjacent sentence IDs whose gap is ≤ threshold into merged spans. This is the input to the exporters.
 
-**Render support** (`src/render/`):
-- `settings.js` — `defaultRenderConfig()` defines the shape stored at `state.renderConfig`.
-- `queue.js` — concurrent render queue (concurrency=2). `enqueueAll(jobs)` drives `invoke('run_render', ...)` calls; `cancelJob(id)` / `cancelAll()` invoke `cancel_render`.
-- `subtitles.js` — `buildReelSrt(reel, sentences, fps, mergeThreshold)` re-maps sentence timecodes to the reel's output timeline for subtitle burn-in.
-- `fillers.js` — Polish filler word sets (`ALWAYS_FILLERS`, `CONTEXT_FILLERS`) and `expandSpansWithFillerRemoval(mergedSpans, sentences, fps)` which converts word-level spans into micro-spans skipping fillers.
+**Selection support** (`src/selection/`) — relocated here from the removed `src/render/` in F-01:
+- `fillers.js` — Polish filler word sets (`ALWAYS_FILLERS`, `CONTEXT_FILLERS`) used by step-2 selection. Also still exports `expandSpansWithFillerRemoval(mergedSpans, sentences, fps)`, retained for S-04 (currently no consumer).
 - `timeline.js` — `drawTimeline(canvas, reel, sentences, fps, playheadFrame)` renders a reel's source-timeline (per-clip blocks + playhead) onto a 2D canvas. Pure draw; caller sets canvas intrinsic width first.
 - `waveform.js` — in-memory RMS-peak cache (`sentenceId → Float32Array`). `loadWaveform(...)` lazily `invoke`s the `extract_waveform` backend command; `cachedPeaks` / `invalidateWaveform` manage the cache.
 
@@ -84,46 +75,18 @@ Rust modules registered as Tauri commands in `lib.rs`:
 
 | Command | Module | Purpose |
 |---|---|---|
-| `run_render` | `rendering.rs` | FFmpeg filter graph + optional intro/outro concat |
-| `cancel_render` | `rendering.rs` | Signal cancellation for a running reel render |
-| `detect_hw_encoder` | `rendering.rs` | Probe FFmpeg for h264_videotoolbox/nvenc/qsv |
-| `extract_thumbnail` | `rendering.rs` | `ffmpeg -ss <t> -frames:v 1` for metadata thumbnails |
 | `save_project` | `project.rs` | Write `.reelproj` JSON file |
 | `load_project` | `project.rs` | Read `.reelproj` JSON file |
 | `transcribe_video` | `whisper.rs` | Extract audio + run `whisper-cli`, return SRT + word timestamps |
-| `detect_face_keyframes` | `face_detect.rs` | Sample frames via FFmpeg sidecar, gradient-based edge tracking, return smoothed `{t, x}` keyframes for 9:16 crop |
 | `extract_waveform` | `waveform.rs` | Decode a span to mono PCM via FFmpeg sidecar, return `Vec<f32>` RMS peaks (`num_samples` buckets) for the clip-trim waveform UI; disk-cached as `<key>.bin` |
 
-**FFmpeg sidecar** lives at `src-tauri/binaries/ffmpeg-aarch64-apple-darwin`. Bundled via `tauri.conf.json → bundle.externalBin`. The `ffmpeg.rs` module spawns it via `tauri-plugin-shell`, parses `frame=N` progress lines from stderr, and emits `render-progress` events with `{reel_id, percent}`.
-
-**Cancellation** — `RenderRegistry` (managed state) holds one `Arc<Notify>` per active reel_id. `cancel_render` calls `notify_waiters()`; the ffmpeg runner polls the notifier between progress events.
+**FFmpeg sidecar** lives at `src-tauri/binaries/ffmpeg-aarch64-apple-darwin`. Bundled via `tauri.conf.json → bundle.externalBin`. After F-01 it is used only by `whisper.rs` (audio extraction) and `waveform.rs` (PCM decode); the `ffmpeg.rs` module spawns it via `tauri-plugin-shell` (`run_ffmpeg_output`).
 
 **Whisper** — `transcribe_video` invokes `whisper-cli` from system PATH (not a bundled sidecar). Requires the user to install it separately (`brew install whisper-cpp` on macOS). The model path is passed from the frontend. Results (SRT + word JSON) are cached under `<appCacheDir>/whisper-cache/<hash>.{srt,json}` keyed by `(file_size + first_1MB SHA-256)`.
 
-**Face detection** — `detect_face_keyframes` dumps frames at 2fps via the FFmpeg sidecar as grayscale raw video, applies a sliding-window gradient-energy heuristic to find the most-edge-dense column (proxy for face location), and smooths with EMA (alpha=0.15). Cached under `<appCacheDir>/face-cache/<hash>.json` keyed by `(size + mtime + first_1MB SHA-256)`.
-
-### Render pipeline (`rendering.rs`)
-
-**Fast path** — `eligible_for_stream_copy` is true when `stream_copy=true` + `aspect=source` + no logo/intro/outro + no subtitles + no loudness normalize. Runs per-span `-ss/-to -c copy` then ffmpeg concat, skipping re-encode entirely.
-
-**Normal path** — `build_args(req, out_path)` builds a single `-filter_complex` string chaining in order:
-1. Per-span `trim`/`atrim` + `setpts`/`asetpts` → `[vi][ai]` labels
-2. `concat=n=N:v=1:a=1[vc][ac]`
-3. If `aspect == "vertical_9_16"`: `crop=ih*9/16:ih:<x>:0,scale=1080:1920[vcrop]` — `<x>` is either a piecewise-linear face-tracking expression (when `face_keyframes` provided) or center `(iw-ih*9/16)/2`
-4. If `logo`: `scale=<output_w*pct/100>:-1,format=rgba,colorchannelmixer=aa=<opacity>[lg]` → `overlay[vlogo]`; logo is input `[1:v]`, source is `[0:v]`
-5. If `burn_subtitles`: `subtitles='<escaped_path>':force_style='...'[vsub]`; temp `.srt` written to `<tmpdir>/reel_<id>_<aspect>.srt`
-6. If `preview`: `scale=-2:480[vprev]`
-7. If `loudness_normalize` (skipped for preview): `[ac]loudnorm=I=-14:LRA=11:TP=-1.5[an]`
-
-Video codec selected by `video_codec` field: `h264_videotoolbox`, `h264_nvenc` (adds `-rc vbr -cq 19`), `h264_qsv` (adds `-look_ahead 1`), or `libx264` (default, adds `-preset medium`). Preview always uses `libx264 -preset veryfast -crf 28`.
-
-`run_render` wraps `build_args` with a two-pass strategy when intro/outro are present: body renders to `<out>_body.mp4`, then `concat_with_bookends` tries stream-copy (`-c copy`), falls back to re-encode on failure, then deletes the temp files.
-
-`aspect: "both"` is handled entirely in JS by calling `run_render` twice per reel.
-
 ### Project file (`.reelproj`)
 
-Plain JSON written by `save_project` / read by `load_project`. Current schema version: 2. Contains the full `state` snapshot: `srtContent`, `sentences`, `reelsData`, `renderConfig`, and metadata. `renderConfig` uses serde defaults so v1 files (missing Phase 2 fields) load cleanly.
+Plain JSON written by `save_project` / read by `load_project`. Current schema version: 3. Contains the `state` snapshot: `srtContent`, `sentences`, `reelsData`, `mergeThreshold`, and core metadata. F-01 dropped the dead `renderConfig`/`reelsMetadata` blobs; older v2 files load tolerantly (those keys are simply ignored, never assigned to state).
 
 ## Things to know before editing
 
@@ -141,7 +104,7 @@ Plain JSON written by `save_project` / read by `load_project`. Current schema ve
 
 - All new frontend functions must carry JSDoc type annotations at their boundaries,
   e.g. `/** @param {Sentence[]} sentences @returns {string} */`. Define shared shapes
-  (`Sentence`, `Reel`, `RenderConfig`) once as `@typedef` blocks in `src/state.js` and
+  (`Sentence`, `Reel`) once as `@typedef` blocks in `src/state.js` and
   reference them by name.
 - Validate every LLM response against the expected schema BEFORE use. Parse the JSON,
   then check required fields (`clip_ids`, `reel_name`, `virality_score`, `hook/body/punchline`)
