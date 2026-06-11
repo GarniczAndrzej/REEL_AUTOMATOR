@@ -156,3 +156,63 @@ Sygnatury potwierdzone w Scripting `README.txt`:
 > **Dowód wtórny (silny), niezależny od kroku GUI:** w tym samym katalogu pluginów działa już realny, komercyjny plugin **Snap-Captions** (`com.mediable.SnapCaptions`, Electron 36) — co dowodzi, że runtime WI w tej instalacji Studio **ładuje custom panele HTML/JS i sięga do API Resolve**. PoC F-02 używa dokładnie tego samego modelu (sandboxed Electron + `WorkflowIntegration.node`), więc ryzyko „nie załaduje się" jest empirycznie niskie.
 
 > **Wynik operatora (do uzupełnienia):** _<panel: ? / bin: ? / timeline: ? / blokery: ?>_
+
+---
+
+## Reuse evaluation (ocena ponownego użycia frontendu)
+
+### Po-F-01 powierzchnia `invoke()` (zweryfikowana w kodzie)
+
+Dzisiaj 20 wywołań `invoke()`. F-01 (`remove-render-path`) usuwa całą ścieżkę renderowania:
+`detect_hw_encoder`, `detect_face_keyframes`, `extract_thumbnail`, `list/load/save/delete_render_preset`,
+`extract_waveform`, `save/load_render_queue`, `run_render`, `cancel_render` (z `step3-export.js`, `render/waveform.js`, `render/queue.js`).
+
+**Powierzchnia, która przeżywa F-01** (jedyne, czego reused frontend nadal potrzebuje):
+
+| # | Komenda (`invoke`)   | Call site                  | Co naprawdę robi (Rust dziś)                      | Wymaga API Resolve? |
+|---|----------------------|----------------------------|--------------------------------------------------|---------------------|
+| 1 | `load_project`       | `src/ui/step1-import.js:288` | Odczyt pliku `.reelproj` (JSON) z dysku          | Nie — I/O pliku     |
+| 2 | `save_project`       | `src/ui/step1-import.js:346` | Zapis pliku `.reelproj` (JSON) na dysk           | Nie — I/O pliku     |
+| 3 | `transcribe_video`   | `src/ui/step1-import.js:517` | ffmpeg (audio) + `whisper-cli` z PATH → SRT+słowa | Nie — subprocess    |
+| 4 | `load_llm_cache`     | `src/ai/cache.js:26`        | Odczyt cache LLM `<sha>.json` z dysku            | Nie — I/O + crypto  |
+| 5 | `save_llm_cache`     | `src/ai/cache.js:35`        | Zapis cache LLM na dysk                          | Nie — I/O + crypto  |
+| 6 | `clear_llm_cache`    | `src/ai/cache.js:46`        | Czyszczenie katalogu cache                       | Nie — I/O           |
+| — | `callGemini/Claude/OpenRouter` | `src/ai/providers.js` | **Już zwykły `fetch`** (nie `invoke`)            | Nie — sieć w renderer |
+
+**Obserwacja krytyczna:** *żadna* z 6 ocalałych komend nie potrzebuje API Resolve. To wyłącznie I/O pliku, subprocess i crypto — czyli rzeczy, które **proces główny Electrona obsługuje natywnie przez Node** (`fs`, `crypto`, `child_process`). API Resolve jest potrzebne dopiero dla *nowej* funkcjonalności S-09 (bin + timeline'y z reeli) — to dodatek, nie zamiennik.
+
+### Mapowanie `invoke()` → most w panelu Resolve (Electron)
+
+| Tauri (dziś)                        | Zamiennik w panelu WI (Electron)                                                        | Wysiłek |
+|-------------------------------------|------------------------------------------------------------------------------------------|---------|
+| `invoke('load_project',{path})`     | `ipcRenderer.invoke('app:loadProject',path)` → main `fs.readFile` + `JSON.parse`         | Niski   |
+| `invoke('save_project',{path,...})` | `ipcRenderer.invoke('app:saveProject',…)` → main `fs.writeFile`                           | Niski   |
+| `invoke('transcribe_video',{...})`  | `ipcRenderer.invoke('app:transcribe',…)` → main `child_process.spawn('whisper-cli'/ffmpeg)` | Średni  |
+| `invoke('load_llm_cache',{hash})`   | `ipcRenderer.invoke('app:llmCacheGet',hash)` → main `fs` + `crypto`                       | Niski   |
+| `invoke('save_llm_cache',{...})`    | `ipcRenderer.invoke('app:llmCacheSet',…)` → main `fs`                                     | Niski   |
+| `invoke('clear_llm_cache')`         | `ipcRenderer.invoke('app:llmCacheClear')` → main `fs.rm`                                  | Niski   |
+| `callGemini/Claude/OpenRouter`      | **bez zmian** — `fetch` działa w renderer; tylko dodać `connect-src` w CSP panelu          | Zerowy* |
+| *(nowość S-09)* utwórz bin/timeline | `ipcRenderer.invoke('resolve:createBin'/…)` → main `WorkflowIntegration.node` (Faza 1)    | Nowy    |
+
+\* poza dostrojeniem CSP `index.html` (musi zezwolić `connect-src` na `api.anthropic.com`, `generativelanguage.googleapis.com`, `openrouter.ai`).
+
+**Kluczowy wniosek architektoniczny:** kształt mostu jest niemal identyczny. Tauri: `window` → `invoke('cmd',args)` → host Rust (async). Electron WI: `window.bridge.cmd(args)` → `ipcRenderer.invoke('cmd',args)` → `ipcMain.handle` w main (async). To samo: cienki most na `window`, wywołania asynchroniczne. Migracja jest **mechaniczna**, nie koncepcyjna.
+
+### Ocena trzech strategii
+
+**1. Pełny reuse 1:1 (Tauri app bez zmian w panelu) — ODRZUCONA.**
+Aplikacja to Tauri (webview WRY + `@tauri-apps/api`). Panel WI to aplikacja **Electron** — w środku nie ma runtime'u Tauri, więc `invoke()` z `@tauri-apps/api/core` nie ma hosta. Bundla Tauri nie da się uruchomić niezmienionego wewnątrz Resolve. Zgodnie z oczekiwaniem planu: szybkie wykluczenie.
+
+**2. Reuse UI + nowy most po stronie Resolve — REKOMENDOWANA.**
+Zachowujemy całą warstwę HTML/CSS/JS bez zmian: `src/ui/*`, `src/exporters/*` (czyste funkcje), `src/parser/*`, `src/ai/*`, `src/state.js`. Wymieniamy tylko cienki shim `invoke()` na preload `contextBridge`, który eksponuje te same nazwy funkcji, i reimplementujemy **6 ocalałych komend** w main Electrona (Node `fs`/`crypto`/`child_process`) — wszystkie trywialne/średnie, bo to czyste I/O+subprocess. API Resolve dokładamy jako **dodatkowe** metody mostu dla nowej ścieżki bin→timeline (potwierdzona w Fazie 1). Kształty mostu są niemal tożsame → migracja mechaniczna. Ryzyko: sandbox/context-isolation Electrona 36 (model wymuszony od 19.0.2) wymaga dyscypliny preload; CSP renderer; reimplementacja whisper/ffmpeg w Node zamiast Rust.
+
+**3. Osobny panel natywny dla Resolve — FALLBACK.**
+Cienki nowy UI (HTML/JS od zera lub nawet Qt UIManager/skrypt Python z SDK) wołający współdzieloną logikę selekcji/segmentacji (`parser/segments.js`, `exporters/*`). Działa, ale wyrzuca inwestycję w istniejący UI i dubluje pracę. Sensowny tylko, gdyby reuse (strategia 2) trafił na nieprzewidzianą ścianę (np. twardy konflikt sandboxa z którymś modułem frontendu).
+
+### Rekomendacja
+
+**Strategia 2 (reuse UI + nowy most Resolve-side).** Uzasadnienie oparte na Fazach 1–2:
+- Runtime panelu jest wykonalny i udowodniony (Electron; SamplePlugin + produkcyjny Snap-Captions w tej instalacji Studio).
+- Cały UI portuje się bez zmian (to zwykły HTML/CSS/JS w renderer Chromium).
+- Most jest mechaniczny: Tauri `invoke` → Electron `contextBridge`/`ipcRenderer` to ten sam wzorzec; 6 komend to czyste I/O/subprocess obsługiwane natywnie przez Node w main.
+- Ścieżka US-02 (bin + timeline) jest dostępna w API i dokłada się jako nowe metody mostu, nie przebudowuje istniejących.

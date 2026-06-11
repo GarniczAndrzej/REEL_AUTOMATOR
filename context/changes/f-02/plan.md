@@ -233,7 +233,7 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [x] 2.1 PoC artifact path recorded in research-notes.md
+- [x] 2.1 PoC artifact path recorded in research-notes.md — 47a2328
 
 #### Manual
 
@@ -245,12 +245,12 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [ ] 3.1 Notes contain a reuse evaluation section
+- [x] 3.1 Notes contain a reuse evaluation section
 
 #### Manual
 
-- [ ] 3.2 All three strategies addressed; one explicitly recommended
-- [ ] 3.3 invoke()→bridge mapping covers every post-F-01 surviving command
+- [x] 3.2 All three strategies addressed; one explicitly recommended
+- [x] 3.3 invoke()→bridge mapping covers every post-F-01 surviving command
 
 ### Phase 4: Decision doc + cleanup
 
