@@ -256,11 +256,11 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [x] 4.1 Decision doc exists and names a verdict
-- [x] 4.2 Repo source tree untouched (`git status --porcelain src src-tauri` empty)
+- [x] 4.1 Decision doc exists and names a verdict — d8cf9af
+- [x] 4.2 Repo source tree untouched (`git status --porcelain src src-tauri` empty) — d8cf9af
 
 #### Manual
 
-- [x] 4.3 decision.md states exactly one verdict unambiguously
-- [x] 4.4 If not Park, integration contract is concrete enough for S-09
-- [x] 4.5 PoC artifacts confirmed deleted from the Resolve plugin path
+- [x] 4.3 decision.md states exactly one verdict unambiguously — d8cf9af
+- [x] 4.4 If not Park, integration contract is concrete enough for S-09 — d8cf9af
+- [x] 4.5 PoC artifacts confirmed deleted from the Resolve plugin path — d8cf9af
