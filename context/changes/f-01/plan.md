@@ -334,14 +334,14 @@ Pure deletion — strictly reduces bundle size, command surface, and backend bin
 
 #### Automated
 
-- [ ] 1.1 Rust type-checks: `cargo check --manifest-path src-tauri/Cargo.toml`
-- [ ] 1.2 No render references remain in `src-tauri/src/` (grep clean)
-- [ ] 1.3 Sidecar `externalBin` entry intact in `tauri.conf.json`
+- [x] 1.1 Rust type-checks: `cargo check --manifest-path src-tauri/Cargo.toml`
+- [x] 1.2 No render references remain in `src-tauri/src/` (grep clean)
+- [x] 1.3 Sidecar `externalBin` entry intact in `tauri.conf.json`
 
 #### Manual
 
-- [ ] 1.4 App launches via `npm run tauri dev` (backend boots without render commands)
-- [ ] 1.5 Whisper path still invokes the sidecar (audio extraction works)
+- [x] 1.4 App launches via `npm run tauri dev` (backend boots without render commands)
+- [x] 1.5 Whisper path still invokes the sidecar (audio extraction works)
 
 ### Phase 2: Frontend render removal + relocate survivors
 
