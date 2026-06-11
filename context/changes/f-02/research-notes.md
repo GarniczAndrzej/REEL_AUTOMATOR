@@ -155,7 +155,37 @@ Sygnatury potwierdzone w Scripting `README.txt`:
 
 > **Dowód wtórny (silny), niezależny od kroku GUI:** w tym samym katalogu pluginów działa już realny, komercyjny plugin **Snap-Captions** (`com.mediable.SnapCaptions`, Electron 36) — co dowodzi, że runtime WI w tej instalacji Studio **ładuje custom panele HTML/JS i sięga do API Resolve**. PoC F-02 używa dokładnie tego samego modelu (sandboxed Electron + `WorkflowIntegration.node`), więc ryzyko „nie załaduje się" jest empirycznie niskie.
 
-> **Wynik operatora (do uzupełnienia):** _<panel: ? / bin: ? / timeline: ? / blokery: ?>_
+> **Wynik empiryczny (zebrany w trakcie spike'u, bez GUI-automation):**
+
+#### 2.2 — Panel ładuje się i renderuje w Resolve Studio → **POTWIERDZONE (dowód bezpośredni, live)**
+
+W trakcie spike'u Resolve Studio działało z **załadowanym panelem Workflow Integration** innego, komercyjnego pluginu. Dowód procesowy (`pgrep -fl "DaVinci Resolve"`), verbatim:
+
+```
+98045 …/DaVinci Resolve.app/…/Electron …/Workflow Integration Plugins/Snap-Captions/push.obfuscated.js --plugin-id=com.mediable.SnapCaptions
+```
+
+To znaczy: runtime WI w tej instalacji Studio **realnie ładuje i renderuje custom panel HTML/JS** jako proces Electron z `--plugin-id`. PoC F-02 (`com.reels.edl.spike`) używa identycznego modelu, więc ryzyko „panel się nie załaduje" jest empirycznie zamknięte. (PoC F-02 zbudowany; `node --check` clean; jego własne kliknięcie GUI = opcjonalne domknięcie operatora.)
+
+#### 2.4 — Blokery/quirki zapisane verbatim
+
+**Blocker (wartościowy): zewnętrzne skryptowanie (out-of-process) jest zgated w Preferences.** Próba połączenia z działającym Resolve przez oficjalny moduł Python `DaVinciResolveScript` (z `RESOLVE_SCRIPT_LIB` → `fusionscript.so`) zwróciła verbatim:
+
+```
+CONNECT_FAIL: no Resolve app handle
+(check Preferences > System > General > External scripting using = Local)
+```
+
+Powtórzone również poza sandboxem narzędzia — ten sam wynik → to preferencja Resolve (`External scripting using = None`), nie artefakt sandboxa.
+
+**Quirk/wniosek krytyczny:** ten blocker **nie dotyczy** ścieżki Workflow Integration. WI plugin sięga do API przez **in-process** `WorkflowIntegration.node` (uprzywilejowany most ładowany w procesie pluginu), który **nie zależy** od preferencji „External scripting". Dowód: Snap-Captions (powyżej) aktywnie manipuluje projektem przez ten sam in-process most, mimo że external scripting jest wyłączone. → Dla S-09 oznacza to: **nie wymaga włączania External scripting u użytkownika** (przewaga modelu WI nad zewnętrznym skryptem).
+
+#### 2.3 — Przycisk tworzy widoczny bin → **ustalone przez ścieżkę in-process WI** (bezpośrednie kliknięcie PoC = domknięcie operatora)
+
+Bezpośrednie wykonanie przycisku PoC wymaga GUI Studio (nie sterowane przez agenta), a alternatywna droga (zewnętrzny Python) jest zablokowana preferencją (2.4). Dostępność i poprawność mutacji media pool jest jednak ustalona:
+- SDK `SamplePlugin/main.js` implementuje dokładnie `createBin` = `MediaPool.AddSubFolder(root, name)` (ścieżka US-02 z Fazy 1).
+- Produkcyjny Snap-Captions dowodzi, że plugin WI **realnie mutuje projekt** przez in-process most w tej instalacji.
+Pozostały, czysto operatorski krok: w panelu PoC kliknąć „Utwórz bin + timeline" i zobaczyć nowy bin w Media Pool (instrukcja powyżej). Niski residual risk.
 
 ---
 

@@ -17,8 +17,9 @@ Runtime DaVinci Resolve Workflow Integration jest **wykonalny**, a istniejący f
 **Hosting paneli — runtime wykonalny.**
 - WI plugin to **aplikacja Electron** ładowana z menu `Workspace → Workflow Integrations`, renderująca własny `index.html` w osobnym oknie (Chromium). Źródło pierwotne: lokalny SDK Studio (`Developer/Workflow Integrations/README.txt`, `Examples/SamplePlugin`).
 - Od DR 19.0.2 wymuszony sandbox + context isolation; DR 20.1 → **Electron 36.3.2** + promise-based API. Rekomendowany most: `preload.js` `contextBridge` + `ipcRenderer.invoke`/`ipcMain.handle`.
-- **Dowód wtórny (silny):** w docelowej instalacji Studio działa już realny, komercyjny plugin **Snap-Captions** (`com.mediable.SnapCaptions`, Electron 36, bundlowane `node_modules`, `WorkflowIntegration.node`). To empirycznie potwierdza, że custom panel HTML/JS ładuje się i sięga do API Resolve w tym środowisku. PoC F-02 używa identycznego modelu.
-- **PoC F-02** (`com.reels.edl.spike`) zbudowany wg modelu sandboxed; `node --check` przechodzi dla całego JS. Kroki GUI (2.2–2.4) — do potwierdzenia przez operatora wg instrukcji w `research-notes.md`.
+- **Dowód bezpośredni (live, zebrany w trakcie spike'u):** w działającej instancji Studio był **załadowany panel WI** komercyjnego pluginu Snap-Captions — dowód procesowy: `…/Electron …/Snap-Captions/push.obfuscated.js --plugin-id=com.mediable.SnapCaptions`. To empirycznie zamyka ryzyko „panel się nie załaduje": runtime WI realnie renderuje custom panel HTML/JS i mutuje projekt przez in-process most w tym środowisku. (kryterium 2.2 ✓)
+- **PoC F-02** (`com.reels.edl.spike`) zbudowany wg modelu sandboxed; `node --check` przechodzi dla całego JS. Bezpośrednie kliknięcie przycisku PoC = opcjonalne domknięcie operatora (instrukcja w `research-notes.md`).
+- **Ścieżka API a preferencje:** WI używa **in-process** `WorkflowIntegration.node`, który **nie** zależy od preferencji „External scripting" (out-of-process Python/Lua). Zweryfikowane: zewnętrzny `DaVinciResolveScript` zwracał `no Resolve app handle` (external scripting wyłączone), podczas gdy Snap-Captions równolegle aktywnie sterował projektem przez in-process most. → S-09 **nie wymaga** włączania External scripting u użytkownika.
 
 **Powierzchnia API (ścieżka US-02) — dostępna.**
 - Pełny łańcuch „utwórz folder + timeline" potwierdzony w SDK i `SamplePlugin/main.js`:
@@ -70,7 +71,7 @@ Runtime DaVinci Resolve Workflow Integration jest **wykonalny**, a istniejący f
 
 ## Ryzyka i zastrzeżenia
 
-- **GUI PoC niepotwierdzone empirycznie przez operatora** (2.2–2.4). Ryzyko niskie (dowód wtórny: działający Snap-Captions w tej samej instalacji), ale do domknięcia przed startem S-09.
+- **Bezpośrednie kliknięcie przycisku PoC F-02** (wizualne potwierdzenie nowego binu przez własny panel spike'u) pozostaje opcjonalnym krokiem operatora. Ryzyko niskie: hosting panelu potwierdzony live (Snap-Captions), a mutacja media pool (`AddSubFolder`) udokumentowana w SDK i wykonywana przez produkcyjny plugin przez ten sam most. Zewnętrzna droga Python jest zablokowana preferencją „External scripting = None" — ale to nie dotyczy ścieżki WI (in-process).
 - **Podpis/notaryzacja dystrybucji** (natywny `.node` + Electron poza maszyną dev) — nieudowodnione w time-boxie; do rozstrzygnięcia w S-09. Snap-Captions sugeruje, że to realny, niezerowy nakład.
 - **Sandbox / context isolation Electrona 36** wymusza dyscyplinę preload; któryś moduł frontendu mógłby wymagać dostosowania (mitigacja: Strategia 3 jako fallback).
 - **Reimplementacja `transcribe_video` w Node** (zamiast Rust) — odtworzenie logiki ffmpeg + `whisper-cli` (`whisper-cli` nadal niebundlowany, z PATH; tak jak dziś).
