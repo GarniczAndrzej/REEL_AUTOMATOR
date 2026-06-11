@@ -237,9 +237,9 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Manual
 
-- [x] 2.2 Custom panel loads and renders inside Resolve Studio
-- [x] 2.3 Panel button creates a visibly new bin in the open project's Media Pool
-- [x] 2.4 Blockers/quirks/failures recorded verbatim
+- [x] 2.2 Custom panel loads and renders inside Resolve Studio — 0058593
+- [x] 2.3 Panel button creates a visibly new bin in the open project's Media Pool — 0058593
+- [x] 2.4 Blockers/quirks/failures recorded verbatim — 0058593
 
 ### Phase 3: Frontend-reuse evaluation
 
