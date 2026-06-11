@@ -222,45 +222,45 @@ None. When this lands, S-09's blocker in `context/foundation/roadmap.md` (Open Q
 
 #### Automated
 
-- [ ] 1.1 Notes file exists: `test -f context/changes/f-02/research-notes.md`
+- [x] 1.1 Notes file exists: `test -f context/changes/f-02/research-notes.md` — 2cb9bca
 
 #### Manual
 
-- [ ] 1.2 Notes answer all four section questions with a concrete source each
-- [ ] 1.3 Minimal "create folder + timeline" API call sequence written down
+- [x] 1.2 Notes answer all four section questions with a concrete source each — 2cb9bca
+- [x] 1.3 Minimal "create folder + timeline" API call sequence written down — 2cb9bca
 
 ### Phase 2: Smoke-test PoC (throwaway)
 
 #### Automated
 
-- [ ] 2.1 PoC artifact path recorded in research-notes.md
+- [x] 2.1 PoC artifact path recorded in research-notes.md — 47a2328
 
 #### Manual
 
-- [ ] 2.2 Custom panel loads and renders inside Resolve Studio
-- [ ] 2.3 Panel button creates a visibly new bin in the open project's Media Pool
-- [ ] 2.4 Blockers/quirks/failures recorded verbatim
+- [x] 2.2 Custom panel loads and renders inside Resolve Studio — 0058593
+- [x] 2.3 Panel button creates a visibly new bin in the open project's Media Pool — 0058593
+- [x] 2.4 Blockers/quirks/failures recorded verbatim — 0058593
 
 ### Phase 3: Frontend-reuse evaluation
 
 #### Automated
 
-- [ ] 3.1 Notes contain a reuse evaluation section
+- [x] 3.1 Notes contain a reuse evaluation section — 0791db0
 
 #### Manual
 
-- [ ] 3.2 All three strategies addressed; one explicitly recommended
-- [ ] 3.3 invoke()→bridge mapping covers every post-F-01 surviving command
+- [x] 3.2 All three strategies addressed; one explicitly recommended — 0791db0
+- [x] 3.3 invoke()→bridge mapping covers every post-F-01 surviving command — 0791db0
 
 ### Phase 4: Decision doc + cleanup
 
 #### Automated
 
-- [ ] 4.1 Decision doc exists and names a verdict
-- [ ] 4.2 Repo source tree untouched (`git status --porcelain src src-tauri` empty)
+- [x] 4.1 Decision doc exists and names a verdict — d8cf9af
+- [x] 4.2 Repo source tree untouched (`git status --porcelain src src-tauri` empty) — d8cf9af
 
 #### Manual
 
-- [ ] 4.3 decision.md states exactly one verdict unambiguously
-- [ ] 4.4 If not Park, integration contract is concrete enough for S-09
-- [ ] 4.5 PoC artifacts confirmed deleted from the Resolve plugin path
+- [x] 4.3 decision.md states exactly one verdict unambiguously — d8cf9af
+- [x] 4.4 If not Park, integration contract is concrete enough for S-09 — d8cf9af
+- [x] 4.5 PoC artifacts confirmed deleted from the Resolve plugin path — d8cf9af
