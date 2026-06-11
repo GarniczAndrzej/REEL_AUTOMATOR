@@ -39,7 +39,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-06  | word-level-boundary-trim    | nudge cut boundaries at word precision with snap-to-pause    | S-04, S-05         | FR-021                                        | proposed |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
-| S-09  | resolve-plugin-handoff      | push reels into Resolve from inside Resolve in one click     | S-01, S-08, F-02   | FR-030, FR-031, US-02                         | blocked  |
+| S-09  | resolve-plugin-handoff      | push reels into Resolve from inside Resolve in one click     | S-01, S-08, F-02   | FR-030, FR-031, US-02                         | go-with-rework |
 | S-10  | en-pl-i18n                  | switch the whole UI between English and Polish               | S-02, S-04         | FR-034                                        | proposed |
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | ready    |
 | S-12  | empty-error-states          | see explicit empty/error states instead of silent failures   | S-01, S-05         | FR-036                                        | proposed |
@@ -213,9 +213,9 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Parallel with:** S-10, S-13
 - **Blockers:** —
 - **Unknowns:**
-  - Is the Workflow Integration runtime viable and can the Tauri frontend be reused inside it? — Owner: user. Block: yes (resolved by F-02; until then this slice cannot be planned).
-- **Risk:** The headline differentiator and the largest single technical risk. Stays blocked until F-02 returns a viability verdict; the file-export set (S-08) is the always-available fallback so the product ships even if the plugin doesn't.
-- **Status:** blocked
+  - Is the Workflow Integration runtime viable and can the Tauri frontend be reused inside it? — **Resolved by F-02 (verdict `Go-with-rework`, 2026-06-11).** Runtime is viable (Electron Workflow Integration; panel hosting confirmed live in Studio); frontend reuses via Strategy 2 (keep HTML/CSS/JS, rebuild the Tauri `invoke` bridge as an Electron `contextBridge`/`ipcRenderer` bridge + reimplement the 6 post-F-01 commands in Node). Integration contract: `context/changes/f-02/decision.md`.
+- **Risk:** The headline differentiator and the largest single technical risk. F-02 returned `Go-with-rework`: no hard blocker, but the Tauri→Electron bridge rebuild + packaging/signing are scoped rework. The file-export set (S-08) remains the always-available fallback (and the only path for Resolve Free / Linux).
+- **Status:** go-with-rework
 
 ### S-10: EN/PL internationalization
 
@@ -305,7 +305,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | S-06       | word-level-boundary-trim       | Word-level boundary trim + snap-to-pause                | no                    | Needs S-04, S-05                                 |
 | S-07       | auto-mode-pipeline             | One-click auto mode + staged progress                   | no                    | Needs S-01, S-05                                 |
 | S-08       | timeline-export-set            | Premiere XML / FCPXML / Resolve Lua export set          | no                    | Needs S-01                                       |
-| S-09       | resolve-plugin-handoff         | DaVinci Resolve embedded plugin (one-click hand-off)    | no                    | Blocked on F-02 verdict                          |
+| S-09       | resolve-plugin-handoff         | DaVinci Resolve embedded plugin (one-click hand-off)    | yes                   | F-02 verdict `Go-with-rework`; plan against decision.md |
 | S-10       | en-pl-i18n                     | EN/PL internationalization                              | no                    | Needs S-02, S-04                                 |
 | S-11       | keychain-credentials           | Move API keys to OS keychain                            | yes                   | No prerequisite; parallel hardening              |
 | S-12       | empty-error-states             | Explicit empty/error states                             | no                    | Needs S-01, S-05                                 |
@@ -316,7 +316,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 ## Open Roadmap Questions
 
 1. **What is the `delivery_weeks` estimate for this change?** — Owner: user. Block: `roadmap-wide` (pacing only; does not block any specific slice). Sustained after-hours effort acknowledged 2026-06-10; no hard deadline.
-2. **Is the DaVinci Resolve Workflow Integration plugin runtime viable, and can the Tauri frontend be reused inside it?** — Owner: user. Block: `S-09`. This is the project's highest technical risk; F-02 (`resolve-plugin-spike`) is the slot that resolves it. Resolve before committing S-09 to a delivery slice.
+2. ~~**Is the DaVinci Resolve Workflow Integration plugin runtime viable, and can the Tauri frontend be reused inside it?**~~ — **RESOLVED 2026-06-11 by F-02 (`resolve-plugin-spike`): verdict `Go-with-rework`.** Runtime viable (Electron Workflow Integration); frontend reuses via Strategy 2 with a rebuilt Electron bridge. S-09 unblocked; integration contract in `context/changes/f-02/decision.md`.
 3. **WhisperX bundling + cache migration** — how to ship WhisperX (+ alignment, + optional pyannote diarization with HF-token handling) as a built-in engine replacing the PATH `whisper-cli`, preserving or migrating the SRT+word-JSON cache contract? — Owner: team. Block: no (a hard build task inside S-05, surfaced here because it spans transcription + caching + packaging).
 
 ## Parked
