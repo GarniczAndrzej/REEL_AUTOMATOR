@@ -30,7 +30,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | ID    | Change ID                   | Outcome (user can …)                                          | Prerequisites      | PRD refs                                      | Status   |
 | ----- | --------------------------- | ------------------------------------------------------------ | ------------------ | --------------------------------------------- | -------- |
 | F-01  | remove-render-path          | (foundation) FFmpeg render path deleted; regression fence green | —               | FR-038                                        | done     |
-| F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | ready    |
+| F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | done     |
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | proposed |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | proposed |
@@ -100,7 +100,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** Can the Tauri frontend host inside a Resolve Workflow Integration panel, or does the plugin need a separate runtime? — Owner: user. Block: no (this foundation IS the resolution; it does not itself wait on anything).
 - **Risk:** This is the project's single largest technical unknown. Doing it as an early, parallel spike (top blocker = decisions) avoids committing S-09 to a delivery slice before viability is known. If the answer is "not viable," S-09 reverts to the file-export fallback (S-08) and is parked.
-- **Status:** ready
+- **Status:** done
 
 ## Slices
 
@@ -342,3 +342,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 (Empty on first generation. `/10x-archive` appends here — and flips the matching item's `Status` to `done` — when a change whose `Change ID` matches a roadmap item is archived. Do NOT pre-populate.)
 
 - **F-01: (foundation) FFmpeg render path deleted; regression fence green** — Archived 2026-06-11 → `context/archive/2026-06-10-f-01/`. Lesson: —.
+- **F-02: (foundation) decision recorded on Resolve plugin viability** — Archived 2026-06-11 → `context/archive/2026-06-10-f-02/`. Lesson: —.
