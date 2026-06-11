@@ -362,26 +362,26 @@ Pure deletion — strictly reduces bundle size, command surface, and backend bin
 
 #### Automated
 
-- [x] 3.1 Production build succeeds
-- [x] 3.2 Regression suite green
-- [x] 3.3 No metadata references remain in `src/` (grep clean)
+- [x] 3.1 Production build succeeds — 4e9f92d
+- [x] 3.2 Regression suite green — 4e9f92d
+- [x] 3.3 No metadata references remain in `src/` (grep clean) — 4e9f92d
 
 #### Manual
 
-- [x] 3.4 App boots; AI selection still produces reels
-- [x] 3.5 No Metadata tab / "Generuj metadane" button; no console errors
-- [x] 3.6 Undo/redo in step 2 still works
+- [x] 3.4 App boots; AI selection still produces reels — 4e9f92d
+- [x] 3.5 No Metadata tab / "Generuj metadane" button; no console errors — 4e9f92d
+- [x] 3.6 Undo/redo in step 2 still works — 4e9f92d
 
 ### Phase 4: `.reelproj` v3 migration + regression fence
 
 #### Automated
 
-- [ ] 4.1 Regression suite green incl. new back-compat case
-- [ ] 4.2 Production build succeeds
-- [ ] 4.3 Saved `.reelproj` is `version: 3` with no `renderConfig`/`reelsMetadata`
+- [x] 4.1 Regression suite green incl. new back-compat case
+- [x] 4.2 Production build succeeds
+- [x] 4.3 Saved `.reelproj` is `version: 3` with no `renderConfig`/`reelsMetadata`
 
 #### Manual
 
-- [ ] 4.4 Old v2 `.reelproj` (with `renderConfig`) loads without error
-- [ ] 4.5 EDL/XML/Lua export from the loaded project; spot-check NLE import
-- [ ] 4.6 Re-saved project is v3 with dead blobs gone
+- [x] 4.4 Old v2 `.reelproj` (with `renderConfig`) loads without error
+- [x] 4.5 EDL/XML/Lua export from the loaded project; spot-check NLE import
+- [x] 4.6 Re-saved project is v3 with dead blobs gone

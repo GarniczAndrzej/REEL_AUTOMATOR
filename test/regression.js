@@ -443,6 +443,108 @@ assert(framesToTC(17982, 29.97) === '00:10:00;00', 'DF: frame 17982 = 00:10:00;0
 assert(framesToTC(107892, 29.97) === '01:00:00;00', 'DF: 1 hour (107892 frames) = 01:00:00;00');
 
 // ─────────────────────────────────────────────────────────────────
+// Test 8: .reelproj v2 → v3 back-compat (F-01 render-path removal)
+// An old v2 project carrying dead renderConfig / reelsMetadata blobs
+// must still normalize + export cleanly once the render path is gone.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 8: v2 .reelproj back-compat ─────────────────────');
+
+// A v2-shaped project as written by the pre-F-01 app: valid pipeline
+// data plus the now-removed renderConfig + reelsMetadata blobs.
+const v2Project = {
+  version: 2,
+  srtName: 'webinar_2024.srt',
+  srtContent: srtText,
+  fps: FPS,
+  videoFilename: VIDEO_FILE,
+  videoFilename2: VIDEO_FILE,
+  videoPath: VIDEO_PATH,
+  videoResolution: RESOLUTION,
+  projectName: PROJECT_NAME,
+  gapFrames: GAP_FRAMES,
+  minChars: MIN_CHARS,
+  mergeThreshold: MERGE_12,
+  sentences: newSentences,
+  reelsData,
+  // Dead blobs that v3 drops on load:
+  renderConfig: {
+    aspect: 'vertical_9_16',
+    videoCodec: 'h264_nvenc',
+    outDir: '/tmp/out',
+    logo: { path: '/logo.png', position: 'br', opacity: 1, widthPct: 15 },
+    burnSubtitles: true,
+    loudnessNormalize: true,
+  },
+  reelsMetadata: [
+    { reelIdx: 0, reelName: 'Reel 1', title: 'Stary tytuł', thumbnailTimestamp: 3 },
+  ],
+  namedPresets: { Instagram: { aspect: 'vertical_9_16' } },
+};
+
+// Mirrors the tolerant load (applyProjectData) after F-01: only the
+// surviving keys are carried into state; renderConfig / reelsMetadata /
+// namedPresets are ignored (never assigned).
+function normalizeV2Project(data) {
+  const norm = {};
+  if (data.fps) norm.fps = data.fps;
+  if (data.gapFrames != null) norm.gapFrames = data.gapFrames;
+  if (data.videoFilename2 || data.videoFilename)
+    norm.videoFilename = data.videoFilename2 || data.videoFilename;
+  if (data.videoPath) norm.videoPath = data.videoPath;
+  if (data.videoResolution) norm.videoResolution = data.videoResolution;
+  if (data.projectName) norm.projectName = data.projectName;
+  if (data.mergeThreshold != null) norm.mergeThreshold = data.mergeThreshold;
+  if (data.sentences) norm.sentences = data.sentences;
+  if (data.reelsData) norm.reelsData = data.reelsData;
+  return norm;
+}
+
+const norm = normalizeV2Project(v2Project);
+
+assert(!('renderConfig' in norm), 'normalized project drops renderConfig');
+assert(!('reelsMetadata' in norm), 'normalized project drops reelsMetadata');
+assert(!('namedPresets' in norm), 'normalized project drops namedPresets');
+assert(norm.sentences.length === newSentences.length, 'sentences survive load');
+assert(norm.reelsData.length === reelsData.length, 'reelsData survives load');
+
+const bcEDL = generateEDL({
+  reelsData: norm.reelsData,
+  sentences: norm.sentences,
+  fps: norm.fps,
+  gapFrames: norm.gapFrames,
+  videoFilename: norm.videoFilename,
+  mergeThreshold: norm.mergeThreshold,
+});
+assert(bcEDL.length > 0 && bcEDL.includes('TITLE: REELS_EDL_AUTOMATOR'),
+  'v2 project still exports valid EDL');
+
+const bcXML = generateXML({
+  reelsData: norm.reelsData,
+  sentences: norm.sentences,
+  fps: norm.fps,
+  videoFilename: norm.videoFilename,
+  videoPath: norm.videoPath,
+  videoResolution: norm.videoResolution,
+  projectName: norm.projectName,
+  mergeThreshold: norm.mergeThreshold,
+});
+assert(bcXML.length > 0 && bcXML.includes('<xmeml version="4">'),
+  'v2 project still exports valid XML');
+
+const bcLua = generateLua({
+  reelsData: norm.reelsData,
+  sentences: norm.sentences,
+  fps: norm.fps,
+  gapFrames: norm.gapFrames,
+  videoPath: norm.videoPath,
+  projectName: norm.projectName,
+  mergeThreshold: norm.mergeThreshold,
+});
+assert(bcLua.length > 0 && bcLua.includes('mediaPool:AppendToTimeline(allClips)'),
+  'v2 project still exports valid Lua');
+
+// ─────────────────────────────────────────────────────────────────
 // Summary
 // ─────────────────────────────────────────────────────────────────
 

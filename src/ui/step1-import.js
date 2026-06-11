@@ -321,7 +321,7 @@ async function writeProject(path) {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const payload = {
-      version: 2,
+      version: 3,
       srtName: state.srtName,
       srtContent: state.srtContent,
       fps: state.fps,
