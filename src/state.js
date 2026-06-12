@@ -5,6 +5,7 @@
  * @property {string} text
  * @property {number} start_frame
  * @property {number} end_frame
+ * @property {string} [speaker] - diarization speaker label (opt-in, additive)
  */
 
 /**
@@ -63,6 +64,7 @@ Zasady:
   whisperModelPath: '', // legacy raw .bin path — retired, ignored on load
   modelId: '', // selected managed faster-whisper model id (S-05)
   whisperLanguage: 'pl',
+  diarize: false, // opt-in speaker diarization (S-05 Phase 6)
 
   // F18 — additional video sources (source 0 = state.videoPath / state.srtContent)
   sources: [], // [{videoFilename, videoPath, srtName, srtContent}] for sources index 1+

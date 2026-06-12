@@ -900,6 +900,59 @@ assert(
 );
 
 // ─────────────────────────────────────────────────────────────────
+// Test 12: diarization speaker labels — present and absent (Phase 6)
+// segmentFromWords must carry an optional `speaker` when the engine provides
+// it, and omit it cleanly when absent (additive, still v4).
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 12: diarization speaker labels ──────────────────');
+
+// Absent: the base fixture has no speaker → words must not carry `speaker`.
+assert(
+  wxSentences.every((s) => s.words.every((w) => w.speaker === undefined)),
+  'no speaker field when engine omits diarization',
+);
+
+// Present: clone the fixture with speaker labels on each word.
+const diarizedSegments = wxFixture.segments.map((seg) => ({
+  ...seg,
+  words: seg.words.map((w, i) => ({
+    ...w,
+    speaker: i % 2 ? 'SPEAKER_01' : 'SPEAKER_00',
+  })),
+}));
+const diarizedSentences = segmentFromWords(diarizedSegments, FPS, MIN_CHARS);
+assert(
+  diarizedSentences.every((s) =>
+    s.words.every((w) => typeof w.speaker === 'string'),
+  ),
+  'speaker carried onto every word when present',
+);
+assert(
+  diarizedSentences[0].words[0].speaker === 'SPEAKER_00',
+  'first word speaker label preserved',
+);
+// Speaker survives the v4 project round-trip.
+const diarizedLoaded = JSON.parse(JSON.stringify(diarizedSentences));
+assert(
+  diarizedLoaded[0].words[0].speaker === 'SPEAKER_00',
+  'speaker labels survive v4 round-trip',
+);
+// Exporters still work with speaker-labeled sentences.
+const diarizedEDL = generateEDL({
+  reelsData: [{ reel_name: 'R', clip_ids: [diarizedSentences[0].id] }],
+  sentences: diarizedSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoFilename: VIDEO_FILE,
+  mergeThreshold: MERGE_0,
+});
+assert(
+  diarizedEDL.includes('TITLE: REELS_EDL_AUTOMATOR'),
+  'speaker-labeled sentences still export valid EDL',
+);
+
+// ─────────────────────────────────────────────────────────────────
 // Summary
 // ─────────────────────────────────────────────────────────────────
 

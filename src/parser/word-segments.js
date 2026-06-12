@@ -28,7 +28,7 @@ export function segmentFromWords(engineSegments, fps, minChars) {
       const text = String(w.text ?? '').trim();
       if (!text) continue;
       if (typeof w.start !== 'number' || typeof w.end !== 'number') continue;
-      words.push({ text, start: w.start, end: w.end });
+      words.push({ text, start: w.start, end: w.end, speaker: w.speaker });
     }
   }
   if (!words.length) return [];
@@ -69,11 +69,16 @@ export function segmentFromWords(engineSegments, fps, minChars) {
       duration_frame: ef - sf,
       start_tc: framesToTC(sf, fps),
       end_tc: framesToTC(ef, fps),
-      words: g.words.map((w) => ({
-        text: w.text,
-        start_frame: Math.round(w.start * fps),
-        end_frame: Math.round(w.end * fps),
-      })),
+      words: g.words.map((w) => {
+        const word = {
+          text: w.text,
+          start_frame: Math.round(w.start * fps),
+          end_frame: Math.round(w.end * fps),
+        };
+        // Diarization is opt-in (Phase 6): carry speaker only when present.
+        if (w.speaker != null) word.speaker = w.speaker;
+        return word;
+      }),
     };
   });
 

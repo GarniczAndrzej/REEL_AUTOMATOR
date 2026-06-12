@@ -176,6 +176,8 @@ pub async fn transcribe_video(
     model_path: Option<String>,
     model_id: Option<String>,
     language: String,
+    diarize: Option<bool>,
+    hf_token: Option<String>,
 ) -> Result<serde_json::Value, String> {
     // Engine model: prefer model_id (managed), fall back to a raw path during
     // the frontend transition (Phase 4 retires the raw path).
@@ -183,6 +185,14 @@ pub async fn transcribe_video(
         .filter(|s| !s.is_empty())
         .or(model_path.filter(|s| !s.is_empty()))
         .ok_or_else(|| "Nie wybrano modelu transkrypcji.".to_string())?;
+
+    // Opt-in diarization needs an HF token; fail early with a distinct message
+    // so the core (toggle-off) path is never blocked by diarization setup.
+    let diarize = diarize.unwrap_or(false);
+    let hf_token = hf_token.unwrap_or_default();
+    if diarize && hf_token.trim().is_empty() {
+        return Err("Diaryzacja jest włączona, ale brak tokenu Hugging Face. Wprowadź token lub wyłącz diaryzację.".into());
+    }
 
     TRANSCRIBE_CANCELLED.store(false, Ordering::SeqCst);
 
@@ -240,15 +250,22 @@ pub async fn transcribe_video(
 
     let lang_arg = if language == "auto" { "auto".to_string() } else { language.clone() };
 
+    let mut args: Vec<String> = vec![
+        "--audio".into(), wav_str.clone(),
+        "--model".into(), model.clone(),
+        "--language".into(), lang_arg,
+    ];
+    if diarize {
+        args.push("--diarize".into());
+        args.push("--hf-token".into());
+        args.push(hf_token.clone());
+    }
+
     let sidecar = app
         .shell()
         .sidecar(crate::engine::ENGINE_SIDECAR)
         .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
-        .args([
-            "--audio", &wav_str,
-            "--model", &model,
-            "--language", &lang_arg,
-        ]);
+        .args(args);
 
     let (mut rx, child) = sidecar
         .spawn()

@@ -501,8 +501,8 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [x] 5.1 Transcript-exporter regression case passes (if added under `src/exporters/`)
-- [x] 5.2 Rust type-check passes (`cargo check`)
+- [x] 5.1 Transcript-exporter regression case passes (if added under `src/exporters/`) — 86cf1d8
+- [x] 5.2 Rust type-check passes (`cargo check`) — 86cf1d8
 
 #### Manual
 
@@ -514,8 +514,8 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [ ] 6.1 Regression suite passes with `speaker` present and absent
-- [ ] 6.2 Rust type-check passes (`cargo check`)
+- [x] 6.1 Regression suite passes with `speaker` present and absent
+- [x] 6.2 Rust type-check passes (`cargo check`)
 
 #### Manual
 

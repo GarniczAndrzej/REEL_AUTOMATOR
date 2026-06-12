@@ -5,6 +5,7 @@ import {
   generateTranscriptSRT,
   generateTranscriptVTT,
 } from '../exporters/transcript.js';
+import { getApiKey, setApiKey } from '../ai/api-key.js';
 
 export function init() {
   const srtFileInput = document.getElementById('srtFile');
@@ -51,6 +52,24 @@ export function init() {
   document
     .getElementById('cancelTranscribeBtn')
     .addEventListener('click', cancelTranscribe);
+  // Phase 6 — diarization toggle + HF token
+  const diarizeToggle = document.getElementById('diarizeToggle');
+  diarizeToggle.checked = state.diarize;
+  const hfTokenInput = document.getElementById('hfTokenInput');
+  hfTokenInput.value = getApiKey('huggingface');
+  document.getElementById('diarizeTokenRow').style.display = state.diarize
+    ? ''
+    : 'none';
+  diarizeToggle.addEventListener('change', (e) => {
+    state.diarize = e.target.checked;
+    document.getElementById('diarizeTokenRow').style.display = e.target.checked
+      ? ''
+      : 'none';
+    emit();
+  });
+  hfTokenInput.addEventListener('input', (e) => {
+    setApiKey('huggingface', e.target.value.trim());
+  });
   initModelManager();
 
   dropZone.addEventListener('dragover', (e) => {
@@ -351,6 +370,7 @@ async function writeProject(path) {
       userPrompt: state.userPrompt,
       whisperLanguage: state.whisperLanguage,
       modelId: state.modelId,
+      diarize: state.diarize,
       sentences: state.sentences,
       reelsData: state.reelsData,
       sources: state.sources || [],
@@ -377,6 +397,7 @@ function applyProjectData(data) {
   if (data.whisperLanguage) state.whisperLanguage = data.whisperLanguage;
   // Migration: prefer managed modelId; ignore stale raw whisperModelPath.
   if (data.modelId) state.modelId = data.modelId;
+  if (data.diarize != null) state.diarize = data.diarize;
   if (data.sentences) state.sentences = data.sentences;
   if (data.reelsData) state.reelsData = data.reelsData;
   if (data.sources) state.sources = data.sources;
@@ -389,6 +410,12 @@ function applyProjectData(data) {
   document.getElementById('userPrompt').value = state.userPrompt || '';
   const wlEl = document.getElementById('whisperLanguage');
   if (wlEl) wlEl.value = state.whisperLanguage || 'pl';
+  const dtEl = document.getElementById('diarizeToggle');
+  if (dtEl) {
+    dtEl.checked = !!state.diarize;
+    const row = document.getElementById('diarizeTokenRow');
+    if (row) row.style.display = state.diarize ? '' : 'none';
+  }
   renderModelManager();
 
   if (state.srtName) {
@@ -736,6 +763,8 @@ async function transcribeWithWhisper() {
       videoPath,
       modelId,
       language,
+      diarize: state.diarize,
+      hfToken: state.diarize ? getApiKey('huggingface') : '',
     });
 
     const rawBase = videoPath
