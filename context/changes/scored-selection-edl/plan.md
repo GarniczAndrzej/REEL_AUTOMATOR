@@ -530,9 +530,9 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [x] 3.1 Regression suite passes
-- [x] 3.2 All four ingest paths call `validateReels`
-- [x] 3.3 Prettier clean on validate.js + step2 + styles
+- [x] 3.1 Regression suite passes — 1262433
+- [x] 3.2 All four ingest paths call `validateReels` — 1262433
+- [x] 3.3 Prettier clean on validate.js + step2 + styles — 1262433
 
 #### Manual
 
@@ -546,9 +546,9 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [ ] 4.1 Regression suite passes incl. new marker cases
-- [ ] 4.2 Legacy byte-identical EDL assertion still green
-- [ ] 4.3 Prettier clean on edl.js + regression.js
+- [x] 4.1 Regression suite passes incl. new marker cases
+- [x] 4.2 Legacy byte-identical EDL assertion still green
+- [x] 4.3 Prettier clean on edl.js + regression.js
 
 #### Manual
 
