@@ -1,3 +1,4 @@
+mod engine;
 mod ffmpeg;
 mod project;
 mod whisper;
@@ -22,6 +23,7 @@ pub fn run() {
             project::save_render_preset,
             project::delete_render_preset,
             whisper::transcribe_video,
+            engine::whisperx_engine_check,
             waveform::extract_waveform,
         ])
         .run(tauri::generate_context!())

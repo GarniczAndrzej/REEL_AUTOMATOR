@@ -3,3 +3,10 @@ dist/
 src-tauri/target/
 .DS_Store
 *.reelproj
+
+# WhisperX sidecar — large frozen artifacts + bundled models (built by sidecar/build.sh)
+sidecar/.venv/
+sidecar/build/
+sidecar/dist/
+sidecar/whisperx_engine/align_models/
+src-tauri/binaries/whisperx-engine-*

@@ -1,0 +1,14 @@
+# WhisperX engine sidecar — Python build-time dependencies.
+#
+# Versions are pinned loosely; the build script (sidecar/build.sh) installs the
+# correct platform wheel for torch/CTranslate2 (CPU vs CUDA vs Metal) before
+# resolving the rest. Regenerate the freeze with PyInstaller after any bump.
+
+whisperx>=3.1.1
+faster-whisper>=1.0.0
+ctranslate2>=4.0.0
+torch>=2.1.0
+torchaudio>=2.1.0
+transformers>=4.36.0
+pyannote.audio>=3.1.0
+pyinstaller>=6.3.0
