@@ -442,7 +442,7 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 #### Automated
 
 - [x] 1.1 Rust type-check passes (`cargo check`) — cb94e36
-- [x] 1.2 Sidecar build script emits arch-suffixed binaries (`ls src-tauri/binaries/whisperx-engine-*`)
+- [x] 1.2 Sidecar build script emits arch-suffixed binaries (`ls src-tauri/binaries/whisperx-engine-*`) — 4b4f522
 - [ ] 1.3 `whisperx_engine_check` returns `ok: true` with no `whisper-cli`/Python on PATH
 
 #### Manual
