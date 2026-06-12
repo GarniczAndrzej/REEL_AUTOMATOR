@@ -441,7 +441,7 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes (`cargo check`)
+- [x] 1.1 Rust type-check passes (`cargo check`) — cb94e36
 - [ ] 1.2 Sidecar build script emits arch-suffixed binaries (`ls src-tauri/binaries/whisperx-engine-*`)
 - [ ] 1.3 `whisperx_engine_check` returns `ok: true` with no `whisper-cli`/Python on PATH
 
@@ -456,9 +456,9 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [ ] 2.1 Rust type-check passes (`cargo check`)
-- [ ] 2.2 Rust build passes (`cargo build`)
-- [ ] 2.3 Legacy `whisper-cache/<hash>.srt` fixture still loads (cache hit, no engine)
+- [x] 2.1 Rust type-check passes (`cargo check`)
+- [x] 2.2 Rust build passes (`cargo build`)
+- [x] 2.3 Legacy `whisper-cache/<hash>.srt` fixture still loads (cache hit, no engine)
 
 #### Manual
 

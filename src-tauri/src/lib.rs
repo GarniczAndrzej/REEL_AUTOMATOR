@@ -23,6 +23,7 @@ pub fn run() {
             project::save_render_preset,
             project::delete_render_preset,
             whisper::transcribe_video,
+            whisper::cancel_transcription,
             engine::whisperx_engine_check,
             waveform::extract_waveform,
         ])
