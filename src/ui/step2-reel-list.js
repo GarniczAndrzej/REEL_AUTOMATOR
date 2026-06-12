@@ -314,6 +314,16 @@ export function renderReels() {
 
       const threshold = r.mergeThreshold ?? state.mergeThreshold;
 
+      // S-01 minimal read-only score display (no sorting / greying / breakdown)
+      const hasScore = typeof r.virality_score === 'number';
+      const scoreBadge = hasScore
+        ? `<span class="reel-score-badge" title="Virality score">${Math.round(r.virality_score)}</span>`
+        : `<span class="reel-score-badge muted" title="Brak oceny">brak oceny</span>`;
+      const reasonHtml =
+        hasScore && r.reason
+          ? `<span class="reel-reason">${esc(r.reason)}</span>`
+          : '';
+
       const clipsHtml = r.clip_ids.length
         ? r.clip_ids
             .map((id, ci) => {
@@ -377,9 +387,11 @@ export function renderReels() {
       return `<div class="reel-card" data-reel-idx="${ri}">
   <div class="reel-header expanded" data-toggle-reel>
     <span class="reel-badge">REEL ${ri + 1}</span>
+    ${scoreBadge}
     <span class="reel-name">${esc(r.reel_name)}</span>
     <span class="reel-meta">${r.clip_ids.length} klipów • ${totalDur}s</span>
     <label class="reel-threshold-wrap" title="Próg scalania dla tego reela (override globalnego)">Próg: <input type="range" class="reel-threshold" data-reel-idx="${ri}" min="0" max="60" value="${threshold}"><span class="reel-threshold-val">${threshold}</span> kl.</label>
+    ${reasonHtml}
   </div>
   <div class="reel-clips open" data-reel-idx="${ri}">${clipsHtml}</div>${timelineHtml}
 </div>`;

@@ -4,6 +4,7 @@
 
 import { state, emit } from '../state.js';
 import { buildPrompt, buildClaudeContent } from '../ai/prompt.js';
+import { validateReels } from '../ai/validate.js';
 import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
 import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
@@ -116,6 +117,7 @@ async function runAIAnalysis() {
   setPS(1, 'done');
   setPS(2, 'running');
 
+  let rawResponse = '';
   try {
     const orModel = state.orSelectedModel;
     if (state.currentProvider === 'openrouter')
@@ -145,6 +147,7 @@ async function runAIAnalysis() {
       return callOpenRouter(apiKey, prompt, orModel);
     });
 
+    rawResponse = responseText;
     if (fromCache) {
       log(`Odpowiedź z pamięci podręcznej (hash: ${hashShort}) ⚡`, 'ok');
     } else {
@@ -157,8 +160,9 @@ async function runAIAnalysis() {
     setPS(3, 'running');
 
     const cleaned = responseText.replace(/```json|```/g, '').trim();
+    const parsed = validateReels(JSON.parse(cleaned), state.sentences);
     pushUndo(snap());
-    state.reelsData = JSON.parse(cleaned);
+    state.reelsData = parsed;
     renderReels();
     document.getElementById('statusReels').textContent = state.reelsData.length;
     setPS(3, 'done');
@@ -170,10 +174,34 @@ async function runAIAnalysis() {
     setPS(2, 'err');
     setPS(3, 'err');
     log('BŁĄD: ' + e.message, 'err');
-    log('Sprawdź API key i połączenie internetowe.', 'err');
+    if (rawResponse) {
+      // FR-018: validation/parse failed — keep the raw text for paste-and-fix.
+      revealPasteFix(rawResponse, 'Błąd walidacji: ' + e.message);
+      log(
+        'Surowa odpowiedź zachowana w polu „Wklej JSON od AI" — popraw i zastosuj.',
+        'err',
+      );
+    } else {
+      log('Sprawdź API key i połączenie internetowe.', 'err');
+    }
   } finally {
     analyzeBtn.disabled = false;
   }
+}
+
+// FR-018 paste-and-fix: stash the raw response in the editable paste box, show
+// the Polish error there, and scroll it into view. Never mutates reelsData.
+function revealPasteFix(rawText, message) {
+  const input = document.getElementById('pasteJsonInput');
+  const status = document.getElementById('pasteJsonStatus');
+  if (input && rawText != null) input.value = rawText;
+  if (status) {
+    status.style.color = 'var(--red)';
+    status.textContent = message;
+  }
+  document
+    .getElementById('pasteJsonCard')
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function editReelsJSON() {
@@ -188,8 +216,12 @@ function editReelsJSON() {
 
 function applyManualJSON() {
   try {
+    const parsed = validateReels(
+      JSON.parse(document.getElementById('jsonEditor').value),
+      state.sentences,
+    );
     const before = snap();
-    state.reelsData = JSON.parse(document.getElementById('jsonEditor').value);
+    state.reelsData = parsed;
     pushUndo(before);
     renderReels();
     document.getElementById('statusReels').textContent = state.reelsData.length;
@@ -213,10 +245,7 @@ function applyPastedJSON() {
   }
   try {
     const cleaned = raw.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) throw new Error('Oczekiwano tablicy JSON []');
-    if (!parsed.length) throw new Error('Tablica jest pusta');
-    if (!parsed[0].clip_ids) throw new Error('Brak pola clip_ids w obiektach');
+    const parsed = validateReels(JSON.parse(cleaned), state.sentences);
     const before = snap();
     state.reelsData = parsed;
     pushUndo(before);
@@ -320,7 +349,10 @@ async function runComparison() {
         );
       return callOpenRouter(cfg.key, prompt, cfg.model);
     });
-    return JSON.parse(result.replace(/```json|```/g, '').trim());
+    return validateReels(
+      JSON.parse(result.replace(/```json|```/g, '').trim()),
+      state.sentences,
+    );
   };
 
   document.getElementById('compareRunBtn').disabled = true;

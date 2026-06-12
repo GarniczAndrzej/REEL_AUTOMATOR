@@ -514,10 +514,10 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [x] 2.1 Regression suite passes
-- [x] 2.2 No `claude-opus-4-7` references remain
-- [x] 2.3 New schema fields present in `prompt.js`
-- [x] 2.4 Prettier clean on `src/ai/*.js` + prompt-panel
+- [x] 2.1 Regression suite passes — 38b5f76
+- [x] 2.2 No `claude-opus-4-7` references remain — 38b5f76
+- [x] 2.3 New schema fields present in `prompt.js` — 38b5f76
+- [x] 2.4 Prettier clean on `src/ai/*.js` + prompt-panel — 38b5f76
 
 #### Manual
 
@@ -530,9 +530,9 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [ ] 3.1 Regression suite passes
-- [ ] 3.2 All four ingest paths call `validateReels`
-- [ ] 3.3 Prettier clean on validate.js + step2 + styles
+- [x] 3.1 Regression suite passes
+- [x] 3.2 All four ingest paths call `validateReels`
+- [x] 3.3 Prettier clean on validate.js + step2 + styles
 
 #### Manual
 
