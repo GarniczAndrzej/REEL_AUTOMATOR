@@ -12,7 +12,7 @@
 # arch-suffixed binary name (e.g. whisperx-engine-aarch64-apple-darwin).
 
 import os
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files, copy_metadata
 
 block_cipher = None
 
@@ -31,9 +31,42 @@ datas += collect_data_files("faster_whisper")
 datas += collect_data_files("pyannote", include_py_files=False)
 datas += collect_data_files("lightning_fabric", include_py_files=False)
 datas += collect_data_files("speechbrain", include_py_files=False)
+datas += collect_data_files("transformers")
+
+# transformers uses lazy `_LazyModule` loading PyInstaller can't follow, and
+# checks each backend via importlib.metadata.version(...). Without the wav2vec2
+# submodules AND the dist-info metadata of torch & friends, the frozen engine
+# can't load Wav2Vec2ForCTC → forced alignment fails (exit 12,
+# "Could not import module 'Wav2Vec2ForCTC'"). Bundle both explicitly.
+for _pkg in (
+    "transformers",
+    "torch",
+    "torchaudio",
+    "tokenizers",
+    "safetensors",
+    "huggingface_hub",
+    "numpy",
+    "regex",
+    "tqdm",
+    "packaging",
+    "filelock",
+    "pyyaml",
+    "requests",
+):
+    try:
+        datas += copy_metadata(_pkg)
+    except Exception:
+        pass
 
 hiddenimports = []
-for pkg in ("whisperx", "faster_whisper", "pyannote.audio", "speechbrain", "torchaudio"):
+for pkg in (
+    "whisperx",
+    "faster_whisper",
+    "pyannote.audio",
+    "speechbrain",
+    "torchaudio",
+    "transformers",
+):
     try:
         hiddenimports += collect_submodules(pkg)
     except Exception:
