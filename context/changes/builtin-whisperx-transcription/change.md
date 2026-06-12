@@ -18,8 +18,11 @@ criterion verifiable in a headless macOS dev session is green and checked:
   gitignored). 1.3/1.4/1.7 (`--selftest`, sample-WAV run, offline align) could
   NOT be executed in the headless harness — it blocks the dyld shared-cache
   mapping the freshly-built adhoc binary needs (`syscall to map cache into
-  shared region failed`); run them from a normal terminal / the Tauri app. 1.5
-  needs the `GPU=1` Metal variant; 1.6 needs a Windows box.
+  shared region failed`); run them from a normal terminal / the Tauri app. The
+  `GPU=1` Metal variant is now also built
+  (`whisperx-engine-aarch64-apple-darwin-gpu`, same 2.6 GB / arm64 / adhoc,
+  gitignored), but 1.5 (Metal vs CPU timing) still needs a real run outside the
+  harness; 1.6 needs a Windows box.
 - Phase 2: 2.1/2.2/2.3 (cargo check/build + cache unit tests).
 - Phase 3: 3.1/3.2/3.3 (regression + cargo check + v3/v4 round-trip).
 - Phase 4: 4.1/4.2 (build + SHA-256 mismatch unit test). 4.3 global
