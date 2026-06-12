@@ -1,17 +1,43 @@
-export function buildPrompt(
-  userPrompt,
-  sentences,
-  sources = null,
-  primaryFilename = '',
-) {
-  const formatSentence = (s) => ({
-    id: s.id,
-    text: s.text,
-    start_tc: s.start_tc,
-    end_tc: s.end_tc,
-    duration_frames: s.duration_frame,
-  });
+const formatSentence = (s) => ({
+  id: s.id,
+  text: s.text,
+  start_tc: s.start_tc,
+  end_tc: s.end_tc,
+  duration_frames: s.duration_frame,
+});
 
+// Static response-format spec + scoring guidance. Independent of userPrompt, so
+// it can sit in the cached Claude prefix (see buildClaudeContent).
+const FORMAT_SPEC = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
+[
+  {
+    "reel_name": "Reel 1 - Tytuł tematu",
+    "clip_ids": [1, 2, 5, 6],
+    "virality_score": 82,
+    "scores": { "hook": 85, "flow": 80, "value": 78, "trend": 84 },
+    "reason": "Mocny hook i konkretna wartość w jednym zdaniu.",
+    "markers": { "hook": 1, "body": 5, "punchline": 6 }
+  },
+  {
+    "reel_name": "Reel 2 - Tytuł tematu",
+    "clip_ids": [10, 11, 3],
+    "virality_score": 67,
+    "scores": { "hook": 70, "flow": 65, "value": 72, "trend": 60 },
+    "reason": "Solidna historia, słabszy potencjał trendu.",
+    "markers": { "hook": 10, "body": 11, "punchline": 3 }
+  }
+]
+
+ZASADY OCENY:
+- Oceń każdy Reel 0–100 w czterech osiach: hook (siła wstępu), flow (płynność i logika montażu), value (wartość merytoryczna), trend (potencjał viralowy / dopasowanie do trendów).
+- "virality_score" to ogólna ocena 0–100 całego Reela (spójna z osiami).
+- Selekcja MUSI zawierać segment z puentą (punchline) — nigdy nie ucinaj materiału przed kluczowym przekazem.
+- "reason" to dokładnie jedno zdanie uzasadnienia po polsku.
+- "markers.hook", "markers.body", "markers.punchline" to clip_id wybrane z listy "clip_ids" tego Reela (muszą do niej należeć).`;
+
+// Build the "available segments" block (+ multi-source note). Independent of
+// userPrompt — part of the cacheable static prefix.
+function buildSegmentsSection(sentences, sources, primaryFilename) {
   let segmentsBlock;
   const hasMultipleSources = sources && sources.length > 0;
 
@@ -41,20 +67,61 @@ export function buildPrompt(
     ? '\nWAŻNE: Nie łącz segmentów z różnych źródeł w jednym Reelu — każde [ŹRÓDŁO N] to osobny plik wideo.\n'
     : '';
 
-  return `${userPrompt}
-${multiSourceNote}
+  return { segmentsBlock, multiSourceNote };
+}
+
+// The static instruction block: multi-source note + segments + format spec.
+// Same text for every provider; forms the cached Claude prefix.
+function buildStaticBlock(sentences, sources, primaryFilename) {
+  const { segmentsBlock, multiSourceNote } = buildSegmentsSection(
+    sentences,
+    sources,
+    primaryFilename,
+  );
+  return `${multiSourceNote}
 DOSTĘPNE SEGMENTY (plik SRT zamieniony na zdania z timecodes):
 ${segmentsBlock}
 
-OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
-[
-  {
-    "reel_name": "Reel 1 - Tytuł tematu",
-    "clip_ids": [1, 2, 5, 6]
-  },
-  {
-    "reel_name": "Reel 2 - Tytuł tematu",
-    "clip_ids": [10, 11, 3]
-  }
-]`;
+${FORMAT_SPEC}`;
+}
+
+/**
+ * String prompt for Gemini / OpenRouter / compare / download / disk-cache key.
+ * @param {string} userPrompt
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {Array|null} sources
+ * @param {string} primaryFilename
+ * @returns {string}
+ */
+export function buildPrompt(
+  userPrompt,
+  sentences,
+  sources = null,
+  primaryFilename = '',
+) {
+  return `${userPrompt}
+${buildStaticBlock(sentences, sources, primaryFilename)}`;
+}
+
+/**
+ * Claude message content with a cached static prefix. The static block (segments
+ * + format spec) comes first with `cache_control: ephemeral` so the cache
+ * breakpoint covers it; the variable user prompt comes second.
+ * @param {string} userPrompt
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {Array|null} sources
+ * @param {string} primaryFilename
+ * @returns {Array<{type:string, text:string, cache_control?:object}>}
+ */
+export function buildClaudeContent(
+  userPrompt,
+  sentences,
+  sources = null,
+  primaryFilename = '',
+) {
+  const staticBlock = buildStaticBlock(sentences, sources, primaryFilename);
+  return [
+    { type: 'text', text: staticBlock, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: userPrompt },
+  ];
 }

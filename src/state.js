@@ -1,3 +1,15 @@
+/**
+ * A scored reel produced by AI selection (S-01). All scored fields are
+ * optional for backward-compat — older projects / providers may omit them.
+ * @typedef {Object} Reel
+ * @property {string} reel_name
+ * @property {number[]} clip_ids - sentence ids selected for this reel
+ * @property {number} [virality_score] - overall 0–100
+ * @property {{hook:number, flow:number, value:number, trend:number}} [scores] - axis sub-scores
+ * @property {string} [reason] - one-sentence justification
+ * @property {{hook?:number, body?:number, punchline?:number}} [markers] - each value is a member of clip_ids
+ */
+
 export const state = {
   // step 1
   srtName: null,

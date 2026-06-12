@@ -497,10 +497,10 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [x] 1.1 Regression suite passes unchanged
-- [x] 1.2 Rust still type-checks (`cargo check`)
-- [x] 1.3 No leftover `step2-analyze` references beyond main.js + orchestrator
-- [x] 1.4 Prettier clean on `src/ui/step2-*.js`
+- [x] 1.1 Regression suite passes unchanged — 79f03dd
+- [x] 1.2 Rust still type-checks (`cargo check`) — 79f03dd
+- [x] 1.3 No leftover `step2-analyze` references beyond main.js + orchestrator — 79f03dd
+- [x] 1.4 Prettier clean on `src/ui/step2-*.js` — 79f03dd
 
 #### Manual
 
@@ -514,10 +514,10 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [ ] 2.1 Regression suite passes
-- [ ] 2.2 No `claude-opus-4-7` references remain
-- [ ] 2.3 New schema fields present in `prompt.js`
-- [ ] 2.4 Prettier clean on `src/ai/*.js` + prompt-panel
+- [x] 2.1 Regression suite passes
+- [x] 2.2 No `claude-opus-4-7` references remain
+- [x] 2.3 New schema fields present in `prompt.js`
+- [x] 2.4 Prettier clean on `src/ai/*.js` + prompt-panel
 
 #### Manual
 

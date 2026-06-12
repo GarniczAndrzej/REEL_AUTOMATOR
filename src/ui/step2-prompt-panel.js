@@ -3,7 +3,7 @@
 // listeners via initPromptPanel(). (R1 split — pure move.)
 
 import { state, emit } from '../state.js';
-import { buildPrompt } from '../ai/prompt.js';
+import { buildPrompt, buildClaudeContent } from '../ai/prompt.js';
 import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
 import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
@@ -132,7 +132,16 @@ async function runAIAnalysis() {
       hashShort,
     } = await withLlmCache(cacheKey, () => {
       if (state.currentProvider === 'gemini') return callGemini(apiKey, prompt);
-      if (state.currentProvider === 'claude') return callClaude(apiKey, prompt);
+      if (state.currentProvider === 'claude')
+        return callClaude(
+          apiKey,
+          buildClaudeContent(
+            state.userPrompt,
+            state.sentences,
+            state.sources?.length ? state.sources : null,
+            state.videoFilename || '',
+          ),
+        );
       return callOpenRouter(apiKey, prompt, orModel);
     });
 
@@ -299,7 +308,16 @@ async function runComparison() {
     });
     const { result } = await withLlmCache(cacheKey, () => {
       if (cfg.provider === 'gemini') return callGemini(cfg.key, prompt);
-      if (cfg.provider === 'claude') return callClaude(cfg.key, prompt);
+      if (cfg.provider === 'claude')
+        return callClaude(
+          cfg.key,
+          buildClaudeContent(
+            state.userPrompt,
+            state.sentences,
+            state.sources?.length ? state.sources : null,
+            state.videoFilename || '',
+          ),
+        );
       return callOpenRouter(cfg.key, prompt, cfg.model);
     });
     return JSON.parse(result.replace(/```json|```/g, '').trim());
