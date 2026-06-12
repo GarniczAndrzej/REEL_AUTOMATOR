@@ -24,9 +24,12 @@ criterion verifiable in a headless macOS dev session is green and checked:
   env / next-to-exe), and `whisper.rs`/`engine.rs` pass the resolved path.
   Verified headless: 283 MB binary `--selftest` → `{"ok":true,...,
   "alignment_model_ready":true}`, `cargo check` + regression 169/169 green.
-  Remaining: 1.3 (Tauri `whisperx_engine_check` in-app), 1.4 (sample-WAV run),
-  1.5 (rebuild `GPU=1` variant — old `-gpu` was baked/stale — then time Metal vs
-  CPU), 1.6 (Windows box), 1.7 (real offline align run).
+  1.3 checked: both variants (CPU + `-gpu`, each 283 MB) `--selftest` →
+  `{"ok":true,...,"alignment_model_ready":true}` headless — verified via direct
+  `--selftest` (the exact payload `whisperx_engine_check` wraps; the Tauri command
+  itself compiles via `cargo check`), not an in-app GUI run. GPU variant rebuilt
+  model-free. Remaining: 1.4 (sample-WAV run), 1.5 (time Metal vs CPU on a real
+  clip), 1.6 (Windows box), 1.7 (real offline forced-align run).
 - Phase 2: 2.1/2.2/2.3 (cargo check/build + cache unit tests).
 - Phase 3: 3.1/3.2/3.3 (regression + cargo check + v3/v4 round-trip).
 - Phase 4: 4.1/4.2 (build + SHA-256 mismatch unit test). 4.3 global
