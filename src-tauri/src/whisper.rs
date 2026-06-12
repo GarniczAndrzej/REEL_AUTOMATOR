@@ -408,6 +408,134 @@ mod tests {
     }
 }
 
+/// Force-align an imported transcript to the audio (no transcription). Extracts
+/// audio via FFmpeg, then drives the engine's `--align-only` mode. Returns the
+/// same normalized `{srt_content, words, segments}` shape as `transcribe_video`.
+#[tauri::command]
+pub async fn align_transcript(
+    app: AppHandle,
+    video_path: String,
+    transcript: String,
+    language: String,
+    is_vtt: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    TRANSCRIBE_CANCELLED.store(false, Ordering::SeqCst);
+
+    let pid = std::process::id();
+    let seq = WHISPER_CALL.fetch_add(1, Ordering::Relaxed);
+    let wav_path = std::env::temp_dir().join(format!("reel_align_{}_{}.wav", pid, seq));
+    let wav_str = wav_path.to_string_lossy().to_string();
+    let ext = if is_vtt.unwrap_or(false) { "vtt" } else { "srt" };
+    let transcript_path =
+        std::env::temp_dir().join(format!("reel_align_{}_{}.{}", pid, seq, ext));
+    std::fs::write(&transcript_path, &transcript).map_err(|e| e.to_string())?;
+    let transcript_str = transcript_path.to_string_lossy().to_string();
+
+    let _ = app.emit(
+        "transcribe-progress",
+        serde_json::json!({ "phase": "audio_extract", "label": "Ekstrakcja audio…", "percent": 0 }),
+    );
+
+    let (_, ok) = crate::ffmpeg::run_ffmpeg_output(
+        &app,
+        &[
+            "-y", "-i", &video_path, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", &wav_str,
+        ],
+    )
+    .await?;
+    if !ok {
+        let _ = std::fs::remove_file(&transcript_path);
+        return Err("Nie udało się wyekstrahować audio z wideo. Sprawdź plik źródłowy.".into());
+    }
+
+    let lang_arg = if language == "auto" { "pl".to_string() } else { language.clone() };
+
+    let sidecar = app
+        .shell()
+        .sidecar(crate::engine::ENGINE_SIDECAR)
+        .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
+        .args([
+            "--align-only",
+            "--audio", &wav_str,
+            "--transcript", &transcript_str,
+            "--language", &lang_arg,
+        ]);
+
+    let (mut rx, child) = sidecar
+        .spawn()
+        .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
+    *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
+
+    let mut stdout_buf = String::new();
+    let mut stderr_buf = String::new();
+    let mut stderr_line = String::new();
+    let mut exit_code: Option<i32> = None;
+
+    while let Some(ev) = rx.recv().await {
+        match ev {
+            CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
+            CommandEvent::Stderr(b) => {
+                let chunk = String::from_utf8_lossy(&b);
+                stderr_buf.push_str(&chunk);
+                stderr_line.push_str(&chunk);
+                while let Some(nl) = stderr_line.find('\n') {
+                    let line: String = stderr_line.drain(..=nl).collect();
+                    let line = line.trim_end();
+                    if let Some(rest) = line.strip_prefix("PROGRESS ") {
+                        let mut phase = "";
+                        let mut percent = 0.0_f64;
+                        for tok in rest.split_whitespace() {
+                            if let Some(v) = tok.strip_prefix("phase=") {
+                                phase = v;
+                            } else if let Some(v) = tok.strip_prefix("percent=") {
+                                percent = v.parse().unwrap_or(0.0);
+                            }
+                        }
+                        let (label, overall) = map_progress(phase, percent);
+                        let _ = app.emit(
+                            "transcribe-progress",
+                            serde_json::json!({ "phase": phase, "label": label, "percent": overall }),
+                        );
+                    }
+                }
+            }
+            CommandEvent::Terminated(p) => {
+                exit_code = p.code;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    *TRANSCRIBE_CHILD.lock().unwrap() = None;
+    let _ = tokio::fs::remove_file(&wav_path).await;
+    let _ = std::fs::remove_file(&transcript_path);
+
+    if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
+        return Err(CANCELLED_MSG.into());
+    }
+    if exit_code != Some(0) {
+        return Err(engine_error_message(exit_code, &stderr_buf));
+    }
+
+    let parsed: serde_json::Value = serde_json::from_str(stdout_buf.trim())
+        .map_err(|e| format!("Niepoprawna odpowiedź silnika WhisperX: {e}"))?;
+    let segments: Vec<serde_json::Value> =
+        parsed["segments"].as_array().cloned().unwrap_or_default();
+
+    let _ = app.emit(
+        "transcribe-progress",
+        serde_json::json!({ "phase": "done", "label": "Gotowe!", "percent": 100 }),
+    );
+
+    Ok(serde_json::json!({
+        "srt_content": build_srt_from_segments(&segments),
+        "words": flatten_words(&segments),
+        "segments": segments,
+        "language": parsed["language"].as_str().unwrap_or(&language),
+    }))
+}
+
 /// Kill the in-flight engine child (if any) and mark the run cancelled so the
 /// driver returns the cancelled-state message rather than a failure.
 #[tauri::command]

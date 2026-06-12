@@ -486,8 +486,8 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [x] 4.1 Rust type-check + build pass
-- [x] 4.2 SHA-256 mismatch deletes partial download and errors
+- [x] 4.1 Rust type-check + build pass — a44d6cf
+- [x] 4.2 SHA-256 mismatch deletes partial download and errors — a44d6cf
 - [ ] 4.3 Frontend passes Prettier check
 
 #### Manual
@@ -501,8 +501,8 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [ ] 5.1 Transcript-exporter regression case passes (if added under `src/exporters/`)
-- [ ] 5.2 Rust type-check passes (`cargo check`)
+- [x] 5.1 Transcript-exporter regression case passes (if added under `src/exporters/`)
+- [x] 5.2 Rust type-check passes (`cargo check`)
 
 #### Manual
 

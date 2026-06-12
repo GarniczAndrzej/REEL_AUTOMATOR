@@ -24,6 +24,7 @@ pub fn run() {
             project::save_render_preset,
             project::delete_render_preset,
             whisper::transcribe_video,
+            whisper::align_transcript,
             whisper::cancel_transcription,
             engine::whisperx_engine_check,
             models::list_models,

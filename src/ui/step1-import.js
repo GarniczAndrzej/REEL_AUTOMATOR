@@ -1,6 +1,10 @@
 import { state, emit } from '../state.js';
 import { parseSRT, parseVTT, framesToTC } from '../parser/srt.js';
 import { segmentFromWords } from '../parser/word-segments.js';
+import {
+  generateTranscriptSRT,
+  generateTranscriptVTT,
+} from '../exporters/transcript.js';
 
 export function init() {
   const srtFileInput = document.getElementById('srtFile');
@@ -23,6 +27,16 @@ export function init() {
   document
     .getElementById('downloadJsonBtn')
     .addEventListener('click', downloadJSON);
+  // S-05 — transcript align + export
+  document
+    .getElementById('alignTranscriptBtn')
+    .addEventListener('click', alignImportedTranscript);
+  document
+    .getElementById('exportSrtBtn')
+    .addEventListener('click', exportTranscriptSRT);
+  document
+    .getElementById('exportVttBtn')
+    .addEventListener('click', exportTranscriptVTT);
 
   // S-05 — Built-in WhisperX transcription + model manager
   document
@@ -251,6 +265,7 @@ function renderSegments() {
     .join('');
   document.getElementById('segCount').textContent =
     state.sentences.length + ' segmentów';
+  syncAlignBtn();
 }
 
 function downloadMD() {
@@ -586,6 +601,86 @@ async function cancelTranscribe() {
   }
 }
 
+// ── S-05 transcript align + export ────────────────────────────────────
+
+// Show "align to audio" only when a video and parsed sentences are both present.
+function syncAlignBtn() {
+  const btn = document.getElementById('alignTranscriptBtn');
+  if (!btn) return;
+  const hasVideo = !!(state._whisperVideoPath || state.videoPath);
+  const hasSentences = state.sentences && state.sentences.length > 0;
+  btn.style.display = hasVideo && hasSentences ? '' : 'none';
+}
+
+// Force-align an imported transcript to the audio to obtain word timestamps.
+async function alignImportedTranscript() {
+  const videoPath = state._whisperVideoPath || state.videoPath;
+  if (!videoPath) {
+    alert('Najpierw wybierz plik wideo, aby dopasować transkrypcję do audio.');
+    return;
+  }
+  if (!state.srtContent) {
+    alert('Brak transkrypcji do dopasowania.');
+    return;
+  }
+  document.getElementById('whisperProgressBox').style.display = 'block';
+  setWhisperProgress('Dopasowanie do audio…', 0);
+
+  let unlisten;
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    unlisten = await listen('transcribe-progress', (e) => {
+      const { label, percent } = e.payload;
+      setWhisperProgress(label, percent);
+    });
+    const { invoke } = await import('@tauri-apps/api/core');
+    const result = await invoke('align_transcript', {
+      videoPath,
+      transcript: state.srtContent,
+      language: state.whisperLanguage || 'pl',
+      isVtt: !!state._srtIsVtt,
+    });
+    // Merge resulting word timestamps onto the imported sentences.
+    mergeWordsIntoSentences(state.sentences, result.words || [], state.fps);
+    renderSegments();
+    setWhisperProgress('Dopasowano słowa do audio!', 100);
+    setTimeout(() => {
+      document.getElementById('whisperProgressBox').style.display = 'none';
+    }, 2000);
+    emit();
+  } catch (e) {
+    const msg = String(e);
+    if (msg.includes('ANULOWANO')) {
+      setWhisperProgress('Anulowano.', 0);
+    } else {
+      setWhisperProgress('Błąd: ' + e, 0);
+      alert('Dopasowanie nieudane: ' + e);
+    }
+  } finally {
+    if (unlisten) unlisten();
+  }
+}
+
+function exportTranscriptSRT() {
+  if (!state.sentences || !state.sentences.length) {
+    alert('Brak transkrypcji do eksportu.');
+    return;
+  }
+  const srt = generateTranscriptSRT(state.sentences, state.fps);
+  const base = (state.srtName || 'transkrypcja').replace(/\.(srt|vtt)$/i, '');
+  downloadBlob(base + '.srt', srt, 'application/x-subrip');
+}
+
+function exportTranscriptVTT() {
+  if (!state.sentences || !state.sentences.length) {
+    alert('Brak transkrypcji do eksportu.');
+    return;
+  }
+  const vtt = generateTranscriptVTT(state.sentences, state.fps);
+  const base = (state.srtName || 'transkrypcja').replace(/\.(srt|vtt)$/i, '');
+  downloadBlob(base + '.vtt', vtt, 'text/vtt');
+}
+
 async function browseWhisperVideo() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
@@ -609,6 +704,7 @@ async function browseWhisperVideo() {
     const vf2 = document.getElementById('videoFilename2');
     if (vf2) vf2.value = name;
     syncTranscribeBtn();
+    syncAlignBtn();
   } catch (e) {
     alert('Nie udało się wybrać pliku: ' + e);
   }
