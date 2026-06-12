@@ -546,9 +546,9 @@ shows the markers before closing the slice.
 
 #### Automated
 
-- [x] 4.1 Regression suite passes incl. new marker cases
-- [x] 4.2 Legacy byte-identical EDL assertion still green
-- [x] 4.3 Prettier clean on edl.js + regression.js
+- [x] 4.1 Regression suite passes incl. new marker cases — a531863
+- [x] 4.2 Legacy byte-identical EDL assertion still green — a531863
+- [x] 4.3 Prettier clean on edl.js + regression.js — a531863
 
 #### Manual
 
