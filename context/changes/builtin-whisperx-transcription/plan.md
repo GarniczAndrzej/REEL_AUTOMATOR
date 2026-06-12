@@ -488,7 +488,7 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 - [x] 4.1 Rust type-check + build pass — a44d6cf
 - [x] 4.2 SHA-256 mismatch deletes partial download and errors — a44d6cf
-- [x] 4.3 Frontend passes Prettier check
+- [x] 4.3 Frontend passes Prettier check — 4603f46
 
 #### Manual
 
