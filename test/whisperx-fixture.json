@@ -1,0 +1,31 @@
+{
+  "language": "pl",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 2.4,
+      "text": "Witajcie na webinarze dzisiaj.",
+      "words": [
+        { "text": "Witajcie", "start": 0.1, "end": 0.55, "score": 0.91 },
+        { "text": "na", "start": 0.6, "end": 0.72, "score": 0.88 },
+        { "text": "webinarze", "start": 0.8, "end": 1.4, "score": 0.93 },
+        { "text": "dzisiaj.", "start": 1.5, "end": 2.4, "score": 0.9 }
+      ]
+    },
+    {
+      "start": 2.5,
+      "end": 6.0,
+      "text": "Pokażę wam jak zwiększyć sprzedaż o pięćdziesiąt procent!",
+      "words": [
+        { "text": "Pokażę", "start": 2.5, "end": 2.9, "score": 0.9 },
+        { "text": "wam", "start": 2.95, "end": 3.1, "score": 0.9 },
+        { "text": "jak", "start": 3.15, "end": 3.3, "score": 0.9 },
+        { "text": "zwiększyć", "start": 3.35, "end": 3.9, "score": 0.92 },
+        { "text": "sprzedaż", "start": 3.95, "end": 4.5, "score": 0.9 },
+        { "text": "o", "start": 4.55, "end": 4.65, "score": 0.87 },
+        { "text": "pięćdziesiąt", "start": 4.7, "end": 5.4, "score": 0.9 },
+        { "text": "procent!", "start": 5.45, "end": 6.0, "score": 0.9 }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,28 @@
+/**
+ * A single word with frame-converted timing, produced by the WhisperX engine's
+ * forced alignment and persisted on its sentence (.reelproj schema v4).
+ * @typedef {Object} Word
+ * @property {string} text
+ * @property {number} start_frame
+ * @property {number} end_frame
+ */
+
+/**
+ * A parsed transcript segment. Produced by `parseSRT`/`parseVTT` (imported
+ * transcripts) and by `segmentFromWords` (engine output); both converge on this
+ * shape, consumed by the exporters and the reel editor.
+ * @typedef {Object} Sentence
+ * @property {number} id
+ * @property {string} text
+ * @property {number} start_frame
+ * @property {number} end_frame
+ * @property {number} duration_frame
+ * @property {string} start_tc
+ * @property {string} end_tc
+ * @property {number} [source_idx] - F18 multi-source index (0 = primary)
+ * @property {Word[]} [words] - word-level timings (engine/align path only)
+ */
+
 export const state = {
   // step 1
   srtName: null,

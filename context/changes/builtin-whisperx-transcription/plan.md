@@ -456,9 +456,9 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [x] 2.1 Rust type-check passes (`cargo check`)
-- [x] 2.2 Rust build passes (`cargo build`)
-- [x] 2.3 Legacy `whisper-cache/<hash>.srt` fixture still loads (cache hit, no engine)
+- [x] 2.1 Rust type-check passes (`cargo check`) — f65f737
+- [x] 2.2 Rust build passes (`cargo build`) — f65f737
+- [x] 2.3 Legacy `whisper-cache/<hash>.srt` fixture still loads (cache hit, no engine) — f65f737
 
 #### Manual
 
@@ -471,9 +471,9 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [ ] 3.1 Regression suite passes incl. new word-segmentation cases
-- [ ] 3.2 Rust type-check passes (`cargo check`)
-- [ ] 3.3 v3 fixture loads without `words`; v4 fixture round-trips `words[]`
+- [x] 3.1 Regression suite passes incl. new word-segmentation cases
+- [x] 3.2 Rust type-check passes (`cargo check`)
+- [x] 3.3 v3 fixture loads without `words`; v4 fixture round-trips `words[]`
 
 #### Manual
 

@@ -1,5 +1,6 @@
 import { state, emit } from '../state.js';
 import { parseSRT, parseVTT, framesToTC } from '../parser/srt.js';
+import { segmentFromWords } from '../parser/word-segments.js';
 
 export function init() {
   const srtFileInput = document.getElementById('srtFile');
@@ -321,7 +322,9 @@ async function writeProject(path) {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const payload = {
-      version: 3,
+      // v4 adds per-sentence words[] (engine forced-alignment). v3 loads
+      // tolerantly (no words → word-trim simply unavailable until re-aligned).
+      version: 4,
       srtName: state.srtName,
       srtContent: state.srtContent,
       fps: state.fps,
@@ -502,7 +505,7 @@ async function transcribeWithWhisper() {
     });
 
     const { invoke } = await import('@tauri-apps/api/core');
-    // Returns { srt_content, words: [{text, start, end}] }
+    // Returns { srt_content, words: [{text,start,end}], segments: [...] }
     const result = await invoke('transcribe_video', {
       videoPath,
       modelPath,
@@ -516,9 +519,32 @@ async function transcribeWithWhisper() {
       .pop()
       .replace(/\.[^.]+$/, '');
     const srtName = rawBase.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_whisper.srt';
+    // Keep the derived SRT for display/save, but the engine path builds
+    // sentences directly from word timestamps (no intermediate re-parse).
     loadSRTContent(result.srt_content, srtName);
-    // Store words for merging after parseSRT
-    state._pendingWhisperWords = result.words || [];
+
+    if (result.segments && result.segments.length) {
+      // Word-driven segmentation: gap-free sentences carrying words[].
+      state.sentences = segmentFromWords(
+        result.segments,
+        state.fps,
+        state.minChars,
+      );
+      state.sentences.forEach((s) => {
+        s.source_idx = 0;
+      });
+      // Engine path owns segmentation; the legacy merge path is retired here
+      // (still used by the imported-transcript align path in Phase 5).
+      state._pendingWhisperWords = null;
+      renderSegments();
+      document.getElementById('statusSegs').textContent =
+        state.sentences.length;
+      document.getElementById('segmentsCard').style.display = 'block';
+      emit();
+    } else {
+      // Fallback (legacy/no segments): store flat words for merge after parse.
+      state._pendingWhisperWords = result.words || [];
+    }
     setWhisperProgress('Gotowe! SRT wczytany.', 100);
     setTimeout(() => {
       document.getElementById('whisperProgressBox').style.display = 'none';

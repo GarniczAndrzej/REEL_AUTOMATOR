@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { parseSRT, framesToTC, parseTime } from '../src/parser/srt.js';
 import { mergeAdjacentClips } from '../src/parser/segments.js';
+import { segmentFromWords } from '../src/parser/word-segments.js';
 import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
 import { generateLua } from '../src/exporters/lua.js';
@@ -543,6 +544,139 @@ const bcLua = generateLua({
 });
 assert(bcLua.length > 0 && bcLua.includes('mediaPool:AppendToTimeline(allClips)'),
   'v2 project still exports valid Lua');
+
+// ─────────────────────────────────────────────────────────────────
+// Test 9: segmentFromWords — word-driven segmentation (S-05 / v4)
+// Feeds a recorded WhisperX-shaped segments/words fixture through the new
+// segmenter; asserts gap-free coverage, correct frame math, numbering, and
+// persisted words[]. Then proves exporters still produce valid output.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 9: segmentFromWords (word-driven) ───────────────');
+
+const WX_PATH = new URL('./whisperx-fixture.json', import.meta.url).pathname;
+const wxFixture = JSON.parse(readFileSync(WX_PATH, 'utf-8'));
+const wxSentences = segmentFromWords(wxFixture.segments, FPS, MIN_CHARS);
+
+assert(wxSentences.length === 2, `produces 2 sentences (got ${wxSentences.length})`);
+assert(
+  wxSentences.every((s, i) => s.id === i + 1),
+  'sentences are numbered 1..n',
+);
+assert(
+  wxSentences.every((s) => Array.isArray(s.words) && s.words.length > 0),
+  'every sentence carries words[]',
+);
+
+// Gap-free: each sentence's end_frame equals the next sentence's start_frame.
+let gapFree = true;
+for (let i = 0; i < wxSentences.length - 1; i++) {
+  if (wxSentences[i].end_frame !== wxSentences[i + 1].start_frame) gapFree = false;
+}
+assert(gapFree, 'consecutive sentence spans are gap-free');
+
+// Frame math: Math.round(seconds * fps), no mid-pipeline rounding.
+const firstWordStart = wxFixture.segments[0].words[0].start;
+assert(
+  wxSentences[0].start_frame === Math.round(firstWordStart * FPS),
+  `sentence[0].start_frame = Math.round(${firstWordStart} * ${FPS})`,
+);
+assert(
+  wxSentences.every((s) => s.duration_frame === s.end_frame - s.start_frame),
+  'duration_frame = end_frame - start_frame',
+);
+// Word frames also follow the invariant.
+const w0 = wxFixture.segments[0].words[0];
+assert(
+  wxSentences[0].words[0].start_frame === Math.round(w0.start * FPS) &&
+    wxSentences[0].words[0].end_frame === Math.round(w0.end * FPS),
+  'word frames use Math.round(seconds * fps)',
+);
+
+// Exporters consume word-driven sentences with no regression.
+const wxReels = [
+  { reel_name: 'Reel WX', clip_ids: [wxSentences[0].id, wxSentences[1].id] },
+];
+const wxEDL = generateEDL({
+  reelsData: wxReels,
+  sentences: wxSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoFilename: VIDEO_FILE,
+  mergeThreshold: MERGE_0,
+});
+assert(
+  wxEDL.includes('TITLE: REELS_EDL_AUTOMATOR') && wxEDL.includes('* SEGMENT ID: 1'),
+  'word-driven sentences export a valid EDL',
+);
+const wxXML = generateXML({
+  reelsData: wxReels,
+  sentences: wxSentences,
+  fps: FPS,
+  videoFilename: VIDEO_FILE,
+  videoPath: VIDEO_PATH,
+  videoResolution: RESOLUTION,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+assert(wxXML.includes('<xmeml version="4">'), 'word-driven sentences export valid XML');
+const wxLua = generateLua({
+  reelsData: wxReels,
+  sentences: wxSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoPath: VIDEO_PATH,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+assert(wxLua.includes('mediaPool:AppendToTimeline(allClips)'), 'word-driven sentences export valid Lua');
+
+// ─────────────────────────────────────────────────────────────────
+// Test 10: .reelproj v4 round-trip (words[]) + v3 tolerant load
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 10: v4 words[] round-trip ───────────────────────');
+
+const v4Project = {
+  version: 4,
+  srtName: 'webinar.srt',
+  fps: FPS,
+  minChars: MIN_CHARS,
+  mergeThreshold: MERGE_0,
+  sentences: wxSentences,
+  reelsData: wxReels,
+};
+// Round-trip through JSON exactly as save_project/load_project do (Value I/O).
+const v4Loaded = JSON.parse(JSON.stringify(v4Project));
+assert(v4Loaded.version === 4, 'v4 project keeps version 4');
+assert(
+  v4Loaded.sentences[0].words.length === wxSentences[0].words.length,
+  'words[] survive the v4 round-trip',
+);
+assert(
+  v4Loaded.sentences[0].words[0].start_frame ===
+    wxSentences[0].words[0].start_frame,
+  'word frame values survive the v4 round-trip',
+);
+
+// v3 (no words) must still load tolerantly — exporters work without words.
+const v3Sentences = wxSentences.map(({ words, ...rest }) => rest);
+assert(
+  v3Sentences.every((s) => s.words === undefined),
+  'v3 fixture has no words[]',
+);
+const v3EDL = generateEDL({
+  reelsData: wxReels,
+  sentences: v3Sentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoFilename: VIDEO_FILE,
+  mergeThreshold: MERGE_0,
+});
+assert(
+  v3EDL.includes('TITLE: REELS_EDL_AUTOMATOR'),
+  'v3 sentences (no words) still export a valid EDL',
+);
 
 // ─────────────────────────────────────────────────────────────────
 // Summary
