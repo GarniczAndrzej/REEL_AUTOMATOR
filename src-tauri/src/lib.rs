@@ -1,5 +1,6 @@
 mod engine;
 mod ffmpeg;
+mod models;
 mod project;
 mod whisper;
 mod waveform;
@@ -25,6 +26,9 @@ pub fn run() {
             whisper::transcribe_video,
             whisper::cancel_transcription,
             engine::whisperx_engine_check,
+            models::list_models,
+            models::download_model,
+            models::delete_model,
             waveform::extract_waveform,
         ])
         .run(tauri::generate_context!())

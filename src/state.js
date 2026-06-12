@@ -59,8 +59,9 @@ Zasady:
   orAllModels: [],
   orSelectedModel: null,
 
-  // Phase 4 F1
-  whisperModelPath: '',
+  // Phase 4 F1 / S-05 model manager
+  whisperModelPath: '', // legacy raw .bin path — retired, ignored on load
+  modelId: '', // selected managed faster-whisper model id (S-05)
   whisperLanguage: 'pl',
 
   // F18 — additional video sources (source 0 = state.videoPath / state.srtContent)

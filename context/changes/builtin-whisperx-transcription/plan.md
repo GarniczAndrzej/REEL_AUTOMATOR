@@ -471,9 +471,9 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [x] 3.1 Regression suite passes incl. new word-segmentation cases
-- [x] 3.2 Rust type-check passes (`cargo check`)
-- [x] 3.3 v3 fixture loads without `words`; v4 fixture round-trips `words[]`
+- [x] 3.1 Regression suite passes incl. new word-segmentation cases — 8738e85
+- [x] 3.2 Rust type-check passes (`cargo check`) — 8738e85
+- [x] 3.3 v3 fixture loads without `words`; v4 fixture round-trips `words[]` — 8738e85
 
 #### Manual
 
@@ -486,8 +486,8 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [ ] 4.1 Rust type-check + build pass
-- [ ] 4.2 SHA-256 mismatch deletes partial download and errors
+- [x] 4.1 Rust type-check + build pass
+- [x] 4.2 SHA-256 mismatch deletes partial download and errors
 - [ ] 4.3 Frontend passes Prettier check
 
 #### Manual

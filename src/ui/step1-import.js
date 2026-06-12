@@ -24,23 +24,20 @@ export function init() {
     .getElementById('downloadJsonBtn')
     .addEventListener('click', downloadJSON);
 
-  // F1 — Whisper transcription
+  // S-05 — Built-in WhisperX transcription + model manager
   document
     .getElementById('browseWhisperVideoBtn')
     .addEventListener('click', browseWhisperVideo);
-  document
-    .getElementById('browseWhisperModelBtn')
-    .addEventListener('click', browseWhisperModel);
   document.getElementById('whisperLanguage').addEventListener('change', (e) => {
     state.whisperLanguage = e.target.value;
-  });
-  document.getElementById('whisperModelPath').addEventListener('input', (e) => {
-    state.whisperModelPath = e.target.value;
-    syncTranscribeBtn();
   });
   document
     .getElementById('transcribeBtn')
     .addEventListener('click', transcribeWithWhisper);
+  document
+    .getElementById('cancelTranscribeBtn')
+    .addEventListener('click', cancelTranscribe);
+  initModelManager();
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -338,7 +335,7 @@ async function writeProject(path) {
       mergeThreshold: state.mergeThreshold,
       userPrompt: state.userPrompt,
       whisperLanguage: state.whisperLanguage,
-      whisperModelPath: state.whisperModelPath,
+      modelId: state.modelId,
       sentences: state.sentences,
       reelsData: state.reelsData,
       sources: state.sources || [],
@@ -363,7 +360,8 @@ function applyProjectData(data) {
   if (data.mergeThreshold != null) state.mergeThreshold = data.mergeThreshold;
   if (data.userPrompt) state.userPrompt = data.userPrompt;
   if (data.whisperLanguage) state.whisperLanguage = data.whisperLanguage;
-  if (data.whisperModelPath) state.whisperModelPath = data.whisperModelPath;
+  // Migration: prefer managed modelId; ignore stale raw whisperModelPath.
+  if (data.modelId) state.modelId = data.modelId;
   if (data.sentences) state.sentences = data.sentences;
   if (data.reelsData) state.reelsData = data.reelsData;
   if (data.sources) state.sources = data.sources;
@@ -374,10 +372,9 @@ function applyProjectData(data) {
   document.getElementById('gapFrames').value = state.gapFrames;
   document.getElementById('minChars').value = state.minChars;
   document.getElementById('userPrompt').value = state.userPrompt || '';
-  const wpEl = document.getElementById('whisperModelPath');
-  if (wpEl) wpEl.value = state.whisperModelPath || '';
   const wlEl = document.getElementById('whisperLanguage');
   if (wlEl) wlEl.value = state.whisperLanguage || 'pl';
+  renderModelManager();
 
   if (state.srtName) {
     document.getElementById('dropZone').style.display = 'none';
@@ -438,8 +435,155 @@ function downloadBlob(name, content, type) {
 
 function syncTranscribeBtn() {
   const hasVideo = !!state._whisperVideoPath;
-  const hasModel = !!document.getElementById('whisperModelPath').value.trim();
+  const hasModel = !!state.modelId && !!_modelStatus[state.modelId]?.downloaded;
   document.getElementById('transcribeBtn').disabled = !(hasVideo && hasModel);
+}
+
+// ── S-05 model manager ────────────────────────────────────────────────
+
+/** @type {Record<string,{downloaded:boolean,path?:string}>} */
+let _modelStatus = {};
+let _downloadingId = null;
+
+async function initModelManager() {
+  await refreshEngineReadiness();
+  await refreshModelStatus();
+  renderModelManager();
+}
+
+async function refreshEngineReadiness() {
+  const el = document.getElementById('engineReadyIndicator');
+  if (!el) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const s = await invoke('whisperx_engine_check');
+    if (s.ok) {
+      el.textContent = `✓ Silnik gotowy (${s.device || 'cpu'}${s.gpu ? ', GPU' : ''})${s.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
+      el.style.color = 'var(--green)';
+    } else {
+      el.textContent =
+        '⚠ Silnik WhisperX nie jest jeszcze zbudowany. Uruchom sidecar/build.sh.';
+      el.style.color = 'var(--amber)';
+    }
+  } catch (e) {
+    el.textContent = '⚠ Nie można sprawdzić silnika: ' + e;
+    el.style.color = 'var(--amber)';
+  }
+}
+
+async function refreshModelStatus() {
+  try {
+    const { MODEL_REGISTRY } =
+      await import('../transcription/model-registry.js');
+    const { invoke } = await import('@tauri-apps/api/core');
+    const list = await invoke('list_models', {
+      modelIds: MODEL_REGISTRY.map((m) => m.id),
+    });
+    _modelStatus = {};
+    for (const s of list) _modelStatus[s.id] = s;
+  } catch (e) {
+    _modelStatus = {};
+  }
+  syncTranscribeBtn();
+}
+
+async function renderModelManager() {
+  const container = document.getElementById('modelManagerList');
+  if (!container) return;
+  const { MODEL_REGISTRY, formatBytes } =
+    await import('../transcription/model-registry.js');
+  container.innerHTML = MODEL_REGISTRY.map((m) => {
+    const st = _modelStatus[m.id] || {};
+    const selected = state.modelId === m.id;
+    const status = st.downloaded
+      ? '<span style="color:var(--green);">✓ Pobrany</span>'
+      : '<span style="color:var(--text3);">Brak</span>';
+    const action = st.downloaded
+      ? `<button class="btn ${selected ? 'btn-primary' : 'btn-secondary'}" style="padding:4px 10px;font-size:11px;" data-select-model="${m.id}">${selected ? '● Wybrany' : 'Wybierz'}</button>`
+      : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" data-download-model="${m.id}" ${_downloadingId ? 'disabled' : ''}>⬇ Pobierz</button>`;
+    return `
+<div class="card" style="padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;${selected ? 'border-color:var(--accent);' : ''}" data-model-row="${m.id}">
+  <div>
+    <div style="font-size:13px;font-weight:600;">${escHtml(m.label)}</div>
+    <div style="font-size:11px;color:var(--text3);">${escHtml(formatBytes(m.sizeBytes))} · ${status}</div>
+    <div class="model-dl-progress" data-progress-for="${m.id}" style="display:none;font-size:11px;color:var(--text2);margin-top:4px;"></div>
+  </div>
+  <div>${action}</div>
+</div>`;
+  }).join('');
+
+  container.querySelectorAll('[data-select-model]').forEach((btn) => {
+    btn.addEventListener('click', () => selectModel(btn.dataset.selectModel));
+  });
+  container.querySelectorAll('[data-download-model]').forEach((btn) => {
+    btn.addEventListener('click', () =>
+      downloadModel(btn.dataset.downloadModel),
+    );
+  });
+}
+
+function selectModel(id) {
+  state.modelId = id;
+  emit();
+  renderModelManager();
+  syncTranscribeBtn();
+}
+
+async function downloadModel(id) {
+  const { getModel } = await import('../transcription/model-registry.js');
+  const model = getModel(id);
+  if (!model) return;
+  if (!model.url) {
+    alert(
+      'Ten model nie ma jeszcze skonfigurowanego adresu pobierania (URL/sha256 do uzupełnienia w rejestrze).',
+    );
+    return;
+  }
+  _downloadingId = id;
+  renderModelManager();
+  const progEl = document.querySelector(`[data-progress-for="${id}"]`);
+  if (progEl) progEl.style.display = 'block';
+
+  let unlisten;
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    unlisten = await listen('model-download-progress', (e) => {
+      if (e.payload.modelId !== id) return;
+      const { percent, bytesPerSec, etaSec } = e.payload;
+      if (progEl) {
+        const mb = (bytesPerSec / 1024 / 1024).toFixed(1);
+        const eta = etaSec ? `${Math.round(etaSec)}s` : '—';
+        progEl.textContent = `${Math.round(percent)}% · ${mb} MB/s · ETA ${eta}`;
+      }
+    });
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('download_model', {
+      modelId: id,
+      url: model.url,
+      sha256: model.sha256 || '',
+      sizeBytes: model.sizeBytes || null,
+    });
+    if (progEl) progEl.textContent = '✓ Pobrano i zweryfikowano';
+    await refreshModelStatus();
+    selectModel(id);
+  } catch (e) {
+    if (progEl) progEl.textContent = 'Błąd: ' + e;
+    alert('Pobieranie modelu nieudane: ' + e);
+  } finally {
+    if (unlisten) unlisten();
+    _downloadingId = null;
+    renderModelManager();
+  }
+}
+
+async function cancelTranscribe() {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('cancel_transcription');
+    setWhisperProgress('Anulowano.', 0);
+  } catch (e) {
+    // ignore
+  }
 }
 
 async function browseWhisperVideo() {
@@ -470,29 +614,15 @@ async function browseWhisperVideo() {
   }
 }
 
-async function browseWhisperModel() {
-  try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({
-      filters: [{ name: 'Whisper model', extensions: ['bin'] }],
-    });
-    if (!path) return;
-    state.whisperModelPath = path;
-    document.getElementById('whisperModelPath').value = path;
-    syncTranscribeBtn();
-  } catch (e) {
-    alert('Nie udało się wybrać pliku: ' + e);
-  }
-}
-
 async function transcribeWithWhisper() {
   const videoPath = state._whisperVideoPath;
-  const modelPath = document.getElementById('whisperModelPath').value.trim();
+  const modelId = state.modelId;
   const language = state.whisperLanguage || 'pl';
 
-  if (!videoPath || !modelPath) return;
+  if (!videoPath || !modelId) return;
 
   document.getElementById('transcribeBtn').disabled = true;
+  document.getElementById('cancelTranscribeBtn').style.display = '';
   document.getElementById('whisperProgressBox').style.display = 'block';
   setWhisperProgress('Inicjalizacja…', 0);
 
@@ -508,7 +638,7 @@ async function transcribeWithWhisper() {
     // Returns { srt_content, words: [{text,start,end}], segments: [...] }
     const result = await invoke('transcribe_video', {
       videoPath,
-      modelPath,
+      modelId,
       language,
     });
 
@@ -550,11 +680,18 @@ async function transcribeWithWhisper() {
       document.getElementById('whisperProgressBox').style.display = 'none';
     }, 2000);
   } catch (e) {
-    setWhisperProgress('Błąd: ' + e, 0);
-    alert('Transkrypcja nieudana: ' + e);
+    const msg = String(e);
+    if (msg.includes('ANULOWANO')) {
+      // User cancel — distinct from a real failure, no error dialog.
+      setWhisperProgress('Anulowano transkrypcję.', 0);
+    } else {
+      setWhisperProgress('Błąd: ' + e, 0);
+      alert('Transkrypcja nieudana: ' + e);
+    }
   } finally {
     if (unlisten) unlisten();
-    document.getElementById('transcribeBtn').disabled = false;
+    document.getElementById('cancelTranscribeBtn').style.display = 'none';
+    syncTranscribeBtn();
   }
 }
 
