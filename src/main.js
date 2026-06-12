@@ -3,6 +3,7 @@ import * as step1 from './ui/step1-import.js';
 import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/step3-export.js';
 import { init as initOrPicker } from './ai/openrouter-picker.js';
+import { getApiKey, setApiKey } from './ai/api-key.js';
 
 export function goStep(n) {
   [1, 2, 3].forEach((i) => {
@@ -105,12 +106,12 @@ function saveApiKey() {
     showStatus('Pusty klucz — nie zapisano', 'err');
     return;
   }
-  localStorage.setItem('edl_apikey_' + state.currentProvider, key);
+  setApiKey(state.currentProvider, key);
   showStatus('Zapisano ✓', 'ok');
 }
 
 function loadApiKey() {
-  const key = localStorage.getItem('edl_apikey_' + state.currentProvider) || '';
+  const key = getApiKey(state.currentProvider);
   document.getElementById('apiKeyInput').value = key;
   const s = document.getElementById('apiStatus');
   if (key) {

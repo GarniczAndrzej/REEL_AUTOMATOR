@@ -31,6 +31,8 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | ----- | --------------------------- | ------------------------------------------------------------ | ------------------ | --------------------------------------------- | -------- |
 | F-01  | remove-render-path          | (foundation) FFmpeg render path deleted; regression fence green | —               | FR-038                                        | done     |
 | F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | done     |
+| R1    | split-step2-analyze         | (refactor) split `step2-analyze.js` into per-surface modules so S-02/S-03/S-04/S-14/S-15 own separate files | F-01 | — (enabler; streams.md R1)                | proposed |
+| R2    | api-key-accessor            | (refactor) replace direct `localStorage.edl_apikey_*` reads with a `getApiKey()/setApiKey()` helper | —          | — (enabler; streams.md R2)                    | proposed |
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | proposed |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | proposed |
@@ -101,6 +103,36 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:** Can the Tauri frontend host inside a Resolve Workflow Integration panel, or does the plugin need a separate runtime? — Owner: user. Block: no (this foundation IS the resolution; it does not itself wait on anything).
 - **Risk:** This is the project's single largest technical unknown. Doing it as an early, parallel spike (top blocker = decisions) avoids committing S-09 to a delivery slice before viability is known. If the answer is "not viable," S-09 reverts to the file-export fallback (S-08) and is parked.
 - **Status:** done
+
+## Prep refactors
+
+Footprint-reduction refactors carried over from `streams.md`. They are not user-visible slices — each one converts a merge-conflict hot file into owned files so later slices can run in parallel worktrees. Per `streams.md` they land **inside the slice that goes first**, not as standalone changes; they appear here only so the roadmap tracks them.
+
+### R1: Split `step2-analyze.js` into per-surface modules
+
+- **Outcome:** (refactor) the 1408-line `src/ui/step2-analyze.js` is carved into `step2-reel-list.js` (→ S-02), `step2-prompt-panel.js` (→ S-03), and `step2-segment-ops.js` (→ S-04), leaving `step2-analyze.js` as a thin orchestrator — so S-02/S-03/S-04/S-14/S-15 each own a distinct file instead of serializing on the shared hot file.
+- **Change ID:** split-step2-analyze
+- **PRD refs:** — (internal enabler; no FR)
+- **Unlocks:** Wave 2 width — S-02/S-03/S-04 (and S-14/S-15) become true worktree partners rather than a serial queue on one file.
+- **Prerequisites:** F-01
+- **Parallel with:** none — lands as the opening move of S-01 (per `streams.md`); not co-parallel with other step2 work.
+- **Blockers:** —
+- **Unknowns:** —
+- **Risk:** Pure structural move — behavior must not change. Run `node --experimental-vm-modules test/regression.js` before and after. Mechanically the project's bottleneck-buster: without it, 11 slices funnel through one file.
+- **Status:** proposed
+
+### R2: `getApiKey()/setApiKey()` accessor abstraction
+
+- **Outcome:** (refactor) the 4 direct `localStorage.edl_apikey_*` read sites (OpenRouter picker, step-2 selection, step-1 import, providers) are replaced by a single `getApiKey()/setApiKey()` helper — so S-11 can swap the backing store to the OS keychain without touching those call sites, and stops conflicting with S-01.
+- **Change ID:** api-key-accessor
+- **PRD refs:** — (internal enabler; supports FR-035 via S-11)
+- **Unlocks:** S-11 (clean keychain swap behind the helper); de-conflicts the key-read sites from S-01.
+- **Prerequisites:** —
+- **Parallel with:** prerequisite-free — slot into Wave 0 (per `streams.md`), ideally before S-01.
+- **Blockers:** —
+- **Unknowns:** —
+- **Risk:** Low — a find-all-call-sites refactor with no behavior change. The win is purely shrinking the merge surface so S-01 and S-11 don't collide on key reads.
+- **Status:** proposed
 
 ## Slices
 
@@ -297,6 +329,8 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | ---------- | ------------------------------ | ------------------------------------------------------- | --------------------- | ------------------------------------------------ |
 | F-01       | remove-render-path             | Remove FFmpeg render path; add regression fence         | yes                   | Run `/10x-plan remove-render-path`               |
 | F-02       | resolve-plugin-spike           | Spike: Resolve Workflow Integration runtime viability   | yes                   | Resolves PRD Open Q #2; unblocks S-09            |
+| R1         | split-step2-analyze            | Split step2-analyze.js into per-surface modules         | no                    | Enabler; land inside S-01 (streams.md R1)        |
+| R2         | api-key-accessor               | getApiKey()/setApiKey() accessor abstraction            | yes                   | Enabler; prereq-free, land inside/ahead of S-11  |
 | S-01       | scored-selection-edl           | Scored AI selection → clean EDL export (north star)     | no                    | Needs F-01                                       |
 | S-02       | scoring-first-reel-list        | Scoring-first reel list UI                              | no                    | Needs S-01                                       |
 | S-03       | prompt-presets                 | Editable system prompt + preset management              | no                    | Needs S-01                                       |

@@ -1,4 +1,5 @@
 import { state, emit } from '../state.js';
+import { getApiKey } from './api-key.js';
 
 export function init() {
   document.getElementById('orLoadBtn').addEventListener('click', loadOrModels);
@@ -39,8 +40,7 @@ export function init() {
 async function loadOrModels() {
   const key =
     document.getElementById('apiKeyInput').value.trim() ||
-    localStorage.getItem('edl_apikey_openrouter') ||
-    '';
+    getApiKey('openrouter');
   const btn = document.getElementById('orLoadBtn');
   btn.disabled = true;
   btn.textContent = 'Ładowanie…';

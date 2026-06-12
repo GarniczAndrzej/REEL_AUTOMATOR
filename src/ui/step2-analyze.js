@@ -1,6 +1,7 @@
 import { state, emit, subscribe } from '../state.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
+import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
 import { framesToTC } from '../parser/srt.js';
 import { isFiller } from '../selection/fillers.js';
@@ -915,8 +916,7 @@ function renderClipText(s) {
 async function runAIAnalysis() {
   const apiKey =
     document.getElementById('apiKeyInput').value.trim() ||
-    localStorage.getItem('edl_apikey_' + state.currentProvider) ||
-    '';
+    getApiKey(state.currentProvider);
   if (!apiKey) {
     alert('Wklej API key w nagłówku!');
     return;
@@ -1118,10 +1118,7 @@ async function runComparison() {
     provider: document.getElementById('compareProvider' + side).value,
     key:
       document.getElementById('compareKey' + side).value.trim() ||
-      localStorage.getItem(
-        'edl_apikey_' + document.getElementById('compareProvider' + side).value,
-      ) ||
-      '',
+      getApiKey(document.getElementById('compareProvider' + side).value),
     model: document.getElementById('compareModel' + side)?.value.trim() || '',
   });
 
