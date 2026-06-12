@@ -514,8 +514,8 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Automated
 
-- [x] 6.1 Regression suite passes with `speaker` present and absent
-- [x] 6.2 Rust type-check passes (`cargo check`)
+- [x] 6.1 Regression suite passes with `speaker` present and absent — 9809e45
+- [x] 6.2 Rust type-check passes (`cargo check`) — 9809e45
 
 #### Manual
 
