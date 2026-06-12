@@ -10,3 +10,5 @@ sidecar/build/
 sidecar/dist/
 sidecar/whisperx_engine/align_models/
 src-tauri/binaries/whisperx-engine-*
+src-tauri/binaries/align_models/
+__pycache__/

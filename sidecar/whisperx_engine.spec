@@ -18,11 +18,12 @@ block_cipher = None
 
 HERE = os.path.abspath(os.getcwd())
 SRC = os.path.join(HERE, "whisperx_engine", "whisperx_engine.py")
-ALIGN_DIR = os.path.join(HERE, "whisperx_engine", "align_models")
 
+# The per-language wav2vec2 alignment model is deliberately NOT baked in: a
+# multi-GB onefile Mach-O fails to load on macOS (dyld aborts before main).
+# build.sh stages it BESIDE the sidecar binary instead, and the Rust layer passes
+# its path via --align-model-dir. Keep this freeze model-free (small + loadable).
 datas = []
-if os.path.isdir(ALIGN_DIR):
-    datas.append((ALIGN_DIR, "align_models"))
 
 # WhisperX / pyannote / faster-whisper pull in models + assets dynamically.
 datas += collect_data_files("whisperx")

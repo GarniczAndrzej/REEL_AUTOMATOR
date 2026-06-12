@@ -55,10 +55,29 @@ EXIT_TRANSCRIBE_FAIL = 14
 
 ENGINE_VERSION = "1.0.0"
 
-# Per-language wav2vec2 alignment model bundled into the frozen artifact at build
-# time (see sidecar/build.sh). When frozen, PyInstaller unpacks data into
-# sys._MEIPASS; in source runs we look next to this file.
+# Per-language wav2vec2 alignment model. It is NOT baked into the frozen binary:
+# a multi-GB onefile Mach-O fails to load on macOS, so the model ships *beside*
+# the sidecar (Tauri bundle.resources) and its directory is passed in via
+# `--align-model-dir` (env ENGINE_ALIGN_DIR). Resolution order: explicit override
+# → next to the executable → PyInstaller _MEIPASS (legacy) → next to this script.
 ALIGN_MODEL_SUBDIR = "align_models"
+
+
+def _align_models_base():
+    """Directory containing per-language alignment models (<base>/<lang>)."""
+    override = os.environ.get("ENGINE_ALIGN_DIR")
+    if override:
+        return override
+    # Beside the executable — frozen sidecar with align_models/ shipped next to it.
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    cand = os.path.join(exe_dir, ALIGN_MODEL_SUBDIR)
+    if os.path.isdir(cand):
+        return cand
+    # Legacy baked location / source run.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return os.path.join(meipass, ALIGN_MODEL_SUBDIR)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), ALIGN_MODEL_SUBDIR)
 
 
 def _emit_progress(phase, percent):
@@ -73,21 +92,13 @@ def _log(msg):
     sys.stderr.flush()
 
 
-def _bundle_root():
-    """Directory where bundled data (alignment models) lives."""
-    meipass = getattr(sys, "_MEIPASS", None)
-    if meipass:
-        return meipass
-    return os.path.dirname(os.path.abspath(__file__))
-
-
 def _alignment_model_dir(language):
-    return os.path.join(_bundle_root(), ALIGN_MODEL_SUBDIR, language or "")
+    return os.path.join(_align_models_base(), language or "")
 
 
 def _alignment_model_ready(language=None):
-    """True when at least one bundled alignment model is present."""
-    base = os.path.join(_bundle_root(), ALIGN_MODEL_SUBDIR)
+    """True when at least one alignment model is present beside the sidecar."""
+    base = _align_models_base()
     if not os.path.isdir(base):
         return False
     if language:
@@ -331,6 +342,11 @@ def build_parser():
     p.add_argument("--hf-token", default=None, help="Hugging Face token for pyannote")
     p.add_argument("--align-only", action="store_true", help="force-align an existing transcript")
     p.add_argument("--transcript", default=None, help=".srt/.vtt to align (with --align-only)")
+    p.add_argument(
+        "--align-model-dir",
+        default=None,
+        help="directory holding per-language alignment models (ships beside the sidecar)",
+    )
     p.add_argument("--selftest", action="store_true", help="print readiness JSON and exit")
     p.add_argument("--version", action="store_true", help="alias for --selftest")
     return p
@@ -338,6 +354,9 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    # An explicit --align-model-dir wins over auto-resolution (next-to-exe etc.).
+    if getattr(args, "align_model_dir", None):
+        os.environ["ENGINE_ALIGN_DIR"] = args.align_model_dir
     try:
         if args.selftest or args.version:
             return cmd_selftest()

@@ -260,6 +260,12 @@ pub async fn transcribe_video(
         args.push("--hf-token".into());
         args.push(hf_token.clone());
     }
+    // Alignment model ships beside the sidecar (not baked in) — tell the engine
+    // where to find it.
+    if let Some(dir) = crate::engine::align_model_dir(&app) {
+        args.push("--align-model-dir".into());
+        args.push(dir);
+    }
 
     let sidecar = app
         .shell()
@@ -467,16 +473,22 @@ pub async fn align_transcript(
 
     let lang_arg = if language == "auto" { "pl".to_string() } else { language.clone() };
 
+    let mut align_args: Vec<String> = vec![
+        "--align-only".into(),
+        "--audio".into(), wav_str.clone(),
+        "--transcript".into(), transcript_str.clone(),
+        "--language".into(), lang_arg.clone(),
+    ];
+    if let Some(dir) = crate::engine::align_model_dir(&app) {
+        align_args.push("--align-model-dir".into());
+        align_args.push(dir);
+    }
+
     let sidecar = app
         .shell()
         .sidecar(crate::engine::ENGINE_SIDECAR)
         .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
-        .args([
-            "--align-only",
-            "--audio", &wav_str,
-            "--transcript", &transcript_str,
-            "--language", &lang_arg,
-        ]);
+        .args(align_args);
 
     let (mut rx, child) = sidecar
         .spawn()

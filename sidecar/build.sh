@@ -78,8 +78,9 @@ fi
 python -m pip install -r "$ENGINE_PKG/requirements.txt"
 
 # ── Stage alignment model(s) ────────────────────────────────────────────────
-# Pre-download the per-language wav2vec2 alignment model into align_models/<lang>
-# so PyInstaller bundles it (offline-ready forced alignment).
+# Pre-download the per-language wav2vec2 alignment model into align_models/<lang>.
+# NOT baked into the binary (a multi-GB onefile Mach-O won't load on macOS) — it
+# is copied BESIDE the sidecar below for offline-ready forced alignment.
 mkdir -p "$ALIGN_DIR"
 for lang in $ALIGN_LANGS; do
   echo "==> Staging alignment model for '$lang'"
@@ -113,6 +114,16 @@ if [ ! -f "$FROZEN" ]; then
 fi
 cp "$FROZEN" "$BIN_DIR/$OUT_NAME$EXE_EXT"
 chmod +x "$BIN_DIR/$OUT_NAME$EXE_EXT" 2>/dev/null || true
+
+# ── Ship alignment model BESIDE the binary (not baked in) ───────────────────
+# Tauri bundles src-tauri/binaries/align_models via bundle.resources; the Rust
+# layer passes its resolved path to the engine with --align-model-dir. The
+# engine also finds it next-to-exe for a local `--selftest`.
+if [ -d "$ALIGN_DIR" ]; then
+  echo "==> Copying alignment model(s) beside the binary: $BIN_DIR/align_models"
+  rm -rf "$BIN_DIR/align_models"
+  cp -R "$ALIGN_DIR" "$BIN_DIR/align_models"
+fi
 
 echo "==> Done: $BIN_DIR/$OUT_NAME$EXE_EXT"
 echo "    Self-test it with: \"$BIN_DIR/$OUT_NAME$EXE_EXT\" --selftest"

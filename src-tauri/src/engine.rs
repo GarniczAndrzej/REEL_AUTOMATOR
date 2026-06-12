@@ -6,12 +6,39 @@
 // Phase 2.
 
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 /// Base name of the sidecar; Tauri resolves the arch-suffixed file per platform.
 pub const ENGINE_SIDECAR: &str = "whisperx-engine";
+
+/// Resolve the external wav2vec2 alignment-model directory that ships *beside*
+/// the sidecar (Tauri `bundle.resources` → `align_models/`). The model is no
+/// longer baked into the frozen binary: a multi-GB onefile Mach-O fails to load
+/// on macOS, so it lives outside the executable and the path is passed to the
+/// engine via `--align-model-dir`.
+///
+/// Resolution order:
+///   1. bundled resource dir (production app bundle), then
+///   2. the repo `src-tauri/binaries/align_models` (covers `tauri dev`, where
+///      `build.sh` stages the model next to the sidecar binary).
+/// Returns `None` when neither exists (engine then falls back to next-to-exe).
+pub fn align_model_dir(app: &AppHandle) -> Option<String> {
+    if let Ok(p) = app.path().resolve("align_models", BaseDirectory::Resource) {
+        if p.is_dir() {
+            return Some(p.to_string_lossy().into_owned());
+        }
+    }
+    let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join("align_models");
+    if dev.is_dir() {
+        return Some(dev.to_string_lossy().into_owned());
+    }
+    None
+}
 
 /// Readiness report returned by the engine `--selftest` probe.
 #[derive(Debug, Serialize, Default)]
@@ -59,7 +86,13 @@ pub async fn run_engine(
 /// Does not require a downloaded transcription model.
 #[tauri::command]
 pub async fn whisperx_engine_check(app: AppHandle) -> Result<EngineStatus, String> {
-    let (out, err, code) = run_engine(&app, &["--selftest"]).await?;
+    let mut args: Vec<String> = vec!["--selftest".into()];
+    if let Some(dir) = align_model_dir(&app) {
+        args.push("--align-model-dir".into());
+        args.push(dir);
+    }
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let (out, err, code) = run_engine(&app, &arg_refs).await?;
     if code != Some(0) {
         return Err(format!(
             "Silnik WhisperX zakończył self-test z błędem (kod {:?}): {}",
