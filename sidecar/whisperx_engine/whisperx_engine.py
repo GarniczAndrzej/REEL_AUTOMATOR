@@ -31,11 +31,16 @@ Modes:
                    (skips transcription; requires --transcript)
   --selftest       readiness probe; prints {ok, version, gpu,
                    alignment_model_ready} and exits 0. Must NOT require a
-                   downloaded transcription model.
+                   downloaded transcription model. `alignment_model_ready` is a
+                   *real* check: it loads the bundled align model and runs one
+                   tiny forced-align, so a broken bundling of the wav2vec2 import
+                   chain reports false instead of a misleading true.
 
 This script is intentionally dependency-light at import time: heavy deps
 (`whisperx`, `torch`) are imported lazily inside the functions that need them so
-`--selftest` / `--version` stay fast and work before any model is downloaded.
+`--version` stays fast and works before any model is downloaded. `--selftest`
+loads the (bundled, offline) align model to verify alignment really works, so it
+takes a few seconds — still no downloaded transcription model required.
 """
 
 import argparse
@@ -96,24 +101,6 @@ def _alignment_model_dir(language):
     return os.path.join(_align_models_base(), language or "")
 
 
-def _alignment_model_ready(language=None):
-    """True when at least one alignment model is present beside the sidecar."""
-    base = _align_models_base()
-    if not os.path.isdir(base):
-        return False
-    if language:
-        d = _alignment_model_dir(language)
-        return os.path.isdir(d) and bool(os.listdir(d))
-    # any language present
-    try:
-        return any(
-            os.path.isdir(os.path.join(base, e)) and os.listdir(os.path.join(base, e))
-            for e in os.listdir(base)
-        )
-    except OSError:
-        return False
-
-
 def _detect_device():
     """Return ('cuda'|'mps'|'cpu', gpu_bool, compute_type)."""
     try:
@@ -129,13 +116,54 @@ def _detect_device():
     return "cpu", False, "int8"
 
 
+def _selftest_align_runs(whisperx, language="pl"):
+    """Actually exercise forced alignment on a tiny synthetic clip.
+
+    The files-only readiness check is misleading: the alignment model files can be
+    present while the frozen import chain (whisperx.alignment → transformers lazy
+    Wav2Vec2ForCTC) is broken — exactly the bundling gap that shipped a binary
+    self-reporting `alignment_model_ready: true` yet failing every real --align-only
+    with exit 12. So load the model and run one tiny align; if it raises, alignment
+    is NOT ready. Runs on CPU (the failure mode was an import error, device-agnostic)
+    and offline (the model ships beside the binary).
+    """
+    model_dir = _alignment_model_dir(language)
+    if not (os.path.isdir(model_dir) and os.listdir(model_dir)):
+        return False
+    try:
+        import numpy as np
+
+        align_model, metadata = whisperx.load_align_model(
+            language_code=language, device="cpu", model_dir=model_dir
+        )
+        audio = np.zeros(8000, dtype=np.float32)  # 0.5 s of 16 kHz silence
+        whisperx.align(
+            [{"start": 0.0, "end": 0.5, "text": "test"}],
+            align_model,
+            metadata,
+            audio,
+            "cpu",
+            return_char_alignments=False,
+        )
+        return True
+    except Exception as e:
+        _log("selftest: alignment exercise failed: %s" % e)
+        if os.environ.get("ENGINE_DEBUG"):
+            import traceback
+
+            _log(traceback.format_exc())
+        return False
+
+
 def cmd_selftest():
     device, gpu, _ = _detect_device()
+    align_ready = False
     try:
         import whisperx  # noqa: F401
 
         version = getattr(__import__("whisperx"), "__version__", ENGINE_VERSION)
         ok = True
+        align_ready = _selftest_align_runs(whisperx)
     except Exception as e:  # whisperx not importable → not ok, but still report
         version = ENGINE_VERSION
         ok = False
@@ -145,7 +173,8 @@ def cmd_selftest():
         "version": str(version),
         "gpu": gpu,
         "device": device,
-        "alignment_model_ready": _alignment_model_ready(),
+        # Truthful now: reflects an actual tiny align run, not just file presence.
+        "alignment_model_ready": align_ready,
     }
     sys.stdout.write(json.dumps(out))
     sys.stdout.flush()
@@ -184,6 +213,10 @@ def _align(whisperx, segments, audio, language, device):
         return result
     except Exception as e:
         _log("alignment failed: %s" % e)
+        if os.environ.get("ENGINE_DEBUG"):
+            import traceback
+
+            _log(traceback.format_exc())
         sys.exit(EXIT_ALIGN_FAIL)
 
 

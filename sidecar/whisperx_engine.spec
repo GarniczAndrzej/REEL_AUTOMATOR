@@ -38,10 +38,18 @@ datas += collect_data_files("transformers")
 # submodules AND the dist-info metadata of torch & friends, the frozen engine
 # can't load Wav2Vec2ForCTC → forced alignment fails (exit 12,
 # "Could not import module 'Wav2Vec2ForCTC'"). Bundle both explicitly.
+#
+# `torchcodec` is the subtle one: transformers' audio_utils.py runs
+# `importlib.metadata.version("torchcodec")` at *import* time whenever the package
+# is merely find_spec-able (PyInstaller bundles it), so its dist-info metadata
+# MUST ship too or the whole wav2vec2 import chain dies with PackageNotFoundError.
+# (transformers never actually imports torchcodec on our align path, so its
+# broken @rpath dylib is irrelevant — only the metadata version read matters.)
 for _pkg in (
     "transformers",
     "torch",
     "torchaudio",
+    "torchcodec",
     "tokenizers",
     "safetensors",
     "huggingface_hub",
