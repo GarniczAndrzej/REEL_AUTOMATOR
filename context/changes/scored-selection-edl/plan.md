@@ -504,11 +504,11 @@ shows the markers before closing the slice.
 
 #### Manual
 
-- [ ] 1.5 Step 2 loads; AI run renders reels identically
-- [ ] 1.6 Drag/delete/merge/trim/threshold all work
-- [ ] 1.7 Undo/redo work from step 2 and globally
-- [ ] 1.8 NLE keys + timeline scrub/preview unchanged
-- [ ] 1.9 Compare modal + JSON editor/paste paths unchanged
+- [x] 1.5 Step 2 loads; AI run renders reels identically — 79f03dd
+- [x] 1.6 Drag/delete/merge/trim/threshold all work — 79f03dd
+- [x] 1.7 Undo/redo work from step 2 and globally — 79f03dd
+- [x] 1.8 NLE keys + timeline scrub/preview unchanged — 79f03dd
+- [x] 1.9 Compare modal + JSON editor/paste paths unchanged — 79f03dd
 
 ### Phase 2: LLM schema + prompt + providers
 
@@ -521,10 +521,10 @@ shows the markers before closing the slice.
 
 #### Manual
 
-- [ ] 2.5 Claude run returns full scored shape
-- [ ] 2.6 Gemini + OpenRouter runs return scored shape
-- [ ] 2.7 Re-run yields near-identical selections (repeatability)
-- [ ] 2.8 Second Claude run shows prompt-cache read
+- [x] 2.5 Claude run returns full scored shape — 38b5f76
+- [x] 2.6 Gemini + OpenRouter runs return scored shape — 38b5f76
+- [x] 2.7 Re-run yields near-identical selections (repeatability) — 38b5f76
+- [x] 2.8 Second Claude run shows prompt-cache read — 38b5f76
 
 ### Phase 3: Validation + minimal score UI
 
@@ -536,11 +536,11 @@ shows the markers before closing the slice.
 
 #### Manual
 
-- [ ] 3.4 Valid scored response renders badges + reasons
-- [ ] 3.5 Malformed JSON → clear error, raw text preserved, reelsData unchanged
-- [ ] 3.6 Out-of-range clip_id rejected with naming error
-- [ ] 3.7 Missing virality_score still loads as `brak oceny`
-- [ ] 3.8 Older `.reelproj` loads as `brak oceny`
+- [x] 3.4 Valid scored response renders badges + reasons — 1262433
+- [x] 3.5 Malformed JSON → clear error, raw text preserved, reelsData unchanged — 1262433
+- [x] 3.6 Out-of-range clip_id rejected with naming error — 1262433
+- [x] 3.7 Missing virality_score still loads as `brak oceny` — 1262433
+- [x] 3.8 Older `.reelproj` loads as `brak oceny` — 1262433
 
 ### Phase 4: EDL markers
 
@@ -552,7 +552,7 @@ shows the markers before closing the slice.
 
 #### Manual
 
-- [ ] 4.4 Scored `.edl` contains `* LOC` hook/body/punchline lines
-- [ ] 4.5 `.edl` imports into NLE with markers at correct positions
-- [ ] 4.6 Punchline marker is inside the reel, never cut
-- [ ] 4.7 Marker-free project exports identical `.edl`
+- [x] 4.4 Scored `.edl` contains `* LOC` hook/body/punchline lines — a531863
+- [x] 4.5 `.edl` imports into NLE with markers at correct positions — a531863
+- [x] 4.6 Punchline marker is inside the reel, never cut — a531863
+- [x] 4.7 Marker-free project exports identical `.edl` — a531863
