@@ -85,6 +85,20 @@ def _align_models_base():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), ALIGN_MODEL_SUBDIR)
 
 
+# Real stdout is reserved for the single JSON result document — the Rust layer
+# parses stdout verbatim as JSON. whisperx/pyannote/faster-whisper log chatter
+# (e.g. "Performing voice activity detection") to stdout, which would corrupt
+# that contract, so main() reassigns sys.stdout → stderr for the whole run and
+# the result is written through this captured original handle instead.
+_RESULT_OUT = sys.stdout
+
+
+def _write_result(doc):
+    """Write the one JSON contract document to the real (reserved) stdout."""
+    _RESULT_OUT.write(doc)
+    _RESULT_OUT.flush()
+
+
 def _emit_progress(phase, percent):
     """Write one greppable progress line to stderr."""
     pct = max(0, min(100, int(round(percent))))
@@ -176,8 +190,7 @@ def cmd_selftest():
         # Truthful now: reflects an actual tiny align run, not just file presence.
         "alignment_model_ready": align_ready,
     }
-    sys.stdout.write(json.dumps(out))
-    sys.stdout.flush()
+    _write_result(json.dumps(out))
     return EXIT_OK
 
 
@@ -308,8 +321,7 @@ def cmd_transcribe(args):
         aligned = _diarize(whisperx, aligned, audio, args.hf_token, device)
 
     out = _normalize(language, aligned)
-    sys.stdout.write(json.dumps(out, ensure_ascii=False))
-    sys.stdout.flush()
+    _write_result(json.dumps(out, ensure_ascii=False))
     return EXIT_OK
 
 
@@ -360,8 +372,7 @@ def cmd_align_only(args):
 
     aligned = _align(whisperx, segments, audio, language, device)
     out = _normalize(language, aligned)
-    sys.stdout.write(json.dumps(out, ensure_ascii=False))
-    sys.stdout.flush()
+    _write_result(json.dumps(out, ensure_ascii=False))
     return EXIT_OK
 
 
@@ -387,6 +398,11 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    # Keep stdout pristine for the single JSON result: route every library log /
+    # print emitted during processing to stderr. Heavy deps are imported lazily
+    # (after this point), so logging StreamHandlers bound to "stdout" at import
+    # time pick up stderr too. The result goes out via _write_result(_RESULT_OUT).
+    sys.stdout = sys.stderr
     # An explicit --align-model-dir wins over auto-resolution (next-to-exe etc.).
     if getattr(args, "align_model_dir", None):
         os.environ["ENGINE_ALIGN_DIR"] = args.align_model_dir
@@ -410,4 +426,13 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # PyInstaller + multiprocessing: torch / faster-whisper / pyannote may spawn
+    # child processes (macOS default start method is 'spawn'). Without this the
+    # frozen binary re-execs itself with multiprocessing bootstrap args and our
+    # argparse rejects them ("unrecognized arguments: -B -S -I -c ...
+    # resource_tracker"). freeze_support() makes the child run the mp bootstrap
+    # instead of main(); it is a no-op for a normal CLI invocation.
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     sys.exit(main())
