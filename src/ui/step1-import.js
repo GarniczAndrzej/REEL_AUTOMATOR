@@ -6,6 +6,7 @@ import {
   generateTranscriptVTT,
 } from '../exporters/transcript.js';
 import { getApiKey, setApiKey } from '../ai/api-key.js';
+import { saveTextToPath } from '../util/save-file.js';
 
 export function init() {
   const srtFileInput = document.getElementById('srtFile');
@@ -71,6 +72,7 @@ export function init() {
     setApiKey('huggingface', e.target.value.trim());
   });
   initModelManager();
+  initWhisperAdvanced();
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -284,25 +286,28 @@ function renderSegments() {
     .join('');
   document.getElementById('segCount').textContent =
     state.sentences.length + ' segmentów';
+  // Transcript export lives in the WhisperX card — reveal it once a transcript
+  // exists (after transcription, import, or align).
+  const exportRow = document.getElementById('whisperExportRow');
+  if (exportRow) exportRow.style.display = state.sentences.length ? '' : 'none';
   syncAlignBtn();
 }
 
-function downloadMD() {
+async function downloadMD() {
   if (!state.sentences.length) return;
   let md = `# Segmenty SRT\n\nPlik: ${state.srtName || 'nieznany'}\nFPS: ${state.fps}\nSegmentów: ${state.sentences.length}\n\n---\n\n`;
   state.sentences.forEach((s) => {
     md += `**#${s.id}** \`${s.start_tc} → ${s.end_tc}\` (${(s.duration_frame / state.fps).toFixed(1)}s)\n\n${s.text}\n\n---\n\n`;
   });
-  downloadBlob('segmenty.md', md, 'text/markdown');
+  await saveTextToPath({ defaultName: 'segmenty.md', content: md });
 }
 
-function downloadJSON() {
+async function downloadJSON() {
   if (!state.sentences.length) return;
-  downloadBlob(
-    'segments.json',
-    JSON.stringify(state.sentences, null, 2),
-    'application/json',
-  );
+  await saveTextToPath({
+    defaultName: 'segments.json',
+    content: JSON.stringify(state.sentences, null, 2),
+  });
 }
 
 // ── Project save/load ─────────────────────────────────────────────
@@ -464,15 +469,6 @@ function addRecentProject(path) {
   } catch (e) {}
 }
 
-function downloadBlob(name, content, type) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 100);
-}
-
 // ── F1 Whisper transcription ──────────────────────────────────────
 
 function syncTranscribeBtn() {
@@ -538,34 +534,43 @@ async function renderModelManager() {
   if (!container) return;
   const { MODEL_REGISTRY, formatBytes } =
     await import('../transcription/model-registry.js');
-  container.innerHTML = MODEL_REGISTRY.map((m) => {
+  // Compact dropdown picker: one <option> per registry model, annotated with
+  // size + download status. Selecting a downloaded model makes it active;
+  // selecting a missing one surfaces the ⬇ Pobierz button beside the dropdown.
+  const options = MODEL_REGISTRY.map((m) => {
     const st = _modelStatus[m.id] || {};
-    const selected = state.modelId === m.id;
-    const status = st.downloaded
-      ? '<span style="color:var(--green);">✓ Pobrany</span>'
-      : '<span style="color:var(--text3);">Brak</span>';
-    const action = st.downloaded
-      ? `<button class="btn ${selected ? 'btn-primary' : 'btn-secondary'}" style="padding:4px 10px;font-size:11px;" data-select-model="${m.id}">${selected ? '● Wybrany' : 'Wybierz'}</button>`
-      : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" data-download-model="${m.id}" ${_downloadingId ? 'disabled' : ''}>⬇ Pobierz</button>`;
-    return `
-<div class="card" style="padding:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;${selected ? 'border-color:var(--accent);' : ''}" data-model-row="${m.id}">
-  <div>
-    <div style="font-size:13px;font-weight:600;">${escHtml(m.label)}</div>
-    <div style="font-size:11px;color:var(--text3);">${escHtml(formatBytes(m.sizeBytes))} · ${status}</div>
-    <div class="model-dl-progress" data-progress-for="${m.id}" style="display:none;font-size:11px;color:var(--text2);margin-top:4px;"></div>
-  </div>
-  <div>${action}</div>
-</div>`;
+    const status = st.downloaded ? 'Pobrany' : 'Brak';
+    const sel = state.modelId === m.id ? ' selected' : '';
+    return `<option value="${m.id}"${sel}>${escHtml(m.label)} — ${status}</option>`;
   }).join('');
 
-  container.querySelectorAll('[data-select-model]').forEach((btn) => {
-    btn.addEventListener('click', () => selectModel(btn.dataset.selectModel));
-  });
-  container.querySelectorAll('[data-download-model]').forEach((btn) => {
-    btn.addEventListener('click', () =>
-      downloadModel(btn.dataset.downloadModel),
+  const selModel = MODEL_REGISTRY.find((m) => m.id === state.modelId);
+  const selDownloaded = !!(selModel && _modelStatus[selModel.id]?.downloaded);
+  const showDownload = !!selModel && !selDownloaded;
+  const disabledAttr = _downloadingId ? 'disabled' : '';
+
+  container.innerHTML = `
+<div style="display:flex;gap:8px;align-items:center;">
+  <select id="modelSelect" style="flex:1;font-size:13px;" ${disabledAttr}>
+    <option value=""${state.modelId ? '' : ' selected'} disabled>— wybierz model —</option>
+    ${options}
+  </select>
+  ${
+    showDownload
+      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-download-model="${selModel.id}" ${disabledAttr}>⬇ Pobierz</button>`
+      : ''
+  }
+</div>
+<div class="model-dl-progress" id="modelDlProgress" style="display:none;font-size:11px;color:var(--text2);margin-top:6px;"></div>`;
+
+  const sel = container.querySelector('#modelSelect');
+  if (sel) sel.addEventListener('change', () => selectModel(sel.value));
+  const dlBtn = container.querySelector('[data-download-model]');
+  if (dlBtn) {
+    dlBtn.addEventListener('click', () =>
+      downloadModel(dlBtn.dataset.downloadModel),
     );
-  });
+  }
 }
 
 function selectModel(id) {
@@ -591,7 +596,7 @@ async function downloadModel(id) {
   // the pre-render node, which the pending innerHTML rewrite then detaches — so
   // every progress update writes to an orphaned element and the UI shows nothing.
   await renderModelManager();
-  const progEl = document.querySelector(`[data-progress-for="${id}"]`);
+  const progEl = document.getElementById('modelDlProgress');
   if (progEl) progEl.style.display = 'block';
 
   let unlisten;
@@ -627,13 +632,138 @@ async function downloadModel(id) {
 }
 
 async function cancelTranscribe() {
+  // Reset the UI immediately so the user can start again right away, instead of
+  // waiting for the (now cancellable) backend promise to unwind. The backend
+  // SIGTERMs the engine and the driver returns the cancelled state shortly.
+  setWhisperProgress('Anulowano.', 0);
+  document.getElementById('cancelTranscribeBtn').style.display = 'none';
+  syncTranscribeBtn();
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('cancel_transcription');
-    setWhisperProgress('Anulowano.', 0);
   } catch (e) {
     // ignore
   }
+}
+
+// ── S-05 Phase 7 — WhisperX advanced settings modal ───────────────────
+// Minimal high-value subset of engine knobs. Empty/default fields fall back to
+// the engine's defaults (untouched modal = no behavior change). Only the
+// per-machine perf knobs (device, computeType) are persisted to localStorage;
+// they are deliberately NOT written to .reelproj (F3 decision).
+const WHISPER_ADV_LS_KEY = 'edl_whisper_advanced';
+
+function defaultWhisperAdvanced() {
+  return {
+    device: '',
+    computeType: '',
+    beamSize: null,
+    initialPrompt: '',
+    vadOnset: null,
+    vadOffset: null,
+    minSpeakers: null,
+    maxSpeakers: null,
+  };
+}
+
+function loadWhisperAdvancedFromLS() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WHISPER_ADV_LS_KEY) || '{}');
+    if (typeof saved.device === 'string')
+      state.whisperAdvanced.device = saved.device;
+    if (typeof saved.computeType === 'string')
+      state.whisperAdvanced.computeType = saved.computeType;
+  } catch (e) {}
+}
+
+function saveWhisperAdvancedToLS() {
+  try {
+    // Per-machine perf knobs only — never the .reelproj-bound run settings.
+    localStorage.setItem(
+      WHISPER_ADV_LS_KEY,
+      JSON.stringify({
+        device: state.whisperAdvanced.device,
+        computeType: state.whisperAdvanced.computeType,
+      }),
+    );
+  } catch (e) {}
+}
+
+function initWhisperAdvanced() {
+  loadWhisperAdvancedFromLS();
+  const openBtn = document.getElementById('whisperAdvancedBtn');
+  const modal = document.getElementById('whisperAdvancedModal');
+  const closeBtn = document.getElementById('whisperAdvancedClose');
+  if (!openBtn || !modal || !closeBtn) return;
+  const close = () => {
+    modal.style.display = 'none';
+  };
+  openBtn.addEventListener('click', () => {
+    fillWhisperAdvancedForm();
+    modal.style.display = 'flex';
+  });
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) close();
+  });
+  document.getElementById('advSaveBtn').addEventListener('click', () => {
+    applyWhisperAdvancedForm();
+    saveWhisperAdvancedToLS();
+    emit();
+    close();
+  });
+  document.getElementById('advResetBtn').addEventListener('click', () => {
+    state.whisperAdvanced = defaultWhisperAdvanced();
+    fillWhisperAdvancedForm();
+    saveWhisperAdvancedToLS();
+    emit();
+  });
+}
+
+function fillWhisperAdvancedForm() {
+  const a = state.whisperAdvanced;
+  document.getElementById('advForceCpu').checked = a.device === 'cpu';
+  document.getElementById('advComputeType').value = a.computeType || '';
+  document.getElementById('advBeamSize').value = a.beamSize ?? '';
+  document.getElementById('advInitialPrompt').value = a.initialPrompt || '';
+  document.getElementById('advVadOnset').value = a.vadOnset ?? '';
+  document.getElementById('advVadOffset').value = a.vadOffset ?? '';
+  document.getElementById('advMinSpeakers').value = a.minSpeakers ?? '';
+  document.getElementById('advMaxSpeakers').value = a.maxSpeakers ?? '';
+}
+
+function applyWhisperAdvancedForm() {
+  const numOrNull = (id) => {
+    const v = document.getElementById(id).value.trim();
+    if (v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const a = state.whisperAdvanced;
+  a.device = document.getElementById('advForceCpu').checked ? 'cpu' : '';
+  a.computeType = document.getElementById('advComputeType').value || '';
+  a.beamSize = numOrNull('advBeamSize');
+  a.initialPrompt = document.getElementById('advInitialPrompt').value.trim();
+  a.vadOnset = numOrNull('advVadOnset');
+  a.vadOffset = numOrNull('advVadOffset');
+  a.minSpeakers = numOrNull('advMinSpeakers');
+  a.maxSpeakers = numOrNull('advMaxSpeakers');
+}
+
+// Map the advanced settings to the engine invoke params (Tauri snake_cases the
+// keys). Empty values become null so the engine omits the corresponding flag.
+function whisperAdvancedArgs() {
+  const a = state.whisperAdvanced;
+  return {
+    device: a.device || null,
+    computeType: a.computeType || null,
+    beamSize: a.beamSize ?? null,
+    initialPrompt: a.initialPrompt || null,
+    vadOnset: a.vadOnset ?? null,
+    vadOffset: a.vadOffset ?? null,
+    minSpeakers: a.minSpeakers ?? null,
+    maxSpeakers: a.maxSpeakers ?? null,
+  };
 }
 
 // ── S-05 transcript align + export ────────────────────────────────────
@@ -644,7 +774,10 @@ function syncAlignBtn() {
   if (!btn) return;
   const hasVideo = !!(state._whisperVideoPath || state.videoPath);
   const hasSentences = state.sentences && state.sentences.length > 0;
-  btn.style.display = hasVideo && hasSentences ? '' : 'none';
+  const show = hasVideo && hasSentences;
+  btn.style.display = show ? '' : 'none';
+  const note = document.getElementById('alignTranscriptNote');
+  if (note) note.style.display = show ? '' : 'none';
 }
 
 // Force-align an imported transcript to the audio to obtain word timestamps.
@@ -674,6 +807,9 @@ async function alignImportedTranscript() {
       transcript: state.srtContent,
       language: state.whisperLanguage || 'pl',
       isVtt: !!state._srtIsVtt,
+      // Only the device override is relevant to align-only (torch align stage);
+      // compute_type/beam/VAD are transcription-only.
+      device: state.whisperAdvanced.device || null,
     });
     // Merge resulting word timestamps onto the imported sentences.
     mergeWordsIntoSentences(state.sentences, result.words || [], state.fps);
@@ -696,24 +832,36 @@ async function alignImportedTranscript() {
   }
 }
 
-function exportTranscriptSRT() {
-  if (!state.sentences || !state.sentences.length) {
-    alert('Brak transkrypcji do eksportu.');
-    return;
-  }
-  const srt = generateTranscriptSRT(state.sentences, state.fps);
+/**
+ * Write a transcript to a user-chosen location via the native save dialog.
+ * @param {'srt'|'vtt'} ext
+ * @param {string} content
+ */
+function saveTranscriptToPath(ext, content) {
   const base = (state.srtName || 'transkrypcja').replace(/\.(srt|vtt)$/i, '');
-  downloadBlob(base + '.srt', srt, 'application/x-subrip');
+  return saveTextToPath({ defaultName: `${base}.${ext}`, content });
 }
 
-function exportTranscriptVTT() {
+async function exportTranscriptSRT() {
   if (!state.sentences || !state.sentences.length) {
     alert('Brak transkrypcji do eksportu.');
     return;
   }
-  const vtt = generateTranscriptVTT(state.sentences, state.fps);
-  const base = (state.srtName || 'transkrypcja').replace(/\.(srt|vtt)$/i, '');
-  downloadBlob(base + '.vtt', vtt, 'text/vtt');
+  await saveTranscriptToPath(
+    'srt',
+    generateTranscriptSRT(state.sentences, state.fps),
+  );
+}
+
+async function exportTranscriptVTT() {
+  if (!state.sentences || !state.sentences.length) {
+    alert('Brak transkrypcji do eksportu.');
+    return;
+  }
+  await saveTranscriptToPath(
+    'vtt',
+    generateTranscriptVTT(state.sentences, state.fps),
+  );
 }
 
 async function browseWhisperVideo() {
@@ -773,6 +921,7 @@ async function transcribeWithWhisper() {
       language,
       diarize: state.diarize,
       hfToken: state.diarize ? getApiKey('huggingface') : '',
+      ...whisperAdvancedArgs(),
     });
 
     const rawBase = videoPath
@@ -781,7 +930,12 @@ async function transcribeWithWhisper() {
       .split('\\')
       .pop()
       .replace(/\.[^.]+$/, '');
-    const srtName = rawBase.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_whisper.srt';
+    // Tag the transcript with the model id so re-transcribing the same clip
+    // with a different model yields a distinct name (e.g. `_small` vs
+    // `_large-v3-turbo`) instead of silently overwriting the previous one.
+    const modelTag = String(modelId).replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const srtName =
+      rawBase.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_' + modelTag + '.srt';
     // Keep the derived SRT for display/save, but the engine path builds
     // sentences directly from word timestamps (no intermediate re-parse).
     loadSRTContent(result.srt_content, srtName);

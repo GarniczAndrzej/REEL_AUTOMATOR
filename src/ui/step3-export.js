@@ -3,6 +3,7 @@ import { generateEDL } from '../exporters/edl.js';
 import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
 import { mergeAdjacentClips } from '../parser/segments.js';
+import { saveTextToPath } from '../util/save-file.js';
 
 export function init() {
   // Tab switching
@@ -238,13 +239,9 @@ function videoBase() {
   return base || 'reels';
 }
 
-function downloadFile(name, content, type) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+function downloadFile(name, content) {
+  // Always prompt for a location — never silently save to ~/Downloads.
+  return saveTextToPath({ defaultName: name, content });
 }
 
 function copyEl(elId) {

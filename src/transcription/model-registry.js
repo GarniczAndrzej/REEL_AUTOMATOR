@@ -80,6 +80,28 @@ export const MODEL_REGISTRY = [
       { name: 'vocabulary.json', sizeBytes: 1_068_114, sha256: '' },
     ],
   },
+  {
+    // Distilled large-v3 (4-layer decoder): near-large-v3 quality at ~2× speed,
+    // ~1.6 GB. Same CT2 file layout as large-v3. Manifest from the HF tree API
+    // (deepdml/faster-whisper-large-v3-turbo-ct2, verified 2026-06-13); the
+    // model.bin sha256 is its LFS blob oid.
+    id: 'large-v3-turbo',
+    label: 'Large-v3-turbo (szybki, jakość ≈ large-v3, ~1.6 GB)',
+    repo: 'deepdml/faster-whisper-large-v3-turbo-ct2',
+    sizeBytes: 1_621_665_983,
+    files: [
+      { name: 'config.json', sizeBytes: 2_263, sha256: '' },
+      {
+        name: 'model.bin',
+        sizeBytes: 1_617_884_929,
+        sha256:
+          'e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da',
+      },
+      { name: 'preprocessor_config.json', sizeBytes: 340, sha256: '' },
+      { name: 'tokenizer.json', sizeBytes: 2_710_337, sha256: '' },
+      { name: 'vocabulary.json', sizeBytes: 1_068_114, sha256: '' },
+    ],
+  },
 ];
 
 /**

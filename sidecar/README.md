@@ -18,10 +18,45 @@ Automator. It replaces the PATH-dependent `whisper-cli` (whisper.cpp) path.
 ## CLI contract (stable — parsed by `src-tauri/src/whisper.rs`)
 
 ```
-whisperx-engine --audio A.wav --model large-v3 --language pl [--diarize --hf-token T] [--align-model-dir DIR]
-whisperx-engine --align-only --audio A.wav --transcript T.srt --language pl [--align-model-dir DIR]
+whisperx-engine --audio A.wav --model large-v3 --language pl [--diarize --hf-token T] [--align-model-dir DIR] [ADVANCED]
+whisperx-engine --align-only --audio A.wav --transcript T.srt --language pl [--align-model-dir DIR] [--device cpu]
 whisperx-engine --selftest        # readiness probe (no transcription model needed)
 ```
+
+### Advanced tuning flags (Phase 7 — all optional)
+
+Surfaced by the in-app "Ustawienia zaawansowane WhisperX" modal. **Every flag is
+optional and omitting it keeps whisperx's own default** — so an untouched modal
+reproduces the engine's prior behavior (no regression). Each maps to a real,
+version-verified whisperx/faster-whisper option:
+
+| Flag | Effect | Applied via |
+|---|---|---|
+| `--device cpu` | Force CPU (skip GPU/Metal; also affects the torch align stage) | `load_model(device=…)` |
+| `--compute-type T` | CT2 precision: `float16` / `int8` / `int8_float16` / `float32` | `load_model(compute_type=…)` |
+| `--beam-size N` | Decoding beam size (default 5) | `asr_options` |
+| `--initial-prompt S` | Decoding initial prompt | `asr_options` |
+| `--vad-onset F` | VAD onset threshold (default 0.5) | `vad_options` |
+| `--vad-offset F` | VAD offset threshold (default 0.363) | `vad_options` |
+| `--min-speakers N` / `--max-speakers N` | Diarization speaker bounds (only with `--diarize`) | `DiarizationPipeline(...)` |
+
+`--device` is the only advanced flag honored by `--align-only` (it drives the
+torch wav2vec2 align stage); `--compute-type`/`--beam-size`/VAD are
+transcription-only and have no effect there.
+
+> **Hidden quality defaults:** the long tail of faster-whisper knobs
+> (`best_of`, `patience`, temperature fallback, `condition_on_previous_text`,
+> `no_speech_threshold`, `log_prob_threshold`, `compression_ratio_threshold`,
+> `suppress_numerals`, …) is **not** surfaced in the modal. The engine currently
+> inherits whisperx's own defaults for them (so the untouched-modal/no-regression
+> guarantee holds); they can be promoted to pinned tuned values or to the modal
+> later without a contract break (adding a flag is additive). Unknown
+> `asr_options`/`vad_options` keys are rejected loudly (the engine exits
+> `14` transcribe-fail rather than silently ignoring a dead control).
+
+> **Contract bump:** adding these flags changes the engine CLI surface. After
+> editing `whisperx_engine.py`, **rebuild the sidecar (CPU + GPU + Windows)** and
+> re-run `--selftest` before shipping — see *Build / regenerate* below.
 
 - `--align-model-dir DIR` points at the alignment-model directory (`DIR/<lang>/`).
   The Rust layer passes the bundled-resource path here. When omitted, the engine

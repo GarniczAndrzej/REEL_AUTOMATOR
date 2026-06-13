@@ -524,6 +524,44 @@ dead control that looks wired but changes nothing.
 
 ---
 
+## Post-core fixes (found during GUI verification, 2026-06-13)
+
+Bugs surfaced while exercising the real transcription path in `tauri dev`;
+fixed outside the original FR-001…FR-007 scope but on the same change.
+
+- **FFmpeg sidecar couldn't launch (audio extraction failed).** The bundled
+  `src-tauri/binaries/ffmpeg-aarch64-apple-darwin` was a 412 KB *dynamic* copy of
+  a Homebrew `ffmpeg 7.1.1_3` build; that Cellar is gone (host now has 8.1.1,
+  `libav*.62`), so the sidecar aborted in dyld before extracting audio and every
+  transcription failed with "Nie udało się wyekstrahować audio z wideo".
+  **Fix:** replaced it with a **self-contained static ffmpeg 8.1 arm64**
+  (osxexperts.net), 52 MB, ad-hoc signed, zero external dylib deps. A bundled
+  sidecar must always be statically linked.
+- **Cache ignored the model/settings.** `transcribe_video`'s cache key was the
+  video hash only, so re-transcribing the same clip with a *different model*
+  returned the previous model's SRT. **Fix:** `variant_key` folds the full run
+  signature (model, language, diarize, beam/VAD/compute/device/speakers) into the
+  v2 cache key; the plain video hash is kept for the legacy whisper.cpp fallback.
+  Derived transcript name now carries the model id (`_small` vs `_large-v3-turbo`)
+  so runs don't collide.
+- **Cancel left the run unrestartable.** SIGKILL of the PyInstaller-onefile
+  bootloader orphaned its Python worker, which held the stdout pipe open so the
+  driver's `rx.recv().await` never returned and the UI stuck on "Anulowano".
+  **Fix:** driver loop polls the cancel flag every 250 ms (`tokio::time::timeout`)
+  and breaks promptly; `cancel_transcription` now sends SIGTERM (forwarded to the
+  worker) then SIGKILL fallback after 300 ms (new unix-only `libc` dep); the
+  frontend resets the UI immediately on cancel.
+- **Saves now always prompt for a location.** Per user direction, every export
+  routes through `src/util/save-file.js` `saveTextToPath` (dialog `save()` + new
+  `save_text_file` Rust command) — nothing auto-downloads to ~/Downloads. Covers
+  EDL/XML/Lua (step3), the AI prompt (step2), and the transcript
+  `.srt`/`.vtt`/`.md`/`segments.json` (step1).
+- **Transcript export moved to the WhisperX card** (revealed once a transcript
+  exists) and a Polish note clarifies that "🎯 Dopasuj do audio" is only for
+  imported external `.srt`/`.vtt` (WhisperX transcription auto-aligns).
+
+---
+
 ## Testing Strategy
 
 ### Unit / Regression Tests (`test/regression.js`):
@@ -640,8 +678,8 @@ rendering.
 
 #### Manual
 
-- [ ] 2.4 Real clip drives the engine with transcribe → align progress
-- [ ] 2.5 Cancel mid-run: no temp WAV / orphan process, shows cancelled state
+- [x] 2.4 Real clip drives the engine with transcribe → align progress — GUI verified 2026-06-13: real clip transcribed end-to-end after fixing the bundled FFmpeg sidecar (it was a dynamic Homebrew 7.1.1_3 copy whose dylibs are gone; replaced with a self-contained static ffmpeg 8.1 arm64)
+- [x] 2.5 Cancel mid-run: no temp WAV / orphan process, shows cancelled state — GUI verified 2026-06-13: cancel→restart now works. Root cause: SIGKILL of the PyInstaller bootloader orphaned its worker (held stdout open → driver promise never resolved). Fixed: driver loop polls the cancel flag every 250 ms; cancel sends SIGTERM (bootloader forwards → worker exits) then SIGKILL fallback; temp WAV removed on exit
 - [ ] 2.6 Each error path shows its specific Polish message
 - [ ] 2.7 Existing project with legacy cache does not re-transcribe
 
@@ -673,7 +711,7 @@ rendering.
 - [x] 4.4 Model list shows downloaded/missing/ready correctly on first run — GUI verified 2026-06-13 (clean first-run: alignment model "wbudowany/gotowy", small/medium/large-v3 all "Brak" + Pobierz, transcribe disabled)
 - [x] 4.5 Download shows live %/speed/ETA and verifies before use — GUI verified 2026-06-13: small (486 MB) downloaded with live %/MB·s/ETA readout (after fixing an un-awaited renderModelManager() that detached the progress node — step1-import.js downloadModel), model.bin sha256 matched registry (3e30…d671), all 4 files present, atomic .part→small/ rename, row flips to ✓ Pobrany/Wybrany
 - [x] 4.6 Corrupt/interrupted download rejected with clear Polish message — GUI verified 2026-06-13: injected a wrong model.bin sha256, re-download streamed full model.bin then failed verify; alert showed the distinct Polish error ("Suma kontrolna … nie zgadza się (oczekiwano deadbeefdead, otrzymano 3e305921506d). Pobieranie odrzucone."), small.part/ removed, no small/ left, row stayed Brak; real sha restored after
-- [ ] 4.7 Transcription uses the selected downloaded model end-to-end
+- [x] 4.7 Transcription uses the selected downloaded model end-to-end — GUI verified 2026-06-13: transcribed a real clip with a downloaded managed model; SRT + word-aligned segments produced. Also fixed a cache bug found here — the cache was keyed by the video only, so re-transcribing with a DIFFERENT model returned the old SRT; key now folds the full run signature (model/language/diarize/advanced)
 
 ### Phase 5: Transcript Import + Optional Align + Export
 
@@ -706,15 +744,15 @@ rendering.
 
 #### Automated
 
-- [ ] 7.1 Frontend passes Prettier check
-- [ ] 7.2 Rust type-check passes (`cargo check`)
-- [ ] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags
+- [x] 7.1 Frontend passes Prettier check
+- [x] 7.2 Rust type-check passes (`cargo check`)
+- [x] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags
 
 #### Manual
 
-- [ ] 7.4 Dropdown lists all models incl. large-v3-turbo with correct per-option status
-- [ ] 7.5 Selecting a downloaded model sets it active; selecting a missing one offers download
-- [ ] 7.6 large-v3-turbo downloads with live progress, verifies sha256, becomes selectable
+- [x] 7.4 Dropdown lists all models incl. large-v3-turbo with correct per-option status
+- [x] 7.5 Selecting a downloaded model sets it active; selecting a missing one offers download
+- [x] 7.6 large-v3-turbo downloads with live progress, verifies sha256, becomes selectable
 - [ ] 7.7 Transcription runs end-to-end with large-v3-turbo selected
-- [ ] 7.8 Advanced-settings modal opens, persists values; untouched modal = current default behavior
+- [x] 7.8 Advanced-settings modal opens, persists values; untouched modal = current default behavior
 - [ ] 7.9 Force CPU + non-default compute precision reach the engine and change a real run

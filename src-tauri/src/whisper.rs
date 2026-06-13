@@ -126,6 +126,57 @@ fn flatten_words(segments: &[serde_json::Value]) -> Vec<serde_json::Value> {
     words
 }
 
+/// Append the Phase-7 advanced-settings flags to the engine argv. Only flags the
+/// user actually set are pushed; everything else is omitted so the engine keeps
+/// its own defaults (untouched modal = no behavior change). `min/max_speakers`
+/// only matter when diarizing but are harmless to pass otherwise (the engine
+/// reads them solely on the diarize path).
+#[allow(clippy::too_many_arguments)]
+fn push_advanced_args(
+    args: &mut Vec<String>,
+    device: &Option<String>,
+    compute_type: &Option<String>,
+    beam_size: &Option<i64>,
+    initial_prompt: &Option<String>,
+    vad_onset: &Option<f64>,
+    vad_offset: &Option<f64>,
+    min_speakers: &Option<i64>,
+    max_speakers: &Option<i64>,
+) {
+    if let Some(d) = device.as_ref().filter(|s| !s.trim().is_empty()) {
+        args.push("--device".into());
+        args.push(d.clone());
+    }
+    if let Some(c) = compute_type.as_ref().filter(|s| !s.trim().is_empty()) {
+        args.push("--compute-type".into());
+        args.push(c.clone());
+    }
+    if let Some(b) = beam_size {
+        args.push("--beam-size".into());
+        args.push(b.to_string());
+    }
+    if let Some(p) = initial_prompt.as_ref().filter(|s| !s.trim().is_empty()) {
+        args.push("--initial-prompt".into());
+        args.push(p.clone());
+    }
+    if let Some(v) = vad_onset {
+        args.push("--vad-onset".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = vad_offset {
+        args.push("--vad-offset".into());
+        args.push(v.to_string());
+    }
+    if let Some(n) = min_speakers {
+        args.push("--min-speakers".into());
+        args.push(n.to_string());
+    }
+    if let Some(n) = max_speakers {
+        args.push("--max-speakers".into());
+        args.push(n.to_string());
+    }
+}
+
 /// Translate an engine exit code into a distinct Polish error message.
 fn engine_error_message(code: Option<i32>, stderr: &str) -> String {
     match code {
@@ -142,22 +193,41 @@ fn engine_error_message(code: Option<i32>, stderr: &str) -> String {
     }
 }
 
-/// Read a cached result for this hash. Prefers the versioned WhisperX entry,
-/// then falls back to a legacy whisper.cpp entry (kept readable). Returns the
+/// Cache variant key: folds the full run signature (model, language,
+/// diarization, advanced tuning knobs) into the video hash. Re-transcribing the
+/// SAME video with a DIFFERENT model/settings therefore yields a DISTINCT cache
+/// entry (a fresh transcription) instead of silently returning the previous
+/// run's result. The plain video hash is kept separately for the legacy lookup.
+fn variant_key(video_hash: &str, run_sig: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(video_hash.as_bytes());
+    h.update(b"\x00");
+    h.update(run_sig.as_bytes());
+    format!("{:x}", h.finalize())
+}
+
+/// Read a cached result. Prefers the versioned WhisperX entry (keyed by the
+/// model/settings-aware `v2_hash`), then falls back to a legacy whisper.cpp
+/// entry (keyed by the plain video `legacy_hash`, kept readable). Returns the
 /// normalized `{srt_content, words, segments}` payload.
-fn read_cache(dir: &std::path::Path, hash: &str) -> Option<serde_json::Value> {
-    // New engine: whisper-cache/v2/<hash>.json holds the whole payload.
-    let v2 = dir.join(CACHE_VERSION).join(format!("{}.json", hash));
+fn read_cache(
+    dir: &std::path::Path,
+    v2_hash: &str,
+    legacy_hash: &str,
+) -> Option<serde_json::Value> {
+    // New engine: whisper-cache/v2/<v2_hash>.json holds the whole payload.
+    let v2 = dir.join(CACHE_VERSION).join(format!("{}.json", v2_hash));
     if let Ok(text) = std::fs::read_to_string(&v2) {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
             return Some(val);
         }
     }
-    // Legacy whisper.cpp: <hash>.srt (+ optional <hash>.json flat words).
-    let legacy_srt = dir.join(format!("{}.srt", hash));
+    // Legacy whisper.cpp: <legacy_hash>.srt (+ optional <legacy_hash>.json).
+    let legacy_srt = dir.join(format!("{}.srt", legacy_hash));
     if let Ok(srt_content) = std::fs::read_to_string(&legacy_srt) {
         let words: Vec<serde_json::Value> =
-            std::fs::read_to_string(dir.join(format!("{}.json", hash)))
+            std::fs::read_to_string(dir.join(format!("{}.json", legacy_hash)))
                 .ok()
                 .and_then(|t| serde_json::from_str(&t).ok())
                 .unwrap_or_default();
@@ -170,11 +240,11 @@ fn read_cache(dir: &std::path::Path, hash: &str) -> Option<serde_json::Value> {
     None
 }
 
-fn write_cache(dir: &std::path::Path, hash: &str, payload: &serde_json::Value) {
+fn write_cache(dir: &std::path::Path, v2_hash: &str, payload: &serde_json::Value) {
     let vdir = dir.join(CACHE_VERSION);
     if std::fs::create_dir_all(&vdir).is_ok() {
         if let Ok(json) = serde_json::to_string(payload) {
-            let _ = std::fs::write(vdir.join(format!("{}.json", hash)), json);
+            let _ = std::fs::write(vdir.join(format!("{}.json", v2_hash)), json);
         }
     }
 }
@@ -188,6 +258,18 @@ pub async fn transcribe_video(
     language: String,
     diarize: Option<bool>,
     hf_token: Option<String>,
+    // Phase 7 — advanced settings (flat, to match the frontend's spread invoke).
+    // Each is optional; an omitted/None value means the engine keeps its own
+    // default (no behavior change when the modal is untouched). Turned into
+    // engine CLI flags by `push_advanced_args`.
+    device: Option<String>,
+    compute_type: Option<String>,
+    beam_size: Option<i64>,
+    initial_prompt: Option<String>,
+    vad_onset: Option<f64>,
+    vad_offset: Option<f64>,
+    min_speakers: Option<i64>,
+    max_speakers: Option<i64>,
 ) -> Result<serde_json::Value, String> {
     // Engine model: a managed model_id resolves to its downloaded local dir
     // (whisper-models/<id>/) that the engine loads offline via --model; a raw
@@ -217,16 +299,36 @@ pub async fn transcribe_video(
 
     TRANSCRIBE_CANCELLED.store(false, Ordering::SeqCst);
 
-    // ── Cache lookup (versioned + legacy fallback) ──────────────────────
-    let cache_key: Option<(std::path::PathBuf, String)> = (|| {
+    // ── Cache lookup (model/settings-aware + legacy fallback) ───────────
+    // The entry is keyed by the video AND the full run signature, so re-running
+    // the same clip with a different model/language/settings does a fresh
+    // transcription instead of returning the previous run's result.
+    let run_sig = serde_json::json!({
+        "model": model.as_str(),
+        "language": language.as_str(),
+        "diarize": diarize,
+        "beam_size": beam_size,
+        "initial_prompt": initial_prompt.as_deref(),
+        "vad_onset": vad_onset,
+        "vad_offset": vad_offset,
+        "compute_type": compute_type.as_deref(),
+        "device": device.as_deref(),
+        "min_speakers": min_speakers,
+        "max_speakers": max_speakers,
+    })
+    .to_string();
+
+    // (dir, v2_hash = model/settings-aware, legacy_hash = plain video hash)
+    let cache_key: Option<(std::path::PathBuf, String, String)> = (|| {
         let dir = app.path().app_cache_dir().ok()?.join("whisper-cache");
         std::fs::create_dir_all(&dir).ok()?;
-        let hash = compute_video_hash(&video_path)?;
-        Some((dir, hash))
+        let video_hash = compute_video_hash(&video_path)?;
+        let v2 = variant_key(&video_hash, &run_sig);
+        Some((dir, v2, video_hash))
     })();
 
-    if let Some((ref dir, ref hash)) = cache_key {
-        if let Some(cached) = read_cache(dir, hash) {
+    if let Some((ref dir, ref v2_hash, ref legacy_hash)) = cache_key {
+        if let Some(cached) = read_cache(dir, v2_hash, legacy_hash) {
             let _ = app.emit(
                 "transcribe-progress",
                 serde_json::json!({ "phase": "done", "label": "Z cache! ⚡", "percent": 100 }),
@@ -281,6 +383,18 @@ pub async fn transcribe_video(
         // Token is passed via the HF_TOKEN env var (below), not argv, so it is
         // not visible in `ps` for the run's lifetime.
     }
+    // Phase 7 — advanced tuning flags (only those the user set).
+    push_advanced_args(
+        &mut args,
+        &device,
+        &compute_type,
+        &beam_size,
+        &initial_prompt,
+        &vad_onset,
+        &vad_offset,
+        &min_speakers,
+        &max_speakers,
+    );
     // Alignment model ships beside the sidecar (not baked in) — tell the engine
     // where to find it.
     if let Some(dir) = crate::engine::align_model_dir(&app) {
@@ -317,7 +431,22 @@ pub async fn transcribe_video(
     let mut stderr_line = String::new();
     let mut exit_code: Option<i32> = None;
 
-    while let Some(ev) = rx.recv().await {
+    // Poll with a short timeout so a cancel mid-run breaks out promptly. The
+    // engine is a PyInstaller onefile: SIGKILL of the bootloader orphans its
+    // worker child, which keeps the stdout/stderr pipe open — a plain
+    // `rx.recv().await` would then block until the orphan finishes the whole
+    // (multi-minute) run, leaving the UI stuck on "Anulowano" and unable to
+    // start again. Re-checking the cancel flag every 250 ms fixes that.
+    loop {
+        if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
+            break;
+        }
+        let ev =
+            match tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await {
+                Ok(Some(ev)) => ev,
+                Ok(None) => break,  // stream closed normally
+                Err(_) => continue, // timeout — re-check the cancel flag
+            };
         match ev {
             CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
             CommandEvent::Stderr(b) => {
@@ -385,8 +514,8 @@ pub async fn transcribe_video(
         serde_json::json!({ "phase": "done", "label": "Gotowe!", "percent": 100 }),
     );
 
-    if let Some((ref dir, ref hash)) = cache_key {
-        write_cache(dir, hash, &payload);
+    if let Some((ref dir, ref v2_hash, _)) = cache_key {
+        write_cache(dir, v2_hash, &payload);
     }
 
     Ok(payload)
@@ -421,7 +550,8 @@ mod tests {
         )
         .unwrap();
 
-        let got = read_cache(&dir, hash).expect("legacy entry should load");
+        // v2 miss (no versioned entry under this hash) → legacy fallback hit.
+        let got = read_cache(&dir, hash, hash).expect("legacy entry should load");
         assert_eq!(got["srt_content"].as_str().unwrap(), srt);
         assert_eq!(got["words"].as_array().unwrap().len(), 1);
         assert!(got["segments"].as_array().unwrap().is_empty());
@@ -441,7 +571,7 @@ mod tests {
         )
         .unwrap();
 
-        let got = read_cache(&dir, hash).expect("v2 entry should load");
+        let got = read_cache(&dir, hash, hash).expect("v2 entry should load");
         assert_eq!(got["srt_content"].as_str().unwrap(), "new");
         assert_eq!(got["segments"].as_array().unwrap().len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
@@ -475,6 +605,10 @@ pub async fn align_transcript(
     transcript: String,
     language: String,
     is_vtt: Option<bool>,
+    // Phase 7 — only the device override is relevant to align-only (it drives
+    // the torch wav2vec2 align stage); compute_type/beam/VAD are transcription
+    // knobs and have no effect here.
+    device: Option<String>,
 ) -> Result<serde_json::Value, String> {
     ensure_engine_free()?;
     TRANSCRIBE_CANCELLED.store(false, Ordering::SeqCst);
@@ -517,6 +651,10 @@ pub async fn align_transcript(
         "--transcript".into(), transcript_str.clone(),
         "--language".into(), lang_arg.clone(),
     ];
+    if let Some(d) = device.as_ref().filter(|s| !s.trim().is_empty()) {
+        align_args.push("--device".into());
+        align_args.push(d.clone());
+    }
     if let Some(dir) = crate::engine::align_model_dir(&app) {
         align_args.push("--align-model-dir".into());
         align_args.push(dir);
@@ -551,7 +689,22 @@ pub async fn align_transcript(
     let mut stderr_line = String::new();
     let mut exit_code: Option<i32> = None;
 
-    while let Some(ev) = rx.recv().await {
+    // Poll with a short timeout so a cancel mid-run breaks out promptly. The
+    // engine is a PyInstaller onefile: SIGKILL of the bootloader orphans its
+    // worker child, which keeps the stdout/stderr pipe open — a plain
+    // `rx.recv().await` would then block until the orphan finishes the whole
+    // (multi-minute) run, leaving the UI stuck on "Anulowano" and unable to
+    // start again. Re-checking the cancel flag every 250 ms fixes that.
+    loop {
+        if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
+            break;
+        }
+        let ev =
+            match tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await {
+                Ok(Some(ev)) => ev,
+                Ok(None) => break,  // stream closed normally
+                Err(_) => continue, // timeout — re-check the cancel flag
+            };
         match ev {
             CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
             CommandEvent::Stderr(b) => {
@@ -623,7 +776,24 @@ pub async fn cancel_transcription() -> Result<(), String> {
     TRANSCRIBE_CANCELLED.store(true, Ordering::SeqCst);
     let child = TRANSCRIBE_CHILD.lock().unwrap().take();
     if let Some(c) = child {
-        let _ = c.kill();
+        // On Unix the engine is a PyInstaller onefile: a hard SIGKILL of the
+        // bootloader can't be forwarded to its worker child, orphaning it (it
+        // keeps running the transcription and holding the stdout pipe). Send
+        // SIGTERM first — the bootloader's handler forwards it so the worker
+        // shuts down cleanly — then hard-kill the bootloader as a fallback.
+        #[cfg(unix)]
+        {
+            let pid = c.pid() as i32;
+            unsafe {
+                libc::kill(pid, libc::SIGTERM);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            let _ = c.kill();
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = c.kill();
+        }
     }
     Ok(())
 }

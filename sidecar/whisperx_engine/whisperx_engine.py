@@ -130,6 +130,47 @@ def _detect_device():
     return "cpu", False, "int8"
 
 
+def _resolve_device_compute(args):
+    """Auto-detected device/compute, with the optional --device/--compute-type
+    overrides applied (Phase 7). Returns ('cuda'|'mps'|'cpu', gpu_bool, compute)."""
+    device, gpu, compute_type = _detect_device()
+    override = getattr(args, "device", None)
+    if override:
+        device = override
+        gpu = device != "cpu"
+    ct_override = getattr(args, "compute_type", None)
+    if ct_override:
+        compute_type = ct_override
+    return device, gpu, compute_type
+
+
+def _build_asr_options(args):
+    """faster-whisper asr_options overrides for whisperx.load_model.
+
+    Only user-set keys are included; an empty dict means load_model keeps its own
+    defaults (so an untouched modal = no behavior change). Every key here is a
+    real field of the pinned faster_whisper TranscriptionOptions — whisperx
+    raises on unknown keys, so a typo surfaces loudly instead of shipping as a
+    silent dead control (Phase 7 contract)."""
+    opts = {}
+    if getattr(args, "beam_size", None) is not None:
+        opts["beam_size"] = int(args.beam_size)
+    if getattr(args, "initial_prompt", None):
+        opts["initial_prompt"] = args.initial_prompt
+    return opts
+
+
+def _build_vad_options(args):
+    """vad_options overrides (vad_onset/vad_offset) for whisperx.load_model.
+    Empty dict ⇒ whisperx VAD defaults."""
+    opts = {}
+    if getattr(args, "vad_onset", None) is not None:
+        opts["vad_onset"] = float(args.vad_onset)
+    if getattr(args, "vad_offset", None) is not None:
+        opts["vad_offset"] = float(args.vad_offset)
+    return opts
+
+
 def _selftest_align_runs(whisperx, language="pl"):
     """Actually exercise forced alignment on a tiny synthetic clip.
 
@@ -264,7 +305,7 @@ def _normalize(language, aligned):
     return {"language": language, "segments": segments}
 
 
-def _diarize(whisperx, aligned, audio, hf_token, device):
+def _diarize(whisperx, aligned, audio, hf_token, device, min_speakers=None, max_speakers=None):
     _emit_progress("diarize", 0)
     try:
         try:
@@ -272,7 +313,10 @@ def _diarize(whisperx, aligned, audio, hf_token, device):
         except Exception:
             DiarizationPipeline = whisperx.DiarizationPipeline  # older layout
         pipeline = DiarizationPipeline(use_auth_token=hf_token, device=device)
-        diarize_segments = pipeline(audio)
+        # min/max speakers are optional bounds (Phase 7); None ⇒ auto-detect.
+        diarize_segments = pipeline(
+            audio, min_speakers=min_speakers, max_speakers=max_speakers
+        )
         aligned = whisperx.assign_word_speakers(diarize_segments, aligned)
         _emit_progress("diarize", 100)
         return aligned
@@ -289,17 +333,33 @@ def _diarize(whisperx, aligned, audio, hf_token, device):
 def cmd_transcribe(args):
     import whisperx
 
-    device, _, compute_type = _detect_device()
+    device, _, compute_type = _resolve_device_compute(args)
     audio = _load_audio(whisperx, args.audio)
+
+    # Phase 7 — optional tuning. Empty dicts ⇒ whisperx keeps its own defaults.
+    asr_options = _build_asr_options(args)
+    vad_options = _build_vad_options(args)
 
     _emit_progress("transcribe", 0)
     try:
-        model = whisperx.load_model(
-            args.model,
-            device if device != "mps" else "cpu",  # CT2 has no MPS backend
+        load_kwargs = dict(
             compute_type=compute_type,
             language=None if args.language in (None, "", "auto") else args.language,
         )
+        if asr_options:
+            load_kwargs["asr_options"] = asr_options
+        if vad_options:
+            load_kwargs["vad_options"] = vad_options
+        model = whisperx.load_model(
+            args.model,
+            device if device != "mps" else "cpu",  # CT2 has no MPS backend
+            **load_kwargs,
+        )
+    except TypeError as e:
+        # An unknown asr_options/vad_options key reaches whisperx as an unexpected
+        # kwarg → fail loudly rather than silently ignoring a dead control.
+        _log("invalid advanced option for the pinned whisperx version: %s" % e)
+        sys.exit(EXIT_TRANSCRIBE_FAIL)
     except Exception as e:
         msg = str(e).lower()
         if "not found" in msg or "no such file" in msg or "does not exist" in msg:
@@ -323,7 +383,15 @@ def cmd_transcribe(args):
         if not args.hf_token:
             _log("diarization requested but no --hf-token provided")
             sys.exit(EXIT_DIARIZE_FAIL)
-        aligned = _diarize(whisperx, aligned, audio, args.hf_token, device)
+        aligned = _diarize(
+            whisperx,
+            aligned,
+            audio,
+            args.hf_token,
+            device,
+            min_speakers=getattr(args, "min_speakers", None),
+            max_speakers=getattr(args, "max_speakers", None),
+        )
 
     out = _normalize(language, aligned)
     _write_result(json.dumps(out, ensure_ascii=False))
@@ -363,7 +431,7 @@ def cmd_align_only(args):
         _log("align-only requires an existing --transcript file")
         sys.exit(EXIT_USAGE)
 
-    device, _, _ = _detect_device()
+    device, _, _ = _resolve_device_compute(args)
     audio = _load_audio(whisperx, args.audio)
     language = None if args.language in (None, "", "auto") else args.language
     if not language:
@@ -387,6 +455,22 @@ def build_parser():
     p.add_argument("--model", help="faster-whisper CT2 model id or local path")
     p.add_argument("--language", default="auto", help="language code, or 'auto'")
     p.add_argument("--batch-size", type=int, default=8)
+    # ── Phase 7 advanced settings (all optional; omitted = engine default) ──
+    # Exposed, user-tunable knobs. Each maps to a real whisperx/faster-whisper
+    # option, verified against the pinned versions. Anything not passed here keeps
+    # whisperx's own default, so an untouched modal reproduces current behavior.
+    p.add_argument("--device", default=None, help="override device: 'cpu' forces CPU")
+    p.add_argument(
+        "--compute-type",
+        default=None,
+        help="CT2 compute type: float16|int8|int8_float16|float32",
+    )
+    p.add_argument("--beam-size", type=int, default=None, help="decoding beam size")
+    p.add_argument("--initial-prompt", default=None, help="initial decoding prompt")
+    p.add_argument("--vad-onset", type=float, default=None, help="VAD onset threshold")
+    p.add_argument("--vad-offset", type=float, default=None, help="VAD offset threshold")
+    p.add_argument("--min-speakers", type=int, default=None, help="diarization: min speakers")
+    p.add_argument("--max-speakers", type=int, default=None, help="diarization: max speakers")
     p.add_argument("--diarize", action="store_true", help="run speaker diarization")
     p.add_argument("--hf-token", default=None, help="Hugging Face token for pyannote (prefer the HF_TOKEN env var)")
     p.add_argument("--align-only", action="store_true", help="force-align an existing transcript")

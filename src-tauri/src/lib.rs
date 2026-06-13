@@ -14,6 +14,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             project::save_project,
             project::load_project,
+            project::save_text_file,
             project::load_llm_cache,
             project::save_llm_cache,
             project::clear_llm_cache,

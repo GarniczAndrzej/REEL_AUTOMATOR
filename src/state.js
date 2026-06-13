@@ -66,6 +66,22 @@ Zasady:
   whisperLanguage: 'pl',
   diarize: false, // opt-in speaker diarization (S-05 Phase 6)
 
+  // S-05 Phase 7 — WhisperX advanced-settings modal. A minimal high-value
+  // subset of engine tuning knobs; omitted/empty values fall back to the
+  // engine's defaults (untouched modal = no behavior change). The perf/device
+  // knobs (device, computeType) are persisted PER-MACHINE in localStorage
+  // (`edl_whisper_advanced`), never in .reelproj; the rest are live in state.
+  whisperAdvanced: {
+    device: '', // '' = auto, 'cpu' = wymuś CPU
+    computeType: '', // '' = domyślny (float16 GPU / int8 CPU); float16|int8|int8_float16|float32
+    beamSize: null, // null = domyślny (5)
+    initialPrompt: '', // '' = brak
+    vadOnset: null, // null = domyślny (0.5)
+    vadOffset: null, // null = domyślny (0.363)
+    minSpeakers: null, // diaryzacja: null = auto
+    maxSpeakers: null, // diaryzacja: null = auto
+  },
+
   // F18 — additional video sources (source 0 = state.videoPath / state.srtContent)
   sources: [], // [{videoFilename, videoPath, srtName, srtContent}] for sources index 1+
 };

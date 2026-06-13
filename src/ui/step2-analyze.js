@@ -1,5 +1,6 @@
 import { state, emit, subscribe } from '../state.js';
 import { buildPrompt } from '../ai/prompt.js';
+import { saveTextToPath } from '../util/save-file.js';
 import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
 import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
@@ -1243,7 +1244,7 @@ function applyCompareResult(which) {
   emit();
 }
 
-function downloadPromptTXT() {
+async function downloadPromptTXT() {
   if (!state.sentences.length) {
     alert('Najpierw przeanalizuj SRT (Krok 1)!');
     return;
@@ -1254,12 +1255,7 @@ function downloadPromptTXT() {
     state.sources?.length ? state.sources : null,
     state.videoFilename || '',
   );
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'PROMPT_DLA_AI.txt';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+  await saveTextToPath({ defaultName: 'PROMPT_DLA_AI.txt', content });
 }
 
 function setPS(n, s) {

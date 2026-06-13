@@ -32,6 +32,11 @@ tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
 futures-util = "0.3"
 
+# Unix-only: send SIGTERM to the engine sidecar on cancel (see whisper.rs
+# cancel_transcription) so the PyInstaller worker child shuts down cleanly.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [profile.release]
 codegen-units = 1
 lto = true

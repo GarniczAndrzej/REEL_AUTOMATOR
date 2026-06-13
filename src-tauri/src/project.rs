@@ -14,6 +14,13 @@ pub fn load_project(path: String) -> Result<Value, String> {
     serde_json::from_str(&s).map_err(|e| e.to_string())
 }
 
+/// Write arbitrary text to a user-chosen path (transcript .srt/.vtt export).
+/// The path comes from the dialog plugin's save() picker on the frontend.
+#[tauri::command]
+pub fn save_text_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 // ── F7 LLM cache ─────────────────────────────────────────────────────
 
 #[tauri::command]
