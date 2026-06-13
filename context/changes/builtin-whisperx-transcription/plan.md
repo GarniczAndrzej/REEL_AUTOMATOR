@@ -417,6 +417,41 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 - The versioned cache prevents re-transcription on reload and on engine swap for already-processed media.
 - Bundling the alignment model (vs downloading at runtime) keeps the core align path instant and offline at the cost of a larger installer.
 
+### Engine readiness cost (found during 4.4–4.6 GUI verification, 2026-06-13)
+
+The readiness badge runs the engine `--selftest`, which spawns the cold frozen
+sidecar fresh each time (onefile self-extraction + torch/whisperx import + load
+the bundled 2.4 GB wav2vec2 align model + run one real forced-align). Measured on
+Apple Silicon: **127 s wall** but only ~11 s CPU — the rest was *blocking network*
+(huggingface_hub etag/HEAD checks against huggingface.co for the bundled align
+model on every spawn). The model-manager UI also waited on this probe before
+rendering.
+
+**Applied fixes:**
+
+- **Force HF offline on local-only engine spawns.** `engine.rs::with_hf_offline`
+  sets `HF_HUB_OFFLINE=1`/`TRANSFORMERS_OFFLINE=1`; applied to the self-test,
+  align-only, and non-diarize transcription spawns (all use bundled/local models).
+  **NOT** applied when diarizing — pyannote may still need fetching. Cut the cold
+  self-test from **127 s → 74 s** (the residual is genuine extraction + model load
+  + the real align run).
+- **Decouple the model UI from the probe.** `initModelManager` now renders the
+  model list first and fires `refreshEngineReadiness()` without awaiting, so the
+  badge ("Sprawdzanie silnika…") fills in asynchronously instead of blocking the
+  list.
+
+**Optional follow-ups (not done — candidates if the ~74 s badge still bothers):**
+
+- **Cache the self-test result** (persist `alignment_model_ready` + version/mtime
+  key) so it runs once, not on every launch / Krok-1 entry.
+- **Lighter readiness probe** — re-introduce a files-present + import-only check
+  (no full forced-align), trading the e907bba "truthful align" guarantee for speed,
+  or run the full align only on first launch and the light check thereafter.
+- **PyInstaller onedir instead of onefile** — eliminates the ~290 MB
+  self-extraction on every spawn (faster cold start; larger install footprint).
+- **Warm/resident engine** — keep one sidecar process alive across calls instead
+  of cold-spawning per transcription/probe.
+
 ## Migration Notes
 
 - **Cache**: legacy `whisper-cache/<hash>.{srt,json}` stays readable; new engine writes a version-scoped namespace. No forced re-transcribe.
@@ -492,9 +527,9 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 #### Manual
 
-- [ ] 4.4 Model list shows downloaded/missing/ready correctly on first run
-- [ ] 4.5 Download shows live %/speed/ETA and verifies before use
-- [ ] 4.6 Corrupt/interrupted download rejected with clear Polish message
+- [x] 4.4 Model list shows downloaded/missing/ready correctly on first run — GUI verified 2026-06-13 (clean first-run: alignment model "wbudowany/gotowy", small/medium/large-v3 all "Brak" + Pobierz, transcribe disabled)
+- [x] 4.5 Download shows live %/speed/ETA and verifies before use — GUI verified 2026-06-13: small (486 MB) downloaded with live %/MB·s/ETA readout (after fixing an un-awaited renderModelManager() that detached the progress node — step1-import.js downloadModel), model.bin sha256 matched registry (3e30…d671), all 4 files present, atomic .part→small/ rename, row flips to ✓ Pobrany/Wybrany
+- [x] 4.6 Corrupt/interrupted download rejected with clear Polish message — GUI verified 2026-06-13: injected a wrong model.bin sha256, re-download streamed full model.bin then failed verify; alert showed the distinct Polish error ("Suma kontrolna … nie zgadza się (oczekiwano deadbeefdead, otrzymano 3e305921506d). Pobieranie odrzucone."), small.part/ removed, no small/ left, row stayed Brak; real sha restored after
 - [ ] 4.7 Transcription uses the selected downloaded model end-to-end
 
 ### Phase 5: Transcript Import + Optional Align + Export
