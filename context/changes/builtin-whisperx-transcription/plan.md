@@ -389,7 +389,112 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 - A missing/invalid token shows a clear Polish error and does not block core transcription
 - Speaker labels survive save → reload
 
-**Implementation Note**: Final phase — confirm the full FR-001…FR-007 surface manually before closing the change.
+**Implementation Note**: Final phase of the FR-001…FR-007 core — confirm that surface manually. Phase 7 below is a post-core enhancement added after GUI verification.
+
+---
+
+## Phase 7: Model Manager Enhancements (added 2026-06-13, post-core)
+
+### Overview
+
+Three follow-on improvements requested after the 4.4–4.6 GUI verification: (1) add a
+**large-v3-turbo** model to the registry, (2) replace the vertical card **list**
+with a compact **dropdown** picker, and (3) a **WhisperX advanced-settings modal**
+exposing the engine's tuning flags (force CPU, compute precision, decoding/VAD/align
+knobs, …). Enhancement scope — outside the original FR-001…FR-007 core. Changes 1–2
+reuse the Phase-4 download/verify/status backend (`models.rs`,
+`download_model`/`list_models`) **unchanged**; change 3 is the heavy one — it bumps
+the **engine CLI contract** and therefore needs a **sidecar rebuild** (CPU + GPU +
+Windows) and re-verification.
+
+### Changes Required:
+
+#### 1. Add large-v3-turbo to the registry
+
+**File**: `src/transcription/model-registry.js`
+
+**Intent**: Add a `large-v3-turbo` entry — the distilled large-v3 variant (4-layer
+decoder, near-large-v3 quality at roughly 2× speed, ~1.6 GB). Candidate CT2 repo
+`deepdml/faster-whisper-large-v3-turbo-ct2` (verified reachable 2026-06-13; file
+set `config.json`, `model.bin`, `preprocessor_config.json`, `tokenizer.json`,
+`vocabulary.json` — same layout as large-v3).
+
+**Contract**: New `TranscriptionModel` with `repo`, real per-file `sizeBytes` (from
+the HF tree API) and the `model.bin` LFS `sha256` (small JSON/txt files carry `''`),
+following the exact pattern of the existing entries. Implementer resolves/confirms
+the repo + pulls the manifest the same way the Systran entries were built. No
+backend change.
+
+#### 2. Dropdown model picker
+
+**File**: `src/ui/step1-import.js` (`renderModelManager` + helpers) + `src/index.html` (`#modelManagerList` markup)
+
+**Intent**: Replace the vertical card list with a single `<select>` dropdown listing
+every registry model, each option annotated with size + status (e.g. `Small
+(~480 MB) — Pobrany` / `— Brak`). Selecting a **downloaded** model sets
+`state.modelId`; selecting a **not-downloaded** model surfaces a download
+affordance (a `⬇ Pobierz` button beside the dropdown) that drives the existing
+`download_model` flow. The live `%/MB·s/ETA` readout and the engine-readiness badge
+stay; the in-progress state disables the dropdown.
+
+**Contract**: All strings Polish; `emit()` after mutation. Reuse `download_model` +
+the `model-download-progress` event (don't re-implement). Preserve the await-render
+fix — the progress node must persist across re-render. Keep `transcribe` gated on a
+downloaded+selected model.
+
+#### 3. WhisperX advanced-settings modal
+
+**Files**: `src/ui/step1-import.js` (+ a modal in `src/index.html`) → `src-tauri/src/whisper.rs` → `sidecar/whisperx_engine/whisperx_engine.py` + `whisperx_engine.spec`/`build.sh` + `sidecar/README.md`
+
+**Intent**: A separate pop-up window ("Ustawienia zaawansowane WhisperX") opened from
+the transcription card, surfacing the WhisperX/faster-whisper tuning knobs with
+sensible defaults so the modal stays optional. Settings flow frontend → `invoke`
+params → `whisper.rs` engine args → new engine CLI flags → `whisperx.load_model`
+(`asr_options`/`vad_options`) / `transcribe` / `align` / diarize. Exposed groups
+(real whisperx options — confirmed via docs 2026-06-13):
+
+- **Compute / performance**: force **CPU** (device override — note CTranslate2
+  transcription is CPU-only on Apple Silicon today; device mainly affects the torch
+  align stage + CUDA boxes), **compute precision** `compute_type`
+  (`float16`/`int8`/`int8_float16`/`float32`), CPU **threads**, **batch_size**.
+- **Decoding / quality**: `beam_size`, `best_of`, `patience`, temperature fallback
+  (`temperatures`), `condition_on_previous_text`, `initial_prompt`,
+  `suppress_numerals`, `suppress_tokens`, `no_speech_threshold`,
+  `compression_ratio_threshold`, `log_prob_threshold`, `max_new_tokens`, `hotwords`.
+- **VAD**: `chunk_size`, `vad_onset`, `vad_offset`.
+- **Alignment**: `no_align` toggle, `interpolate_method`, `return_char_alignments`.
+- **Diarization** (extends the Phase-6 toggle): `min_speakers`, `max_speakers`
+  (HF token already handled).
+
+**Contract**: New optional settings object on the `transcribe_video` invoke (and
+mirrored on `align_transcript` where relevant); each maps to a new engine CLI flag
+(`--device`, `--compute-type`, `--threads`, `--batch-size`, `--beam-size`,
+`--vad-chunk-size`, `--vad-onset`, `--vad-offset`, `--initial-prompt`,
+`--suppress-numerals`, `--no-align`, `--min-speakers`, `--max-speakers`, …). The
+engine applies them via `asr_options`/`vad_options`; **omitted flags fall back to
+whisperx defaults** (no behavior change when the modal is untouched). This **bumps
+the engine contract** → update `sidecar/README.md`, **rebuild the sidecar** (CPU +
+GPU + Windows) and re-run `--selftest`. Persist the chosen settings (state +
+`.reelproj`/localStorage); all strings Polish; `emit()` after mutation.
+
+### Success Criteria:
+
+#### Automated Verification:
+
+- Frontend formats with Prettier cleanly: `npx prettier --check "src/**/*.{js,css,html}"`
+- Rust type-check passes: `~/.cargo/bin/cargo check --manifest-path src-tauri/Cargo.toml`
+- Rebuilt sidecar `--selftest` still returns `ok: true` (new flags don't break the engine)
+
+#### Manual Verification:
+
+- Dropdown lists all models incl. large-v3-turbo with correct per-option status
+- Selecting a downloaded model sets it active; selecting a missing one offers download
+- Downloading large-v3-turbo shows live progress, verifies sha256, becomes selectable
+- Transcription runs end-to-end with large-v3-turbo selected
+- Advanced-settings modal opens, persists values, and an untouched modal reproduces
+  current default behavior (no regression)
+- Forcing CPU + a non-default `compute_type` measurably changes a real run, and the
+  flags reach the engine (verify via the engine command line / stderr)
 
 ---
 
@@ -451,6 +556,18 @@ rendering.
   self-extraction on every spawn (faster cold start; larger install footprint).
 - **Warm/resident engine** — keep one sidecar process alive across calls instead
   of cold-spawning per transcription/probe.
+
+### Dev-environment notes (found during 2026-06-13 GUI verification)
+
+- **`reel-wt-whisperx` is a git worktree with no `node_modules`.** Run `npm install`
+  there before `npm run tauri dev`, or the `beforeDevCommand` aborts with
+  `vite: command not found`.
+- **`src-tauri/.taurignore` (containing `binaries/`) is required for `tauri dev`.**
+  Without it the dev watcher rebuild-loops: the engine self-test touches the bundled
+  HF align cache (`binaries/align_models/**/.no_exist/*`) on every launch, the
+  watcher sees `binaries/` change → rebuild → relaunch → touch → … and the window
+  never settles (looks like a frozen/blank UI). Dev-only; `tauri build` is
+  unaffected. Do not delete it.
 
 ## Migration Notes
 
@@ -558,3 +675,20 @@ rendering.
 - [ ] 6.4 Valid HF token → speaker-labeled segments
 - [ ] 6.5 Missing/invalid token → clear Polish error, core transcription still works
 - [ ] 6.6 Speaker labels survive save → reload
+
+### Phase 7: Model Manager Enhancements (post-core, added 2026-06-13)
+
+#### Automated
+
+- [ ] 7.1 Frontend passes Prettier check
+- [ ] 7.2 Rust type-check passes (`cargo check`)
+- [ ] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags
+
+#### Manual
+
+- [ ] 7.4 Dropdown lists all models incl. large-v3-turbo with correct per-option status
+- [ ] 7.5 Selecting a downloaded model sets it active; selecting a missing one offers download
+- [ ] 7.6 large-v3-turbo downloads with live progress, verifies sha256, becomes selectable
+- [ ] 7.7 Transcription runs end-to-end with large-v3-turbo selected
+- [ ] 7.8 Advanced-settings modal opens, persists values; untouched modal = current default behavior
+- [ ] 7.9 Force CPU + non-default compute precision reach the engine and change a real run
