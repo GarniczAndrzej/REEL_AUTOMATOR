@@ -277,7 +277,12 @@ def _diarize(whisperx, aligned, audio, hf_token, device):
         _emit_progress("diarize", 100)
         return aligned
     except Exception as e:
-        _log("diarization failed: %s" % e)
+        # Scrub the token from the message: pyannote/HF auth errors can echo it
+        # back, and this text flows to stderr → the app's error tail.
+        msg = str(e)
+        if hf_token:
+            msg = msg.replace(hf_token, "***")
+        _log("diarization failed: %s" % msg)
         sys.exit(EXIT_DIARIZE_FAIL)
 
 
@@ -383,7 +388,7 @@ def build_parser():
     p.add_argument("--language", default="auto", help="language code, or 'auto'")
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--diarize", action="store_true", help="run speaker diarization")
-    p.add_argument("--hf-token", default=None, help="Hugging Face token for pyannote")
+    p.add_argument("--hf-token", default=None, help="Hugging Face token for pyannote (prefer the HF_TOKEN env var)")
     p.add_argument("--align-only", action="store_true", help="force-align an existing transcript")
     p.add_argument("--transcript", default=None, help=".srt/.vtt to align (with --align-only)")
     p.add_argument(
@@ -403,6 +408,10 @@ def main(argv=None):
     # (after this point), so logging StreamHandlers bound to "stdout" at import
     # time pick up stderr too. The result goes out via _write_result(_RESULT_OUT).
     sys.stdout = sys.stderr
+    # The HF token is supplied via the HF_TOKEN env var (kept off argv so it is
+    # not visible in `ps`); an explicit --hf-token, if given, still wins.
+    if not args.hf_token:
+        args.hf_token = os.environ.get("HF_TOKEN") or None
     # An explicit --align-model-dir wins over auto-resolution (next-to-exe etc.).
     if getattr(args, "align_model_dir", None):
         os.environ["ENGINE_ALIGN_DIR"] = args.align_model_dir

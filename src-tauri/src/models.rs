@@ -59,6 +59,19 @@ fn sanitize(id: &str) -> String {
         .collect()
 }
 
+/// A per-file model name must be a single, normal path segment — no separators,
+/// no `..`, no absolute/root parts — so it can never escape the `.part` dir when
+/// joined nor smuggle path traversal into the HuggingFace URL. `download_model`
+/// is an invokable command boundary, so the (otherwise trusted) registry names
+/// are validated here rather than assumed safe.
+fn is_safe_filename(name: &str) -> bool {
+    let mut comps = Path::new(name).components();
+    matches!(
+        (comps.next(), comps.next()),
+        (Some(std::path::Component::Normal(_)), None)
+    )
+}
+
 #[derive(Serialize)]
 pub struct ModelStatus {
     pub id: String,
@@ -156,6 +169,12 @@ pub async fn download_model(
     // the .part dir on any error path with a single handler.
     let result: Result<(), String> = async {
         for spec in &files {
+            if !is_safe_filename(&spec.name) {
+                return Err(format!(
+                    "Nieprawidłowa nazwa pliku modelu: {}. Pobieranie odrzucone.",
+                    spec.name
+                ));
+            }
             let url = format!(
                 "https://huggingface.co/{}/resolve/main/{}",
                 repo, spec.name
@@ -227,12 +246,26 @@ pub async fn download_model(
         return Err(e);
     }
 
-    // Swap the verified .part dir into place atomically-ish.
-    let _ = std::fs::remove_dir_all(&final_dir);
-    std::fs::rename(&part_dir, &final_dir).map_err(|e| {
+    // Swap the verified .part dir into place without ever leaving the user with
+    // no model: back up any existing dir first, move .part in, then drop the
+    // backup — restoring it if the final rename fails (permissions, etc.).
+    let bak_dir = root.join(format!("{}.bak", sanitize(&model_id)));
+    let _ = std::fs::remove_dir_all(&bak_dir);
+    let had_existing = final_dir.exists();
+    if had_existing {
+        std::fs::rename(&final_dir, &bak_dir).map_err(|e| {
+            let _ = std::fs::remove_dir_all(&part_dir);
+            format!("Nie udało się podmienić modelu: {e}")
+        })?;
+    }
+    if let Err(e) = std::fs::rename(&part_dir, &final_dir) {
+        if had_existing {
+            let _ = std::fs::rename(&bak_dir, &final_dir); // restore previous model
+        }
         let _ = std::fs::remove_dir_all(&part_dir);
-        e.to_string()
-    })?;
+        return Err(format!("Nie udało się podmienić modelu: {e}"));
+    }
+    let _ = std::fs::remove_dir_all(&bak_dir);
 
     let _ = app.emit(
         "model-download-progress",

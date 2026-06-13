@@ -13,6 +13,16 @@ static WHISPER_CALL: AtomicU64 = AtomicU64::new(0);
 static TRANSCRIBE_CHILD: Mutex<Option<CommandChild>> = Mutex::new(None);
 static TRANSCRIBE_CANCELLED: AtomicBool = AtomicBool::new(false);
 
+// A single global child handle can only track/cancel one process, so a second
+// concurrent run would orphan the first (cancel could no longer reach it).
+// Reject a new run while one is in flight — the app drives one run at a time.
+fn ensure_engine_free() -> Result<(), String> {
+    if TRANSCRIBE_CHILD.lock().unwrap().is_some() {
+        return Err("Transkrypcja już trwa. Poczekaj na jej zakończenie lub anuluj ją.".into());
+    }
+    Ok(())
+}
+
 // Engine/format cache version. WhisperX entries live under `whisper-cache/v2/`
 // so they never collide with legacy whisper.cpp `whisper-cache/<hash>.{srt,json}`
 // entries, which stay readable for already-processed media.
@@ -183,6 +193,7 @@ pub async fn transcribe_video(
     // (whisper-models/<id>/) that the engine loads offline via --model; a raw
     // model_path is a dev fallback passed through verbatim. Guard against a
     // not-yet-downloaded managed model with a distinct Polish message.
+    ensure_engine_free()?;
     let model = match model_id.filter(|s| !s.is_empty()) {
         Some(id) => {
             let dir = crate::models::model_dir(&app, &id)?;
@@ -267,8 +278,8 @@ pub async fn transcribe_video(
     ];
     if diarize {
         args.push("--diarize".into());
-        args.push("--hf-token".into());
-        args.push(hf_token.clone());
+        // Token is passed via the HF_TOKEN env var (below), not argv, so it is
+        // not visible in `ps` for the run's lifetime.
     }
     // Alignment model ships beside the sidecar (not baked in) — tell the engine
     // where to find it.
@@ -280,20 +291,25 @@ pub async fn transcribe_video(
     let sidecar = app
         .shell()
         .sidecar(crate::engine::ENGINE_SIDECAR)
-        .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&wav_path);
+            format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
+        })?
         .args(args);
     // Transcription model is local and the align model is bundled, so force HF
     // offline (skips slow network etag checks) — except when diarizing, where
     // pyannote may still need to be fetched from HuggingFace.
     let sidecar = if diarize {
-        sidecar
+        // pyannote may still need HuggingFace; pass the token via env (not argv).
+        sidecar.env("HF_TOKEN", hf_token.clone())
     } else {
         crate::engine::with_hf_offline(sidecar)
     };
 
-    let (mut rx, child) = sidecar
-        .spawn()
-        .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
+    let (mut rx, child) = sidecar.spawn().map_err(|e| {
+        let _ = std::fs::remove_file(&wav_path);
+        format!("Nie udało się uruchomić silnika WhisperX: {e}")
+    })?;
     *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
 
     let mut stdout_buf = String::new();
@@ -460,6 +476,7 @@ pub async fn align_transcript(
     language: String,
     is_vtt: Option<bool>,
 ) -> Result<serde_json::Value, String> {
+    ensure_engine_free()?;
     TRANSCRIBE_CANCELLED.store(false, Ordering::SeqCst);
 
     let pid = std::process::id();
@@ -489,6 +506,9 @@ pub async fn align_transcript(
         return Err("Nie udało się wyekstrahować audio z wideo. Sprawdź plik źródłowy.".into());
     }
 
+    // Forced alignment needs an explicit language (the wav2vec2 model is
+    // per-language). When the caller leaves it on "auto" we fall back to Polish —
+    // this is a Polish-first app and the bundled align model is `pl`.
     let lang_arg = if language == "auto" { "pl".to_string() } else { language.clone() };
 
     let mut align_args: Vec<String> = vec![
@@ -503,16 +523,27 @@ pub async fn align_transcript(
     }
 
     // Align-only uses just the bundled wav2vec2 model — always force HF offline.
+    // Clean up the temp WAV + transcript on the early sidecar/spawn error paths
+    // too (the post-loop cleanup at the bottom only runs once the engine starts).
+    let cleanup_temps = || {
+        let _ = std::fs::remove_file(&wav_path);
+        let _ = std::fs::remove_file(&transcript_path);
+    };
+
     let sidecar = crate::engine::with_hf_offline(
         app.shell()
             .sidecar(crate::engine::ENGINE_SIDECAR)
-            .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
+            .map_err(|e| {
+                cleanup_temps();
+                format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
+            })?
             .args(align_args),
     );
 
-    let (mut rx, child) = sidecar
-        .spawn()
-        .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
+    let (mut rx, child) = sidecar.spawn().map_err(|e| {
+        cleanup_temps();
+        format!("Nie udało się uruchomić silnika WhisperX: {e}")
+    })?;
     *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
 
     let mut stdout_buf = String::new();

@@ -78,9 +78,9 @@ Produce an OS-aware, frozen WhisperX CLI bundled as a Tauri `externalBin` sideca
 
 **File**: `sidecar/build.sh` + `sidecar/whisperx_engine.spec` (new)
 
-**Intent**: Detect the host OS/arch and build the matching sidecar, pulling the correct platform dependencies (CTranslate2 build, torch CPU vs GPU/Metal). On macOS produce **CPU and GPU (Metal)** variants; produce a **Windows** build as well. Bundle the per-language wav2vec2 alignment model into the frozen artifact at build time. Emit binaries with the Tauri arch-suffix naming used for FFmpeg.
+**Intent**: Detect the host OS/arch and build the matching sidecar, pulling the correct platform dependencies (CTranslate2 build, torch CPU vs GPU/Metal). On macOS produce **CPU and GPU (Metal)** variants; produce a **Windows** build as well. Ship the per-language wav2vec2 alignment model **beside** the frozen binary as a Tauri bundled resource (NOT baked into the onefile — see `lessons.md`: a multi-GB onefile fails to load under macOS dyld, fixed in a31fdbf); the engine receives its path at runtime via `--align-model-dir`. Emit binaries with the Tauri arch-suffix naming used for FFmpeg.
 
-**Contract**: Outputs `src-tauri/binaries/whisperx-engine-<target-triple>[-gpu]` for `aarch64-apple-darwin` (CPU + Metal) and the Windows `x86_64-pc-windows-msvc` triple. A short README documents prerequisites + how to regenerate. (No snippet — this is a build-script task; the implementer owns PyInstaller specifics.)
+**Contract**: Outputs `src-tauri/binaries/whisperx-engine-<target-triple>[-gpu]` for `aarch64-apple-darwin` (CPU + Metal) and the Windows `x86_64-pc-windows-msvc` triple, plus the alignment model dir shipped as a separate bundled resource. A short README documents prerequisites + how to regenerate. (No snippet — this is a build-script task; the implementer owns PyInstaller specifics.)
 
 #### 3. Register the sidecar with Tauri
 
@@ -111,7 +111,7 @@ Produce an OS-aware, frozen WhisperX CLI bundled as a Tauri `externalBin` sideca
 - Frozen sidecar runs standalone (double-click / direct exec) and prints valid JSON on a sample WAV
 - macOS GPU (Metal) variant is selected and is faster than the CPU variant on a capable machine
 - Windows build runs on a clean Windows box with no Python installed
-- Bundled alignment model performs forced alignment offline (no network)
+- Alignment model shipped beside the binary (via `--align-model-dir`) performs forced alignment offline (no network)
 
 **Implementation Note**: Pause for human manual confirmation (especially Windows + GPU variant) before proceeding to Phase 2.
 
@@ -326,6 +326,14 @@ Unify `.srt`/`.vtt` import, offer a one-click "align to audio" pass when a video
 
 **Contract**: Two export actions producing valid `.srt`/`.vtt` from `state.sentences` (+ `words`). If placed under `src/exporters/`, keep it a pure function of `sentences` → string per the exporter rule.
 
+> **Addendum (impl-review 2026-06-13)**: Word-level SRT export is implemented but
+> **opt-in and currently dormant** — `generateTranscriptSRT` embeds per-word timing
+> as a non-standard `NOTE WORDS:` line only behind `{ includeWords: true }`; the UI
+> export path calls it without the flag, so the exported `.srt` is clean caption
+> text (the right default for NLE re-import). Word data is not lost — it persists in
+> the `.reelproj` v4 `words[]`. Promote to an explicit "z czasami słów" export
+> option later if needed.
+
 ### Success Criteria:
 
 #### Automated Verification:
@@ -393,7 +401,7 @@ Add an off-by-default diarization toggle. Enabling prompts for a Hugging Face to
 
 ---
 
-## Phase 7: Model Manager Enhancements (added 2026-06-13, post-core)
+## Phase 7: Model Manager Enhancements (post-core, added 2026-06-13)
 
 ### Overview
 
@@ -447,35 +455,53 @@ downloaded+selected model.
 **Files**: `src/ui/step1-import.js` (+ a modal in `src/index.html`) → `src-tauri/src/whisper.rs` → `sidecar/whisperx_engine/whisperx_engine.py` + `whisperx_engine.spec`/`build.sh` + `sidecar/README.md`
 
 **Intent**: A separate pop-up window ("Ustawienia zaawansowane WhisperX") opened from
-the transcription card, surfacing the WhisperX/faster-whisper tuning knobs with
-sensible defaults so the modal stays optional. Settings flow frontend → `invoke`
-params → `whisper.rs` engine args → new engine CLI flags → `whisperx.load_model`
-(`asr_options`/`vad_options`) / `transcribe` / `align` / diarize. Exposed groups
-(real whisperx options — confirmed via docs 2026-06-13):
+the transcription card, surfacing a **minimal high-value subset** of WhisperX/
+faster-whisper tuning knobs so the modal stays optional. Settings flow frontend →
+`invoke` params → `whisper.rs` engine args → new engine CLI flags →
+`whisperx.load_model` (`asr_options`/`vad_options`) / `transcribe` / `align` /
+diarize. The long tail of knobs is **not** surfaced in the UI — instead the engine
+pins them to **quality-optimized fixed defaults** (better than bare whisperx
+defaults; see "Hidden quality defaults" below). Exposed groups (real whisperx
+options — confirmed via docs 2026-06-13):
 
 - **Compute / performance**: force **CPU** (device override — note CTranslate2
   transcription is CPU-only on Apple Silicon today; device mainly affects the torch
   align stage + CUDA boxes), **compute precision** `compute_type`
-  (`float16`/`int8`/`int8_float16`/`float32`), CPU **threads**, **batch_size**.
-- **Decoding / quality**: `beam_size`, `best_of`, `patience`, temperature fallback
-  (`temperatures`), `condition_on_previous_text`, `initial_prompt`,
-  `suppress_numerals`, `suppress_tokens`, `no_speech_threshold`,
-  `compression_ratio_threshold`, `log_prob_threshold`, `max_new_tokens`, `hotwords`.
-- **VAD**: `chunk_size`, `vad_onset`, `vad_offset`.
-- **Alignment**: `no_align` toggle, `interpolate_method`, `return_char_alignments`.
+  (`float16`/`int8`/`int8_float16`/`float32`).
+- **Decoding / quality**: `beam_size`, `initial_prompt`.
+- **VAD**: `vad_onset`, `vad_offset`.
 - **Diarization** (extends the Phase-6 toggle): `min_speakers`, `max_speakers`
   (HF token already handled).
 
+**Hidden quality defaults** (set fixed in the engine, NOT exposed in the modal):
+the remaining knobs (`best_of`, `patience`, temperature fallback `temperatures`,
+`condition_on_previous_text`, `suppress_numerals`, `suppress_tokens`,
+`no_speech_threshold`, `compression_ratio_threshold`, `log_prob_threshold`,
+`max_new_tokens`, `hotwords`, `chunk_size`, `threads`, `batch_size`,
+`interpolate_method`, `return_char_alignments`, `no_align`) are hardcoded in the
+engine at **values tuned for best transcription quality** — e.g. enable temperature
+fallback, keep `condition_on_previous_text`, conservative `no_speech`/`log_prob`
+thresholds, always align. These are documented in `sidecar/README.md` and can be
+promoted to the modal later without a contract break (adding a flag is additive).
+
 **Contract**: New optional settings object on the `transcribe_video` invoke (and
-mirrored on `align_transcript` where relevant); each maps to a new engine CLI flag
-(`--device`, `--compute-type`, `--threads`, `--batch-size`, `--beam-size`,
-`--vad-chunk-size`, `--vad-onset`, `--vad-offset`, `--initial-prompt`,
-`--suppress-numerals`, `--no-align`, `--min-speakers`, `--max-speakers`, …). The
-engine applies them via `asr_options`/`vad_options`; **omitted flags fall back to
-whisperx defaults** (no behavior change when the modal is untouched). This **bumps
-the engine contract** → update `sidecar/README.md`, **rebuild the sidecar** (CPU +
-GPU + Windows) and re-run `--selftest`. Persist the chosen settings (state +
-`.reelproj`/localStorage); all strings Polish; `emit()` after mutation.
+mirrored on `align_transcript` where relevant); each **exposed** knob maps to a new
+engine CLI flag (`--device`, `--compute-type`, `--beam-size`, `--initial-prompt`,
+`--vad-onset`, `--vad-offset`, `--min-speakers`, `--max-speakers`). The engine
+applies them via `asr_options`/`vad_options`; **omitted flags fall back to the
+engine's quality-tuned defaults** (no behavior change when the modal is untouched).
+This **bumps the engine contract** → update `sidecar/README.md`, **rebuild the
+sidecar** (CPU + GPU + Windows) and re-run `--selftest`. Persist the chosen
+settings: **perf/device knobs (`device`, `compute_type`) in localStorage
+(per-machine), NOT in `.reelproj`**; live values in `state`; all strings Polish;
+`emit()` after mutation. (See F3 — persistence-location decision.)
+
+**Verify the option set before wiring.** Before building the engine flags, confirm
+each exposed knob (and each hidden quality default) is actually accepted by the
+**pinned** whisperx/faster-whisper version — check the installed source or Context7,
+not assumptions. The engine must **log/reject unknown `asr_options`/`vad_options`
+keys** rather than silently swallow them, so a knob that doesn't map can't ship as a
+dead control that looks wired but changes nothing.
 
 ### Success Criteria:
 

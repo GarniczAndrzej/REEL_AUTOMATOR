@@ -1,9 +1,9 @@
 ---
 change_id: builtin-whisperx-transcription
 title: Built-in WhisperX transcription + word-level alignment + model manager
-status: implementing
+status: impl_reviewed
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-06-13
 archived_at: null
 ---
 
