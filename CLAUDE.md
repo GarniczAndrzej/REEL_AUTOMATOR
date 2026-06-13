@@ -96,7 +96,7 @@ Plain JSON written by `save_project` / read by `load_project`. Current schema ve
 - Lua output uses `mediaPool:AppendToTimeline()` in a single batch call, meant to be pasted into DaVinci Resolve's Console.
 - API keys are stored in `localStorage` as `edl_apikey_<provider>`. OpenRouter model list is cached under `edl_or_models_cache`.
 - All user-facing strings are Polish. Keep them Polish.
-- The FFmpeg binary at `src-tauri/binaries/` is architecture-suffixed. Adding support for other platforms requires placing the matching binary and updating `tauri.conf.json`.
+- The FFmpeg binary at `src-tauri/binaries/` is architecture-suffixed. It is **git-ignored** (~52 MB static build) and fetched by `sidecar/fetch-ffmpeg.sh` — run that after a fresh clone or `cargo check`/build will fail on the missing `externalBin`. It **must be statically linked** (no Homebrew dylib deps), or audio extraction breaks once that Homebrew ffmpeg version is gone. Adding other platforms requires a matching static binary + updating `tauri.conf.json`.
 - `whisper-cli` is NOT bundled — it must be installed on the host system. The frontend passes the model path explicitly.
 - `cargo audit` reports ~17 `unmaintained` gtk-rs/GTK3 advisories (`atk`, `gdk`, `gtk`, `webkit2gtk`, …). These are Linux-only transitive Tauri deps; this is a macOS-only app, so they never ship. Safe to ignore — do not chase them.
 

@@ -14,6 +14,22 @@ Automator. It replaces the PATH-dependent `whisper-cli` (whisper.cpp) path.
 | `whisperx_engine/align_models/<lang>/` | Staged wav2vec2 alignment model(s) (downloaded by `build.sh`, git-ignored). Copied **beside** the binary — NOT baked into it. |
 | `whisperx_engine.spec` | PyInstaller spec (single-file freeze). |
 | `build.sh` | OS-aware build → `src-tauri/binaries/whisperx-engine-<triple>[-gpu]`. |
+| `fetch-ffmpeg.sh` | Downloads the **static** FFmpeg sidecar → `src-tauri/binaries/ffmpeg-<triple>` (git-ignored; ~52 MB). |
+
+## Fresh-clone bootstrap
+
+Both sidecars are git-ignored, and Tauri hard-fails `cargo check` / build if a
+registered `externalBin` is missing for the host triple. After cloning, run:
+
+```bash
+sidecar/fetch-ffmpeg.sh   # static FFmpeg (audio extraction + waveform)
+sidecar/build.sh          # freeze the WhisperX engine (see below)
+```
+
+The FFmpeg binary **must be statically linked** — a dynamic Homebrew copy breaks
+the moment that exact Homebrew ffmpeg version is gone (dyld can't find its
+`libav*` dylibs), which surfaces as "Nie udało się wyekstrahować audio z wideo".
+`fetch-ffmpeg.sh` verifies the download is self-contained via `otool -L`.
 
 ## CLI contract (stable — parsed by `src-tauri/src/whisper.rs`)
 

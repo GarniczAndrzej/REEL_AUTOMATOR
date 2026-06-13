@@ -11,4 +11,6 @@ sidecar/dist/
 sidecar/whisperx_engine/align_models/
 src-tauri/binaries/whisperx-engine-*
 src-tauri/binaries/align_models/
+# FFmpeg sidecar — ~52 MB static binary, fetched by sidecar/fetch-ffmpeg.sh
+src-tauri/binaries/ffmpeg-*
 __pycache__/
