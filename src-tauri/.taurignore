@@ -1,0 +1,5 @@
+# Dev-watcher ignore rules (gitignore-style) for `tauri dev`.
+# These are bundled runtime assets, not source — watching them causes an
+# infinite rebuild loop because the engine self-test touches the HuggingFace
+# align-model cache (align_models/**/.no_exist/*) on every launch.
+binaries/

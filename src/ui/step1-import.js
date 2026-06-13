@@ -488,9 +488,13 @@ let _modelStatus = {};
 let _downloadingId = null;
 
 async function initModelManager() {
-  await refreshEngineReadiness();
+  // Render the model list immediately. The engine readiness probe spawns a cold
+  // sidecar self-test (heavy: imports torch, loads the bundled align model, runs
+  // a real forced-align) and can take tens of seconds — do NOT gate the model UI
+  // on it. Kick it off without awaiting; it updates its own badge when it lands.
   await refreshModelStatus();
-  renderModelManager();
+  await renderModelManager();
+  refreshEngineReadiness();
 }
 
 async function refreshEngineReadiness() {
@@ -582,7 +586,11 @@ async function downloadModel(id) {
     return;
   }
   _downloadingId = id;
-  renderModelManager();
+  // Must await: renderModelManager() is async (awaits a dynamic import before
+  // rewriting container.innerHTML). Without await, the querySelector below grabs
+  // the pre-render node, which the pending innerHTML rewrite then detaches — so
+  // every progress update writes to an orphaned element and the UI shows nothing.
+  await renderModelManager();
   const progEl = document.querySelector(`[data-progress-for="${id}"]`);
   if (progEl) progEl.style.display = 'block';
 

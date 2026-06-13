@@ -282,6 +282,14 @@ pub async fn transcribe_video(
         .sidecar(crate::engine::ENGINE_SIDECAR)
         .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
         .args(args);
+    // Transcription model is local and the align model is bundled, so force HF
+    // offline (skips slow network etag checks) — except when diarizing, where
+    // pyannote may still need to be fetched from HuggingFace.
+    let sidecar = if diarize {
+        sidecar
+    } else {
+        crate::engine::with_hf_offline(sidecar)
+    };
 
     let (mut rx, child) = sidecar
         .spawn()
@@ -494,11 +502,13 @@ pub async fn align_transcript(
         align_args.push(dir);
     }
 
-    let sidecar = app
-        .shell()
-        .sidecar(crate::engine::ENGINE_SIDECAR)
-        .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
-        .args(align_args);
+    // Align-only uses just the bundled wav2vec2 model — always force HF offline.
+    let sidecar = crate::engine::with_hf_offline(
+        app.shell()
+            .sidecar(crate::engine::ENGINE_SIDECAR)
+            .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
+            .args(align_args),
+    );
 
     let (mut rx, child) = sidecar
         .spawn()

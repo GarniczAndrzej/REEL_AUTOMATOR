@@ -8,11 +8,25 @@
 use serde::Serialize;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::process::{Command, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 /// Base name of the sidecar; Tauri resolves the arch-suffixed file per platform.
 pub const ENGINE_SIDECAR: &str = "whisperx-engine";
+
+/// Apply `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` to an engine command so
+/// huggingface_hub/transformers skip per-launch network etag checks and use only
+/// the locally-present model files. Without this the bundled wav2vec2 align model
+/// still triggers blocking HEAD requests to huggingface.co on every spawn — ~50s
+/// of pure network wait on the cold `--selftest` that gates the readiness badge.
+///
+/// Safe for the self-test, align-only, and *non-diarize* transcription paths —
+/// all use bundled/local models. Do NOT apply when diarization is requested:
+/// pyannote may still need to be fetched from HuggingFace.
+pub fn with_hf_offline(cmd: Command) -> Command {
+    cmd.env("HF_HUB_OFFLINE", "1")
+        .env("TRANSFORMERS_OFFLINE", "1")
+}
 
 /// Resolve the external wav2vec2 alignment-model directory that ships *beside*
 /// the sidecar (Tauri `bundle.resources` → `align_models/`). The model is no
@@ -57,11 +71,14 @@ pub async fn run_engine(
     args: &[&str],
 ) -> Result<(String, String, Option<i32>), String> {
     let arg_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    let sidecar = app
-        .shell()
-        .sidecar(ENGINE_SIDECAR)
-        .map_err(|e| format!("Silnik WhisperX niedostępny: {e}"))?
-        .args(arg_vec);
+    // The only caller is the readiness self-test, which uses only the bundled
+    // align model — force HF offline so it doesn't stall on network etag checks.
+    let sidecar = with_hf_offline(
+        app.shell()
+            .sidecar(ENGINE_SIDECAR)
+            .map_err(|e| format!("Silnik WhisperX niedostępny: {e}"))?
+            .args(arg_vec),
+    );
     let (mut rx, _child) = sidecar
         .spawn()
         .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
