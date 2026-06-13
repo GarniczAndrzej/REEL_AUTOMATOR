@@ -678,8 +678,8 @@ rendering.
 
 #### Manual
 
-- [x] 2.4 Real clip drives the engine with transcribe → align progress — GUI verified 2026-06-13: real clip transcribed end-to-end after fixing the bundled FFmpeg sidecar (it was a dynamic Homebrew 7.1.1_3 copy whose dylibs are gone; replaced with a self-contained static ffmpeg 8.1 arm64) — 89d19d2
-- [x] 2.5 Cancel mid-run: no temp WAV / orphan process, shows cancelled state — GUI verified 2026-06-13: cancel→restart now works. Root cause: SIGKILL of the PyInstaller bootloader orphaned its worker (held stdout open → driver promise never resolved). Fixed: driver loop polls the cancel flag every 250 ms; cancel sends SIGTERM (bootloader forwards → worker exits) then SIGKILL fallback; temp WAV removed on exit — 89d19d2
+- [x] 2.4 Real clip drives the engine with transcribe → align progress — GUI verified 2026-06-13: real clip transcribed end-to-end after fixing the bundled FFmpeg sidecar (it was a dynamic Homebrew 7.1.1_3 copy whose dylibs are gone; replaced with a self-contained static ffmpeg 8.1 arm64) — ac479ba
+- [x] 2.5 Cancel mid-run: no temp WAV / orphan process, shows cancelled state — GUI verified 2026-06-13: cancel→restart now works. Root cause: SIGKILL of the PyInstaller bootloader orphaned its worker (held stdout open → driver promise never resolved). Fixed: driver loop polls the cancel flag every 250 ms; cancel sends SIGTERM (bootloader forwards → worker exits) then SIGKILL fallback; temp WAV removed on exit — ac479ba
 - [ ] 2.6 Each error path shows its specific Polish message
 - [ ] 2.7 Existing project with legacy cache does not re-transcribe
 
@@ -711,7 +711,7 @@ rendering.
 - [x] 4.4 Model list shows downloaded/missing/ready correctly on first run — GUI verified 2026-06-13 (clean first-run: alignment model "wbudowany/gotowy", small/medium/large-v3 all "Brak" + Pobierz, transcribe disabled)
 - [x] 4.5 Download shows live %/speed/ETA and verifies before use — GUI verified 2026-06-13: small (486 MB) downloaded with live %/MB·s/ETA readout (after fixing an un-awaited renderModelManager() that detached the progress node — step1-import.js downloadModel), model.bin sha256 matched registry (3e30…d671), all 4 files present, atomic .part→small/ rename, row flips to ✓ Pobrany/Wybrany
 - [x] 4.6 Corrupt/interrupted download rejected with clear Polish message — GUI verified 2026-06-13: injected a wrong model.bin sha256, re-download streamed full model.bin then failed verify; alert showed the distinct Polish error ("Suma kontrolna … nie zgadza się (oczekiwano deadbeefdead, otrzymano 3e305921506d). Pobieranie odrzucone."), small.part/ removed, no small/ left, row stayed Brak; real sha restored after
-- [x] 4.7 Transcription uses the selected downloaded model end-to-end — GUI verified 2026-06-13: transcribed a real clip with a downloaded managed model; SRT + word-aligned segments produced. Also fixed a cache bug found here — the cache was keyed by the video only, so re-transcribing with a DIFFERENT model returned the old SRT; key now folds the full run signature (model/language/diarize/advanced) — 89d19d2
+- [x] 4.7 Transcription uses the selected downloaded model end-to-end — GUI verified 2026-06-13: transcribed a real clip with a downloaded managed model; SRT + word-aligned segments produced. Also fixed a cache bug found here — the cache was keyed by the video only, so re-transcribing with a DIFFERENT model returned the old SRT; key now folds the full run signature (model/language/diarize/advanced) — ac479ba
 
 ### Phase 5: Transcript Import + Optional Align + Export
 
@@ -744,9 +744,9 @@ rendering.
 
 #### Automated
 
-- [x] 7.1 Frontend passes Prettier check — 89d19d2
-- [x] 7.2 Rust type-check passes (`cargo check`) — 89d19d2
-- [x] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags — 89d19d2
+- [x] 7.1 Frontend passes Prettier check — ac479ba
+- [x] 7.2 Rust type-check passes (`cargo check`) — ac479ba
+- [x] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags — ac479ba
 
 #### Manual
 
