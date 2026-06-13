@@ -575,9 +575,9 @@ async function downloadModel(id) {
   const { getModel } = await import('../transcription/model-registry.js');
   const model = getModel(id);
   if (!model) return;
-  if (!model.url) {
+  if (!model.repo || !model.files?.length) {
     alert(
-      'Ten model nie ma jeszcze skonfigurowanego adresu pobierania (URL/sha256 do uzupełnienia w rejestrze).',
+      'Ten model nie ma jeszcze skonfigurowanego repozytorium/plików do pobrania (uzupełnij rejestr).',
     );
     return;
   }
@@ -601,9 +601,9 @@ async function downloadModel(id) {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('download_model', {
       modelId: id,
-      url: model.url,
-      sha256: model.sha256 || '',
-      sizeBytes: model.sizeBytes || null,
+      repo: model.repo,
+      files: model.files,
+      totalBytes: model.sizeBytes || null,
     });
     if (progEl) progEl.textContent = '✓ Pobrano i zweryfikowano';
     await refreshModelStatus();

@@ -1,16 +1,36 @@
 // Transcription model manager: download-on-demand into the app data dir with
 // live progress + SHA-256 verification, and per-model status reporting.
 //
-// The curated registry (id, label, size, url, sha256) lives in the frontend
-// (src/transcription/model-registry.js); these commands take the url/sha256 for
-// the requested model so the Rust layer stays registry-agnostic.
+// faster-whisper CT2 models are multi-file *directories* (model.bin + config +
+// tokenizer + vocabulary[.txt|.json] + maybe preprocessor_config), so a model is
+// downloaded into `whisper-models/<id>/` and the engine is pointed at that local
+// path via `--model` (offline after download). The curated registry (id, label,
+// repo, per-file name/size/sha256) lives in the frontend
+// (src/transcription/model-registry.js); these commands take the HF repo + file
+// manifest for the requested model so the Rust layer stays registry-agnostic.
 
 use futures_util::StreamExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
+
+/// `model.bin` is the CT2 weights file; its presence marks a model as ready.
+const MODEL_SENTINEL: &str = "model.bin";
+
+/// One file of a model's directory, as curated in the frontend registry.
+/// `sha256` is hex (lowercase); empty skips verification (only the big LFS
+/// `model.bin` carries a digest — the small JSON files are git blobs, not LFS).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSpec {
+    pub name: String,
+    #[serde(default)]
+    pub sha256: String,
+    #[serde(default)]
+    pub size_bytes: u64,
+}
 
 /// Root dir for downloaded transcription models.
 fn models_root(app: &AppHandle) -> Result<PathBuf, String> {
@@ -22,9 +42,15 @@ fn models_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-/// Final on-disk path for a model id.
-fn model_path(app: &AppHandle, model_id: &str) -> Result<PathBuf, String> {
-    Ok(models_root(app)?.join(format!("{}.bin", sanitize(model_id))))
+/// Final on-disk directory for a model id (holds model.bin + config/tokenizer/…).
+/// Public so `whisper.rs` can resolve the local `--model` path for transcription.
+pub fn model_dir(app: &AppHandle, model_id: &str) -> Result<PathBuf, String> {
+    Ok(models_root(app)?.join(sanitize(model_id)))
+}
+
+/// True when a model dir exists and holds the CT2 weights (`model.bin`).
+pub fn is_downloaded(dir: &Path) -> bool {
+    dir.join(MODEL_SENTINEL).is_file()
 }
 
 fn sanitize(id: &str) -> String {
@@ -41,21 +67,31 @@ pub struct ModelStatus {
     pub size_bytes: u64,
 }
 
+/// Total bytes of all files directly inside `dir` (non-recursive — CT2 dirs are flat).
+fn dir_size(dir: &Path) -> u64 {
+    std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .filter_map(|e| e.metadata().ok())
+                .filter(|m| m.is_file())
+                .map(|m| m.len())
+                .sum()
+        })
+        .unwrap_or(0)
+}
+
 /// Report downloaded/missing status (and on-disk size) for each requested id.
 #[tauri::command]
 pub async fn list_models(app: AppHandle, model_ids: Vec<String>) -> Result<Vec<ModelStatus>, String> {
     let mut out = Vec::new();
     for id in model_ids {
-        let p = model_path(&app, &id)?;
-        let (downloaded, size) = match std::fs::metadata(&p) {
-            Ok(m) if m.is_file() => (true, m.len()),
-            _ => (false, 0),
-        };
+        let dir = model_dir(&app, &id)?;
+        let downloaded = is_downloaded(&dir);
         out.push(ModelStatus {
             id,
             downloaded,
-            path: if downloaded { Some(p.to_string_lossy().to_string()) } else { None },
-            size_bytes: size,
+            path: if downloaded { Some(dir.to_string_lossy().to_string()) } else { None },
+            size_bytes: if downloaded { dir_size(&dir) } else { 0 },
         });
     }
     Ok(out)
@@ -83,83 +119,118 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     }
 }
 
-/// Stream a model file into the app data dir with progress, then verify SHA-256.
-/// Returns the final local path. On any failure the partial file is removed.
+/// Stream every file of a faster-whisper CT2 model from its HuggingFace `repo`
+/// into `whisper-models/<id>/`, emitting aggregate %/speed/ETA progress, then
+/// verify `model.bin`'s SHA-256. Downloads into a sibling `<id>.part/` dir and
+/// atomically renames on success; any failure removes the partial dir so a
+/// half-download never looks ready. Returns the final local model-dir path.
 #[tauri::command]
 pub async fn download_model(
     app: AppHandle,
     model_id: String,
-    url: String,
-    sha256: String,
-    size_bytes: Option<u64>,
+    repo: String,
+    files: Vec<FileSpec>,
+    total_bytes: Option<u64>,
 ) -> Result<String, String> {
+    if files.is_empty() {
+        return Err("Brak listy plików modelu w rejestrze (uzupełnij repo/files).".into());
+    }
     let root = models_root(&app)?;
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
-    let final_path = model_path(&app, &model_id)?;
-    let tmp_path = root.join(format!("{}.part", sanitize(&model_id)));
+    let final_dir = model_dir(&app, &model_id)?;
+    let part_dir = root.join(format!("{}.part", sanitize(&model_id)));
+    let _ = std::fs::remove_dir_all(&part_dir); // clear any prior aborted attempt
+    std::fs::create_dir_all(&part_dir).map_err(|e| e.to_string())?;
+
+    // Overall size for %/ETA: prefer the curated total, else sum the manifest.
+    let total = total_bytes
+        .filter(|n| *n > 0)
+        .unwrap_or_else(|| files.iter().map(|f| f.size_bytes).sum());
 
     let client = reqwest::Client::new();
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Pobieranie modelu nie powiodło się: {e}"))?;
-    if !resp.status().is_success() {
-        return Err(format!("Serwer zwrócił błąd {} przy pobieraniu modelu.", resp.status()));
-    }
-    let total = resp.content_length().or(size_bytes).unwrap_or(0);
-
-    let mut file = tokio::fs::File::create(&tmp_path)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut stream = resp.bytes_stream();
-    let mut downloaded: u64 = 0;
     let start = std::time::Instant::now();
+    let mut downloaded: u64 = 0;
     let mut last_emit = std::time::Instant::now();
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path);
-            format!("Przerwane pobieranie modelu: {e}")
-        })?;
-        file.write_all(&chunk).await.map_err(|e| {
-            let _ = std::fs::remove_file(&tmp_path);
-            e.to_string()
-        })?;
-        downloaded += chunk.len() as u64;
-
-        // Throttle progress events to ~5/s.
-        if last_emit.elapsed().as_millis() >= 200 {
-            last_emit = std::time::Instant::now();
-            let secs = start.elapsed().as_secs_f64().max(0.001);
-            let rate = downloaded as f64 / secs;
-            let percent = if total > 0 { (downloaded as f64 / total as f64) * 100.0 } else { 0.0 };
-            let eta = if rate > 0.0 && total > downloaded {
-                (total - downloaded) as f64 / rate
-            } else {
-                0.0
-            };
-            let _ = app.emit(
-                "model-download-progress",
-                serde_json::json!({
-                    "modelId": model_id,
-                    "percent": percent,
-                    "bytesPerSec": rate,
-                    "etaSec": eta,
-                    "downloaded": downloaded,
-                    "total": total,
-                }),
+    // Run the whole multi-file download in one fallible block so we can clean up
+    // the .part dir on any error path with a single handler.
+    let result: Result<(), String> = async {
+        for spec in &files {
+            let url = format!(
+                "https://huggingface.co/{}/resolve/main/{}",
+                repo, spec.name
             );
+            let resp = client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| format!("Pobieranie modelu nie powiodło się: {e}"))?;
+            if !resp.status().is_success() {
+                return Err(format!(
+                    "Serwer zwrócił błąd {} przy pobieraniu pliku {}.",
+                    resp.status(),
+                    spec.name
+                ));
+            }
+
+            let dest = part_dir.join(&spec.name);
+            let mut file = tokio::fs::File::create(&dest)
+                .await
+                .map_err(|e| e.to_string())?;
+            let mut stream = resp.bytes_stream();
+            while let Some(chunk) = stream.next().await {
+                let chunk =
+                    chunk.map_err(|e| format!("Przerwane pobieranie modelu: {e}"))?;
+                file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+                downloaded += chunk.len() as u64;
+
+                // Throttle aggregate progress events to ~5/s.
+                if last_emit.elapsed().as_millis() >= 200 {
+                    last_emit = std::time::Instant::now();
+                    let secs = start.elapsed().as_secs_f64().max(0.001);
+                    let rate = downloaded as f64 / secs;
+                    let percent = if total > 0 {
+                        (downloaded as f64 / total as f64) * 100.0
+                    } else {
+                        0.0
+                    };
+                    let eta = if rate > 0.0 && total > downloaded {
+                        (total - downloaded) as f64 / rate
+                    } else {
+                        0.0
+                    };
+                    let _ = app.emit(
+                        "model-download-progress",
+                        serde_json::json!({
+                            "modelId": model_id,
+                            "percent": percent,
+                            "bytesPerSec": rate,
+                            "etaSec": eta,
+                            "downloaded": downloaded,
+                            "total": total,
+                        }),
+                    );
+                }
+            }
+            file.flush().await.map_err(|e| e.to_string())?;
+            drop(file);
+
+            // Verify the big LFS weights before trusting the download.
+            verify_sha256(&dest, &spec.sha256)?;
         }
+        Ok(())
     }
-    file.flush().await.map_err(|e| e.to_string())?;
-    drop(file);
+    .await;
 
-    // Verify before marking ready.
-    verify_sha256(&tmp_path, &sha256)?;
+    if let Err(e) = result {
+        let _ = std::fs::remove_dir_all(&part_dir);
+        return Err(e);
+    }
 
-    std::fs::rename(&tmp_path, &final_path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp_path);
+    // Swap the verified .part dir into place atomically-ish.
+    let _ = std::fs::remove_dir_all(&final_dir);
+    std::fs::rename(&part_dir, &final_dir).map_err(|e| {
+        let _ = std::fs::remove_dir_all(&part_dir);
         e.to_string()
     })?;
 
@@ -168,15 +239,15 @@ pub async fn download_model(
         serde_json::json!({ "modelId": model_id, "percent": 100.0, "bytesPerSec": 0.0, "etaSec": 0.0, "done": true }),
     );
 
-    Ok(final_path.to_string_lossy().to_string())
+    Ok(final_dir.to_string_lossy().to_string())
 }
 
-/// Delete a downloaded model.
+/// Delete a downloaded model directory.
 #[tauri::command]
 pub async fn delete_model(app: AppHandle, model_id: String) -> Result<(), String> {
-    let p = model_path(&app, &model_id)?;
-    if p.exists() {
-        std::fs::remove_file(&p).map_err(|e| e.to_string())?;
+    let dir = model_dir(&app, &model_id)?;
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     }
     Ok(())
 }

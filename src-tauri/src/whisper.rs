@@ -179,12 +179,22 @@ pub async fn transcribe_video(
     diarize: Option<bool>,
     hf_token: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    // Engine model: prefer model_id (managed), fall back to a raw path during
-    // the frontend transition (Phase 4 retires the raw path).
-    let model = model_id
-        .filter(|s| !s.is_empty())
-        .or(model_path.filter(|s| !s.is_empty()))
-        .ok_or_else(|| "Nie wybrano modelu transkrypcji.".to_string())?;
+    // Engine model: a managed model_id resolves to its downloaded local dir
+    // (whisper-models/<id>/) that the engine loads offline via --model; a raw
+    // model_path is a dev fallback passed through verbatim. Guard against a
+    // not-yet-downloaded managed model with a distinct Polish message.
+    let model = match model_id.filter(|s| !s.is_empty()) {
+        Some(id) => {
+            let dir = crate::models::model_dir(&app, &id)?;
+            if !crate::models::is_downloaded(&dir) {
+                return Err("Wybrany model nie został pobrany. Pobierz go w menedżerze modeli.".to_string());
+            }
+            dir.to_string_lossy().to_string()
+        }
+        None => model_path
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "Nie wybrano modelu transkrypcji.".to_string())?,
+    };
 
     // Opt-in diarization needs an HF token; fail early with a distinct message
     // so the core (toggle-off) path is never blocked by diarization setup.
