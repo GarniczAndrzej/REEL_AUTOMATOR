@@ -663,10 +663,10 @@ rendering.
 
 #### Manual
 
-- [ ] 1.4 Frozen sidecar runs standalone and prints valid JSON on a sample WAV
-- [ ] 1.5 macOS GPU (Metal) variant selected and faster than CPU
-- [ ] 1.6 Windows build runs on a clean box with no Python
-- [ ] 1.7 Bundled alignment model performs forced alignment offline
+- [x] 1.4 Frozen sidecar runs standalone and prints valid JSON on a sample WAV — verified 2026-06-14: the frozen `whisperx-engine-aarch64-apple-darwin` was run directly (outside Tauri) on a real 12.3 s Polish-speech WAV with the managed `small` model → exit 0 and valid contract JSON (`segments[].words[]` with start/end). Real Polish clip, not synthetic sine
+- [x] 1.5 macOS GPU (Metal) variant selected and faster than CPU — GUI verified 2026-06-14 (user sign-off)
+- [ ] 1.6 Windows build runs on a clean box with no Python — N/A for now, i'll check later
+- [x] 1.7 Bundled alignment model performs forced alignment offline — verified 2026-06-14: same standalone CLI run executed with `HF_HUB_OFFLINE=1`/`TRANSFORMERS_OFFLINE=1` and the bundled `align_models/pl` dir → produced real per-word start/end timings on the Polish clip with no network, confirming the beside-the-binary alignment model aligns offline
 
 ### Phase 2: Backend Engine Swap + Cache Versioning
 
@@ -680,8 +680,8 @@ rendering.
 
 - [x] 2.4 Real clip drives the engine with transcribe → align progress — GUI verified 2026-06-13: real clip transcribed end-to-end after fixing the bundled FFmpeg sidecar (it was a dynamic Homebrew 7.1.1_3 copy whose dylibs are gone; replaced with a self-contained static ffmpeg 8.1 arm64) — ac479ba
 - [x] 2.5 Cancel mid-run: no temp WAV / orphan process, shows cancelled state — GUI verified 2026-06-13: cancel→restart now works. Root cause: SIGKILL of the PyInstaller bootloader orphaned its worker (held stdout open → driver promise never resolved). Fixed: driver loop polls the cancel flag every 250 ms; cancel sends SIGTERM (bootloader forwards → worker exits) then SIGKILL fallback; temp WAV removed on exit — ac479ba
-- [ ] 2.6 Each error path shows its specific Polish message
-- [ ] 2.7 Existing project with legacy cache does not re-transcribe
+- [x] 2.6 Each error path shows its specific Polish message — code-verified 2026-06-14: `engine_error_message` (whisper.rs:181) maps every engine exit code (10 model-not-found, 11 audio-decode, 12 align, 13 diarize, 14 transcribe, 2 usage/args) to a DISTINCT Polish message, plus early-fail messages for missing HF token (whisper.rs:296) and FFmpeg-extract/engine-spawn failures, and a stderr-tail fallback. Several of these were observed live this session (missing-token, bad-token exit-13, the exit-2 args error, and the FFmpeg-extract failure during the static-ffmpeg fix)
+- [x] 2.7 Existing project with legacy cache does not re-transcribe — GUI verified 2026-06-14 (user sign-off)
 
 ### Phase 3: Word-Driven Segmentation + Persistence (v4)
 
@@ -693,9 +693,9 @@ rendering.
 
 #### Manual
 
-- [ ] 3.4 Segments are gap-free, numbered, read as sentences
-- [ ] 3.5 Word boundaries land between words (no mid-word cuts)
-- [ ] 3.6 Save → reload a v4 project preserves `words[]`
+- [x] 3.4 Segments are gap-free, numbered, read as sentences — GUI verified 2026-06-14 (user sign-off)
+- [x] 3.5 Word boundaries land between words (no mid-word cuts) — GUI verified 2026-06-14 (user sign-off)
+- [x] 3.6 Save → reload a v4 project preserves `words[]`
 - [ ] 3.7 Exported EDL imports cleanly (no regression vs SRT path)
 
 ### Phase 4: Model Manager UI + Download-on-Demand
@@ -722,9 +722,9 @@ rendering.
 
 #### Manual
 
-- [ ] 5.3 Import `.srt`/`.vtt` (no video) loads text-only segments and feeds selection
-- [ ] 5.4 "Align to audio" attaches word timestamps to imported segments
-- [ ] 5.5 Exported `.srt`/`.vtt` re-imports cleanly and matches the transcript
+- [x] 5.3 Import `.srt`/`.vtt` (no video) loads text-only segments and feeds selection — GUI verified 2026-06-14 (user sign-off)
+- [x] 5.4 "Align to audio" attaches word timestamps to imported segments — GUI verified 2026-06-14 (user sign-off)
+- [x] 5.5 Exported `.srt`/`.vtt` re-imports cleanly and matches the transcript
 
 ### Phase 6: Opt-In Diarization Toggle
 
@@ -735,10 +735,10 @@ rendering.
 
 #### Manual
 
-- [ ] 6.3 Toggle off → zero HF/diarization involvement
-- [ ] 6.4 Valid HF token → speaker-labeled segments
-- [ ] 6.5 Missing/invalid token → clear Polish error, core transcription still works
-- [ ] 6.6 Speaker labels survive save → reload
+- [x] 6.3 Toggle off → zero HF/diarization involvement — GUI verified 2026-06-14 (user sign-off)
+- [x] 6.4 Valid HF token → speaker-labeled segments — GUI verified 2026-06-14: diarization ran end-to-end and the cached engine JSON carries non-null `speaker` on every word (one clip detected TWO speakers SPEAKER_00+SPEAKER_01, another a single SPEAKER_00), persisted into the `.reelproj`. Labels are **data-only by design** (per user decision): the transcript SRT/VTT exporters stay clean for round-trip and no UI element renders the speaker, so the labels are not visible in the exported SRT — they live in `state`/`word-segments.js`/`.reelproj` only
+- [x] 6.5 Missing/invalid token → clear Polish error, core transcription still works — GUI verified 2026-06-14 (user sign-off); error mapping also code-confirmed (missing token early-fails at whisper.rs:296, invalid token → engine exit 13 → distinct Polish pyannote message)
+- [x] 6.6 Speaker labels survive save → reload
 
 ### Phase 7: Model Manager Enhancements (post-core, added 2026-06-13)
 
@@ -753,6 +753,6 @@ rendering.
 - [x] 7.4 Dropdown lists all models incl. large-v3-turbo with correct per-option status
 - [x] 7.5 Selecting a downloaded model sets it active; selecting a missing one offers download
 - [x] 7.6 large-v3-turbo downloads with live progress, verifies sha256, becomes selectable
-- [ ] 7.7 Transcription runs end-to-end with large-v3-turbo selected
+- [x] 7.7 Transcription runs end-to-end with large-v3-turbo selected — GUI verified 2026-06-14 (user sign-off)
 - [x] 7.8 Advanced-settings modal opens, persists values; untouched modal = current default behavior
-- [ ] 7.9 Force CPU + non-default compute precision reach the engine and change a real run
+- [x] 7.9 Force CPU + non-default compute precision reach the engine and change a real run — verified 2026-06-14 via a CLI A/B on a 12.3 s Polish speech WAV (`small` model, `--device cpu`, same audio): `--compute-type float32` vs `int8` produced DIFFERENT decoded text ("Wiesperks" vs "eSperks" for the word WhisperX) and a materially different runtime (162.7 s vs 106.5 s), proving the flags reach CTranslate2 and alter a real run rather than being silently ignored. (In-app the flags were also confirmed to run without the prior exit-2 "unrecognized arguments" crash.)
