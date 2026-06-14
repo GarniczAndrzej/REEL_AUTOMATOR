@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-11
+updated: 2026-06-14
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -37,7 +37,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | proposed |
 | S-04  | segment-tuning-ops          | reorder, merge, delete segments and strip filler words       | S-01               | FR-022, FR-023                                | proposed |
-| S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | proposed |
+| S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
 | S-06  | word-level-boundary-trim    | nudge cut boundaries at word precision with snap-to-pause    | S-04, S-05         | FR-021                                        | proposed |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
@@ -196,7 +196,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Unknowns:**
   - How to bundle WhisperX (+ alignment) as a built-in engine replacing the PATH `whisper-cli`, and how to migrate/preserve the existing SRT+word-JSON cache contract? — Owner: team. Block: no (a hard build task, not a viability unknown — but de-risk early).
 - **Risk:** Heaviest slice on the quality path — word-level alignment is what guarantees the ~0%-mid-word primary criterion. Engine swap changes the transcription command, packaging, and cache key/format; preserve or migrate the cache so existing projects don't re-transcribe.
-- **Status:** proposed
+- **Status:** done
 
 ### S-06: Word-level boundary trim + snap-to-pause
 
@@ -377,3 +377,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 
 - **F-01: (foundation) FFmpeg render path deleted; regression fence green** — Archived 2026-06-11 → `context/archive/2026-06-10-f-01/`. Lesson: —.
 - **F-02: (foundation) decision recorded on Resolve plugin viability** — Archived 2026-06-11 → `context/archive/2026-06-10-f-02/`. Lesson: —.
+- **S-05: transcribe locally with word-level alignment + manage models** — Archived 2026-06-14 → `context/archive/2026-06-12-builtin-whisperx-transcription/`. Lesson: —.
