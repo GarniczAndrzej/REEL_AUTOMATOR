@@ -7,7 +7,7 @@ export async function callGemini(apiKey, prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 16384 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 16384 },
     }),
   });
   if (!resp.ok) {
@@ -18,7 +18,14 @@ export async function callGemini(apiKey, prompt) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-export async function callClaude(apiKey, prompt) {
+/**
+ * @param {string} apiKey
+ * @param {string|Array<{type:string, text:string, cache_control?:object}>} content
+ *   bare string, or the structured content array from buildClaudeContent (with a
+ *   cached static prefix).
+ * @returns {Promise<string>}
+ */
+export async function callClaude(apiKey, content) {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -30,7 +37,8 @@ export async function callClaude(apiKey, prompt) {
     body: JSON.stringify({
       model: CLAUDE_MODEL,
       max_tokens: 16384,
-      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+      messages: [{ role: 'user', content }],
       system:
         'Jesteś ekspertem od montażu wideo. Zwracasz TYLKO czysty JSON bez komentarzy ani markdown.',
     }),
@@ -56,7 +64,7 @@ export async function callOpenRouter(apiKey, prompt, orModel) {
     body: JSON.stringify({
       model: orModel,
       max_tokens: 16384,
-      temperature: 0.3,
+      temperature: 0.1,
       messages: [
         {
           role: 'system',

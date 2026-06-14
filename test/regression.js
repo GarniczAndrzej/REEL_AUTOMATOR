@@ -953,6 +953,91 @@ assert(
 );
 
 // ─────────────────────────────────────────────────────────────────
+// Test 13: EDL markers — hook/body/punchline locator lines (S-01)
+// Conditional on reel.markers; marker-free reels stay byte-identical.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 13: EDL markers (hook/body/punchline) ────────────');
+
+const m2 = newSentences.find((s) => s.id === 2);
+const m3 = newSentences.find((s) => s.id === 3);
+
+// One reel carries markers; a second marker-free reel rides along in the run.
+const markerReels = [
+  {
+    reel_name: 'Reel A - z markerami',
+    clip_ids: [2, 3],
+    markers: { hook: 2, body: 2, punchline: 3 },
+  },
+  { reel_name: 'Reel B - bez markerów', clip_ids: [7, 8] },
+];
+const markerEDL = generateEDL({
+  reelsData: markerReels,
+  sentences: newSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoFilename: VIDEO_FILE,
+  mergeThreshold: MERGE_0,
+});
+
+const locLines = markerEDL.split('\n').filter((l) => l.startsWith('* LOC:'));
+assert(
+  locLines.length === 3,
+  `exactly 3 LOC lines from the one markered reel (got ${locLines.length})`,
+);
+assert(
+  locLines.some((l) => l.includes('GREEN HOOK')),
+  'LOC has GREEN HOOK',
+);
+assert(
+  locLines.some((l) => l.includes('BLUE BODY')),
+  'LOC has BLUE BODY',
+);
+assert(
+  locLines.some((l) => l.includes('RED PUNCHLINE')),
+  'LOC has RED PUNCHLINE',
+);
+
+// Reel A record span (threshold=0): [3600*fps, 3600*fps + dur2 + dur3)
+const recStart = 3600 * FPS;
+const recEnd = recStart + m2.duration_frame + m3.duration_frame;
+const tcToFrames = (tc) => {
+  const [h, mm, s, f] = tc.split(/[:;]/).map(Number);
+  return h * 3600 * FPS + mm * 60 * FPS + s * FPS + f; // NDF (FPS=25)
+};
+locLines.forEach((l, i) => {
+  const tc = l.split(' ')[2]; // "* LOC: <tc> <COLOR> <NAME>"
+  const fr = tcToFrames(tc);
+  assert(
+    fr >= recStart && fr < recEnd,
+    `LOC[${i}] record frame ${fr} inside reel A span [${recStart}, ${recEnd})`,
+  );
+});
+
+// Exact record frames: hook(2)=recStart, punchline(3)=recStart+dur2
+assert(
+  markerEDL.includes(`* LOC: ${legacyFramesToTC(recStart, FPS)} GREEN HOOK`),
+  `HOOK marker at ${legacyFramesToTC(recStart, FPS)}`,
+);
+assert(
+  markerEDL.includes(
+    `* LOC: ${legacyFramesToTC(recStart + m2.duration_frame, FPS)} RED PUNCHLINE`,
+  ),
+  `PUNCHLINE marker at ${legacyFramesToTC(recStart + m2.duration_frame, FPS)}`,
+);
+
+// A fully marker-free run emits zero LOC lines (byte-identical legacy path).
+const noMarkerEDL = generateEDL({
+  reelsData: [{ reel_name: 'Reel bez markerów', clip_ids: [2, 3] }],
+  sentences: newSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoFilename: VIDEO_FILE,
+  mergeThreshold: MERGE_0,
+});
+assert(!noMarkerEDL.includes('* LOC:'), 'marker-free run emits zero LOC lines');
+
+// ─────────────────────────────────────────────────────────────────
 // Summary
 // ─────────────────────────────────────────────────────────────────
 
