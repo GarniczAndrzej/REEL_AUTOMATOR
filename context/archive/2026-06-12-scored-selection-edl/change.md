@@ -1,10 +1,10 @@
 ---
 change_id: scored-selection-edl
 title: Scored AI selection → clean EDL export
-status: implemented
+status: archived
 created: 2026-06-12
-updated: 2026-06-12
-archived_at: null
+updated: 2026-06-14
+archived_at: 2026-06-14T16:11:08Z
 ---
 
 ## Notes

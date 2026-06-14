@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-11
+updated: 2026-06-14
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -33,7 +33,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | done     |
 | R1    | split-step2-analyze         | (refactor) split `step2-analyze.js` into per-surface modules so S-02/S-03/S-04/S-14/S-15 own separate files | F-01 | — (enabler; streams.md R1)                | proposed |
 | R2    | api-key-accessor            | (refactor) replace direct `localStorage.edl_apikey_*` reads with a `getApiKey()/setApiKey()` helper | —          | — (enabler; streams.md R2)                    | proposed |
-| S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | proposed |
+| S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | done     |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | proposed |
 | S-04  | segment-tuning-ops          | reorder, merge, delete segments and strip filler words       | S-01               | FR-022, FR-023                                | proposed |
@@ -147,7 +147,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Unknowns:**
   - Does adding `virality_score` + markers to the Reel schema break EDL/`.reelproj` import compatibility? — Owner: team. Block: no (covered by the regression fence + serde defaults).
 - **Risk:** The LLM-schema change in `src/ai/prompt.js` touches every consumer (providers, step-2 editor, exporters) — the CLAUDE.md "update every consumer + grep the field name" rule applies. Validate the response before use (FR-018) so no unvalidated object reaches the export pipeline. This slice IS the wedge; correctness here is the product.
-- **Status:** proposed
+- **Status:** done
 
 ### S-02: Scoring-first reel list UI
 
@@ -377,3 +377,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 
 - **F-01: (foundation) FFmpeg render path deleted; regression fence green** — Archived 2026-06-11 → `context/archive/2026-06-10-f-01/`. Lesson: —.
 - **F-02: (foundation) decision recorded on Resolve plugin viability** — Archived 2026-06-11 → `context/archive/2026-06-10-f-02/`. Lesson: —.
+- **S-01: get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL** — Archived 2026-06-14 → `context/archive/2026-06-12-scored-selection-edl/`. Lesson: —.
