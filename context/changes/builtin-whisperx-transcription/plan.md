@@ -746,7 +746,7 @@ rendering.
 
 - [x] 7.1 Frontend passes Prettier check — ac479ba
 - [x] 7.2 Rust type-check passes (`cargo check`) — ac479ba
-- [x] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags — ac479ba
+- [x] 7.3 Rebuilt sidecar `--selftest` returns `ok: true` after the new CLI flags — ac479ba; **corrected 2026-06-14**: the binary in place was actually STALE (frozen before the Phase 7 flags) — `--selftest` passed only because selftest doesn't exercise `--device`/`--compute-type`, so the missing flags slipped through (advanced modal failed at runtime with exit 2 "unrecognized arguments"). Rebuilt via `sidecar/build.sh`; now `--device cpu --compute-type float32 --selftest` is accepted (exit 0). Lesson: verify the rebuilt argparse accepts the new flags, not just that selftest is green.
 
 #### Manual
 
