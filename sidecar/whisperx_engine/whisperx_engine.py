@@ -312,7 +312,12 @@ def _diarize(whisperx, aligned, audio, hf_token, device, min_speakers=None, max_
             from whisperx.diarize import DiarizationPipeline
         except Exception:
             DiarizationPipeline = whisperx.DiarizationPipeline  # older layout
-        pipeline = DiarizationPipeline(use_auth_token=hf_token, device=device)
+        # The HF-token kwarg was renamed `use_auth_token` → `token` in newer
+        # whisperx; try the current name first, fall back for older builds.
+        try:
+            pipeline = DiarizationPipeline(token=hf_token, device=device)
+        except TypeError:
+            pipeline = DiarizationPipeline(use_auth_token=hf_token, device=device)
         # min/max speakers are optional bounds (Phase 7); None ⇒ auto-detect.
         diarize_segments = pipeline(
             audio, min_speakers=min_speakers, max_speakers=max_speakers
