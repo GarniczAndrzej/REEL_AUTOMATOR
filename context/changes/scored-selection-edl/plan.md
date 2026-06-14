@@ -505,7 +505,7 @@ shows the markers before closing the slice.
 #### Manual
 
 - [x] 1.5 Step 2 loads; AI run renders reels identically — 79f03dd
-- [x] 1.6 Drag/delete/merge/trim/threshold all work — 79f03dd
+- [ ] 1.6 Drag/delete/merge/trim/threshold all work — drag-reorder (zmiana kolejności klipów) NIE działa i przyciski (✕ ⊕ ◀ ▶) wymagają większej widoczności; usuwanie/scalanie/trym/suwak progu działają. Odłożone do osobnej zmiany.
 - [x] 1.7 Undo/redo work from step 2 and globally — 79f03dd
 - [x] 1.8 NLE keys + timeline scrub/preview unchanged — 79f03dd
 - [x] 1.9 Compare modal + JSON editor/paste paths unchanged — 79f03dd
