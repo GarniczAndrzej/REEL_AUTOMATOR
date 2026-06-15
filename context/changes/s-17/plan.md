@@ -290,11 +290,11 @@ No data migration. `load_project` is schema-agnostic; removing the render-queue/
 
 #### Automated
 
-- [x] 3.1 No stale doc symbols in CLAUDE.md
-- [x] 3.2 s-04 folder deleted
-- [x] 3.3 No orphaned S-06/S-14 slice bodies in roadmap
+- [x] 3.1 No stale doc symbols in CLAUDE.md — 41391e5
+- [x] 3.2 s-04 folder deleted — 41391e5
+- [x] 3.3 No orphaned S-06/S-14 slice bodies in roadmap — 41391e5
 
 #### Manual
 
-- [x] 3.4 CLAUDE.md Whisper section accurate against whisper.rs + engine.rs
-- [x] 3.5 roadmap.md At-a-glance / Backlog Handoff / Parked internally consistent
+- [x] 3.4 CLAUDE.md Whisper section accurate against whisper.rs + engine.rs — 41391e5
+- [x] 3.5 roadmap.md At-a-glance / Backlog Handoff / Parked internally consistent — 41391e5
