@@ -362,30 +362,30 @@ The progressive single surface renders all sections in one DOM; gating is visibi
 
 #### Automated
 
-- [x] 2.1 Rust type-check passes
-- [x] 2.2 Regression suite passes
-- [x] 2.3 No `goStep`/`reel:goStep` references remain
-- [x] 2.4 Prettier clean
+- [x] 2.1 Rust type-check passes — 4ab16f7
+- [x] 2.2 Regression suite passes — 4ab16f7
+- [x] 2.3 No `goStep`/`reel:goStep` references remain — 4ab16f7
+- [x] 2.4 Prettier clean — 4ab16f7
 
 #### Manual
 
-- [x] 2.5 Sections reveal/gate correctly; export unreachable without reels
-- [x] 2.6 Settings modal saves key+model, persists merge-gap; header decluttered
-- [x] 2.7 Full happy path completes on new surface
-- [x] 2.8 Preview + canvas surfaces still render
+- [x] 2.5 Sections reveal/gate correctly; export unreachable without reels — 4ab16f7
+- [x] 2.6 Settings modal saves key+model, persists merge-gap; header decluttered — 4ab16f7
+- [x] 2.7 Full happy path completes on new surface — 4ab16f7
+- [x] 2.8 Preview + canvas surfaces still render — 4ab16f7
 
 ### Phase 3a: Structural split — `step1-import.js` (behavior-neutral)
 
 #### Automated
 
-- [ ] 3a.1 Rust type-check passes
-- [ ] 3a.2 Regression suite passes
-- [ ] 3a.3 Prettier clean
+- [x] 3a.1 Rust type-check passes
+- [x] 3a.2 Regression suite passes
+- [x] 3a.3 Prettier clean
 
 #### Manual
 
-- [ ] 3a.4 Import → analyze → export happy path behaves exactly as before the split (control for 3b)
-- [ ] 3a.5 Transcription, save/load, segment preview unchanged
+- [x] 3a.4 Import → analyze → export happy path behaves exactly as before the split (control for 3b)
+- [x] 3a.5 Transcription, save/load, segment preview unchanged
 
 ### Phase 3b: Re-home & declutter
 
