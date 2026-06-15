@@ -345,34 +345,34 @@ The progressive single surface renders all sections in one DOM; gating is visibi
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes
-- [x] 1.2 Regression suite passes
-- [x] 1.3 No dead identifiers remain (grep empty)
-- [x] 1.4 Prettier clean
+- [x] 1.1 Rust type-check passes — ce66347
+- [x] 1.2 Regression suite passes — ce66347
+- [x] 1.3 No dead identifiers remain (grep empty) — ce66347
+- [x] 1.4 Prettier clean — ce66347
 
 #### Manual
 
-- [x] 1.5 App boots; old-shell happy path still works
-- [x] 1.6 Save/reload + old v3/v4 `.reelproj` load with no errors
-- [x] 1.7 Merge-gap persists across restart
-- [x] 1.8 Informational notice appears as a toast
-- [x] 1.9 `probe_video_metadata` returns fps + WxH for a test video; falls back without error on unparseable input
+- [x] 1.5 App boots; old-shell happy path still works — ce66347
+- [x] 1.6 Save/reload + old v3/v4 `.reelproj` load with no errors — ce66347
+- [x] 1.7 Merge-gap persists across restart — ce66347
+- [x] 1.8 Informational notice appears as a toast — ce66347
+- [x] 1.9 `probe_video_metadata` returns fps + WxH for a test video; falls back without error on unparseable input — ce66347
 
 ### Phase 2: Shell + gating — progressive single surface & settings modal
 
 #### Automated
 
-- [ ] 2.1 Rust type-check passes
-- [ ] 2.2 Regression suite passes
-- [ ] 2.3 No `goStep`/`reel:goStep` references remain
-- [ ] 2.4 Prettier clean
+- [x] 2.1 Rust type-check passes
+- [x] 2.2 Regression suite passes
+- [x] 2.3 No `goStep`/`reel:goStep` references remain
+- [x] 2.4 Prettier clean
 
 #### Manual
 
-- [ ] 2.5 Sections reveal/gate correctly; export unreachable without reels
-- [ ] 2.6 Settings modal saves key+model, persists merge-gap; header decluttered
-- [ ] 2.7 Full happy path completes on new surface
-- [ ] 2.8 Preview + canvas surfaces still render
+- [x] 2.5 Sections reveal/gate correctly; export unreachable without reels
+- [x] 2.6 Settings modal saves key+model, persists merge-gap; header decluttered
+- [x] 2.7 Full happy path completes on new surface
+- [x] 2.8 Preview + canvas surfaces still render
 
 ### Phase 3a: Structural split — `step1-import.js` (behavior-neutral)
 

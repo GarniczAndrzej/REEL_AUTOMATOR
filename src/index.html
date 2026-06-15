@@ -18,34 +18,7 @@
         </button>
         <button class="api-save-btn" id="saveProjectBtn">Zapisz</button>
         <button class="api-save-btn" id="saveProjectAsBtn">Zapisz jako…</button>
-      </div>
-      <div class="api-bar">
-        <input
-          type="password"
-          id="apiKeyInput"
-          placeholder="Wklej API key..."
-          autocomplete="off"
-        />
-
-        <!-- OpenRouter: wybór modelu -->
-        <div class="or-model-wrap" id="orModelWrap">
-          <div class="or-search-wrap" id="orSearchWrap">
-            <input
-              type="text"
-              id="orModelSearch"
-              placeholder="Szukaj modelu..."
-              autocomplete="off"
-            />
-            <div class="or-dropdown" id="orDropdown"></div>
-          </div>
-          <span class="or-selected-badge" id="orSelectedBadge" title=""
-            >brak modelu</span
-          >
-          <button class="or-load-btn" id="orLoadBtn">Załaduj modele</button>
-        </div>
-
-        <button class="api-save-btn" id="saveApiKeyBtn">Zapisz</button>
-        <span class="api-status" id="apiStatus"></span>
+        <button class="api-save-btn" id="settingsBtn">⚙ Ustawienia</button>
       </div>
     </header>
 
@@ -105,8 +78,8 @@
       </div>
 
       <div class="content">
-        <!-- STEP 1 -->
-        <div class="panel active" id="panel1">
+        <!-- SECTION: Import -->
+        <section class="surface-section" id="sectionImport">
           <div class="panel-header">
             <h2>Import pliku SRT</h2>
             <p>
@@ -375,10 +348,10 @@
               + Dodaj kolejne źródło wideo
             </button>
           </div>
-        </div>
+        </section>
 
-        <!-- STEP 2 -->
-        <div class="panel" id="panel2">
+        <!-- SECTION: Review (analiza AI) -->
+        <section class="surface-section section-locked" id="sectionReview">
           <div class="panel-header">
             <h2>Analiza AI</h2>
             <p>
@@ -515,12 +488,14 @@
           </div>
 
           <div class="btn-row" id="step2Next" style="display: none">
-            <button class="btn btn-primary" id="goStep3Btn">Eksportuj →</button>
+            <button class="btn btn-primary" id="toExportBtn">
+              Eksportuj →
+            </button>
           </div>
-        </div>
+        </section>
 
-        <!-- STEP 3 -->
-        <div class="panel" id="panel3">
+        <!-- SECTION: Export -->
+        <section class="surface-section section-locked" id="sectionExport">
           <div class="panel-header">
             <h2>Eksport</h2>
             <p>
@@ -589,20 +564,6 @@
                   placeholder="Reels 2024"
                   value="Reels"
                 />
-              </div>
-              <div class="setting-item">
-                <label>Domyślny próg scalania (klatki)</label>
-                <input
-                  type="number"
-                  id="mergeThreshold"
-                  value="12"
-                  min="0"
-                  max="120"
-                />
-                <div class="fps-note">
-                  Globalny domyślny. Każdy reel może mieć własny próg (suwak w
-                  nagłówku reela). 0 = każde zdanie osobno.
-                </div>
               </div>
             </div>
           </div>
@@ -758,7 +719,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </main>
 
@@ -942,6 +903,115 @@
               Przywróć domyślne
             </button>
             <button class="btn btn-primary" id="advSaveBtn">Zapisz</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S-16 Phase 2 — App settings modal (API key, model, merge-gap) -->
+    <div id="settingsModal" class="modal-overlay" style="display: none">
+      <div class="modal-box" style="width: 560px">
+        <div class="modal-header">
+          <span
+            style="
+              font-family: var(--display);
+              font-weight: 700;
+              font-size: 15px;
+            "
+            >Ustawienia</span
+          >
+          <button
+            class="btn btn-secondary"
+            id="settingsClose"
+            style="padding: 4px 10px"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal-body">
+          <div
+            style="
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
+              color: var(--text3);
+              margin-bottom: 10px;
+            "
+          >
+            OpenRouter
+          </div>
+          <div class="settings-grid">
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>API key</label>
+              <div style="display: flex; gap: 8px; align-items: center">
+                <input
+                  type="password"
+                  id="apiKeyInput"
+                  placeholder="OpenRouter API key (sk-or-...)"
+                  autocomplete="off"
+                  style="flex: 1"
+                />
+                <button
+                  class="btn btn-primary"
+                  id="saveApiKeyBtn"
+                  style="padding: 6px 12px; font-size: 12px"
+                >
+                  Zapisz
+                </button>
+              </div>
+              <span
+                class="api-status"
+                id="apiStatus"
+                style="margin-top: 6px"
+              ></span>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Model</label>
+              <div class="or-model-wrap" id="orModelWrap">
+                <div class="or-search-wrap" id="orSearchWrap">
+                  <input
+                    type="text"
+                    id="orModelSearch"
+                    placeholder="Szukaj modelu..."
+                    autocomplete="off"
+                  />
+                  <div class="or-dropdown" id="orDropdown"></div>
+                </div>
+                <span class="or-selected-badge" id="orSelectedBadge" title=""
+                  >brak modelu</span
+                >
+                <button class="or-load-btn" id="orLoadBtn">
+                  Załaduj modele
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style="
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
+              color: var(--text3);
+              margin: 18px 0 10px;
+            "
+          >
+            Eksport
+          </div>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <label>Domyślny próg scalania (klatki)</label>
+              <input
+                type="number"
+                id="mergeThreshold"
+                value="12"
+                min="0"
+                max="120"
+              />
+              <div class="fps-note">
+                Globalny próg scalania sąsiednich zdań. 0 = każde zdanie osobno.
+              </div>
+            </div>
           </div>
         </div>
       </div>

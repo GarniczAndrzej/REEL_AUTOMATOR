@@ -6,6 +6,7 @@ import { state, emit } from '../state.js';
 import { initReelList } from './step2-reel-list.js';
 import { initPromptPanel } from './step2-prompt-panel.js';
 import { initSegmentOps, undo, redo } from './step2-segment-ops.js';
+import { scrollToSection } from './surface.js';
 
 // Re-export the global undo/redo surface for main.js (`import * as step2`).
 export { undo, redo };
@@ -20,8 +21,8 @@ export function init() {
     emit();
   });
 
-  document.getElementById('goStep3Btn').addEventListener('click', () => {
-    document.dispatchEvent(new CustomEvent('reel:goStep', { detail: 3 }));
+  document.getElementById('toExportBtn').addEventListener('click', () => {
+    scrollToSection('sectionExport');
   });
 
   const list = document.getElementById('reelsList');

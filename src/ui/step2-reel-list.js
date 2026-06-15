@@ -54,12 +54,6 @@ function showPreviewPanel() {
   if (panel) panel.style.display = 'block';
 }
 
-function hidePreviewPanel() {
-  const panel = document.getElementById('previewPanel');
-  if (panel) panel.style.display = 'none';
-  if (previewVideoEl) previewVideoEl.pause();
-}
-
 function updatePreviewPanelSize() {
   if (!previewVideoEl) return;
   previewVideoEl.style.width = '320px';
@@ -195,11 +189,6 @@ function initPreviewVideo() {
       `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
     );
     if (btn) btn.textContent = '⏸';
-  });
-
-  // Hide panel when leaving step 2
-  document.addEventListener('reel:goStep', (e) => {
-    if (e.detail !== 2) hidePreviewPanel();
   });
 
   // Refresh video src whenever videoPath changes

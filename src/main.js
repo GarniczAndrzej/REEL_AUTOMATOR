@@ -3,16 +3,9 @@ import * as step1 from './ui/step1-import.js';
 import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/step3-export.js';
 import { init as initOrPicker } from './ai/openrouter-picker.js';
-import { getApiKey, setApiKey } from './ai/api-key.js';
 import { loadSettings } from './settings.js';
-
-export function goStep(n) {
-  [1, 2, 3].forEach((i) => {
-    document.getElementById('panel' + i).classList.toggle('active', i === n);
-    document.getElementById('nav' + i).classList.toggle('active', i === n);
-  });
-  if (n === 3) step3.updateSummary();
-}
+import { initSurface } from './ui/surface.js';
+import { initSettingsModal } from './ui/settings-modal.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Seed persisted app settings (S-16) before step inits read state. The
@@ -21,12 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settings = loadSettings();
   if (settings.mergeThreshold != null)
     state.mergeThreshold = settings.mergeThreshold;
-
-  // Register nav first — before inits, so a throwing init never blocks navigation
-  document.getElementById('nav1').addEventListener('click', () => goStep(1));
-  document.getElementById('nav2').addEventListener('click', () => goStep(2));
-  document.getElementById('nav3').addEventListener('click', () => goStep(3));
-  document.addEventListener('reel:goStep', (e) => goStep(e.detail));
 
   try {
     step1.init();
@@ -37,12 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     step2.init();
   } catch (e) {
     console.error('[step2.init]', e);
-    const p2 = document.getElementById('panel2');
-    if (p2)
-      p2.insertAdjacentHTML(
+    const review = document.getElementById('sectionReview');
+    if (review)
+      review.insertAdjacentHTML(
         'afterbegin',
         `<div style="background:#c0392b;color:#fff;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;">
-        ⚠ Błąd inicjalizacji kroku 2: ${e.message}<br>
+        ⚠ Błąd inicjalizacji analizy: ${e.message}<br>
         <small>Otwórz DevTools (Cmd+Option+I) aby zobaczyć szczegóły.</small>
       </div>`,
       );
@@ -57,18 +44,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     console.error('[initOrPicker]', e);
   }
+  try {
+    initSettingsModal();
+  } catch (e) {
+    console.error('[initSettingsModal]', e);
+  }
 
-  // API key bar — OpenRouter only
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  apiKeyInput.placeholder = 'OpenRouter API key (sk-or-...)...';
-  document.getElementById('orModelWrap').classList.add('visible');
-
-  document
-    .getElementById('saveApiKeyBtn')
-    .addEventListener('click', saveApiKey);
-
-  // Load persisted key on boot
-  loadApiKey();
+  // Progressive surface: reveals/gates sections from real state. Init last so
+  // the step modules have rendered their markup first.
+  try {
+    initSurface();
+  } catch (e) {
+    console.error('[initSurface]', e);
+  }
 
   // Subscribe to state changes → update sidebar status
   subscribe((s) => {
@@ -77,7 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('statusReels').textContent = s.reelsData.length;
   });
 
-  // ── F16 — Global undo/redo (works from any step) ──────────────────
+  // ── F16 — Global undo/redo (works from any section) ──────────────────
   document.addEventListener('keydown', (e) => {
     const mod = navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey;
     if (!mod) return;
@@ -92,36 +80,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 });
-
-function saveApiKey() {
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) {
-    showStatus('Pusty klucz — nie zapisano', 'err');
-    return;
-  }
-  setApiKey('openrouter', key);
-  showStatus('Zapisano ✓', 'ok');
-}
-
-function loadApiKey() {
-  const key = getApiKey('openrouter');
-  document.getElementById('apiKeyInput').value = key;
-  const s = document.getElementById('apiStatus');
-  if (key) {
-    s.textContent = 'Klucz załadowany';
-    s.className = 'api-status ok';
-  } else {
-    s.textContent = '';
-    s.className = 'api-status';
-  }
-}
-
-function showStatus(msg, type) {
-  const s = document.getElementById('apiStatus');
-  s.textContent = msg;
-  s.className = 'api-status ' + type;
-  setTimeout(() => {
-    s.className = 'api-status';
-    s.textContent = '';
-  }, 2500);
-}

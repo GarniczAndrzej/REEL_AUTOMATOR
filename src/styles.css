@@ -360,13 +360,16 @@ main {
   gap: 24px;
 }
 
-.panel {
-  display: none;
+/* S-16 — progressive single surface: sections stack in one scrolling column;
+   later sections stay hidden (`section-locked`) until their state precondition
+   is met. surface.js toggles the lock class. */
+.surface-section {
+  display: flex;
   flex-direction: column;
   gap: 20px;
 }
-.panel.active {
-  display: flex;
+.surface-section.section-locked {
+  display: none;
 }
 
 .panel-header h2 {

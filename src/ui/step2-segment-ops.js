@@ -343,7 +343,9 @@ export function initSegmentOps(list) {
 
   // ── F14 — NLE keyboard shortcuts (no modifier) ────────────────────
   document.addEventListener('keydown', (e) => {
-    if (!document.getElementById('panel2').classList.contains('active')) return;
+    // Single surface (S-16): the NLE clip shortcuts only apply while reviewing
+    // reels — gate on reels existing rather than a now-removed active panel.
+    if (!state.reelsData.length) return;
     if (
       e.target.matches('input, textarea, select') ||
       e.target.closest('[contenteditable]')

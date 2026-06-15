@@ -5,7 +5,6 @@ import { generateLua } from '../exporters/lua.js';
 import { mergeAdjacentClips } from '../parser/segments.js';
 import { saveTextToPath } from '../util/save-file.js';
 import { toast } from './toast.js';
-import { saveSettings } from '../settings.js';
 
 export function init() {
   // Tab switching
@@ -40,12 +39,7 @@ export function init() {
     state.projectName = e.target.value;
     emit();
   });
-  document.getElementById('mergeThreshold').addEventListener('input', (e) => {
-    state.mergeThreshold = +e.target.value;
-    // Persist across sessions (S-16 #6) — merge-gap lives in the settings bag.
-    saveSettings({ mergeThreshold: state.mergeThreshold });
-    emit();
-  });
+  // Merge-gap now lives in the settings modal (S-16 Phase 2).
 
   // Browse video
   document
@@ -111,7 +105,6 @@ export function updateSummary() {
   document.getElementById('videoFilenameExport').value =
     state.videoFilename || '';
   document.getElementById('videoFullPath').value = state.videoPath || '';
-  document.getElementById('mergeThreshold').value = state.mergeThreshold;
   document.getElementById('projectName').value = state.projectName;
 }
 

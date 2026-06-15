@@ -276,15 +276,39 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 
 ### S-16: UI/UX redesign — simpler, decluttered flow
 
-- **Outcome:** Editor moves through a streamlined interface that **rewrites the current three-step wizard** (`step1-import` → `step2-analyze` → `step3-export`) into a flow with fewer visible steps and far less on-screen clutter — collapsing the staged `goStep(n)` shell into a single primary working surface where import/transcribe, scored-reel review + segment tuning, and export read as one continuous task rather than three separate screens. Visual hierarchy is tightened (clear primary action per state, secondary controls demoted/collapsed), so a first-time editor reaches a clean exported timeline without hunting across tabs.
+- **Outcome:** Editor moves through a streamlined interface that **rewrites the current three-step wizard** (`step1-import` → `step2-analyze` → `step3-export`) into a flow with fewer visible steps and far less on-screen clutter — collapsing the staged `goStep(n)` shell into a single primary working surface where import/transcribe, scored-reel review + segment tuning, and export read as one continuous task rather than three separate screens. App-level configuration (API key, model, merge gap) moves out of the inline flow into a dedicated **settings window**; export becomes a **quick-export popover** rather than a full step; project settings auto-populate from the imported video; and the proposed-reels list is decluttered (no in-list playback, no per-reel timeline, component scores surfaced). Visual hierarchy is tightened (clear primary action per state, secondary controls demoted/collapsed), so a first-time editor reaches a clean exported timeline without hunting across tabs.
 - **Change ID:** ui-ux-redesign
 - **PRD refs:** — (UX overhaul; no single FR — serves the persona's review-speed goal behind US-01 and the "fewer steps" usability intent; coordinate with FR-008/FR-009 one-click flow)
+- **Redesign scope (from `context/foundation/UI changes proposals.md`, 2026-06-15):** the user's concrete redesign intents, grouped. Items marked *(coordinate: …)* overlap another slice and must be reconciled when that slice builds into the new shell; items marked *(prune)* are removals; *(done)* / *(parked)* note prior decisions.
+
+  **A. One continuous flow — collapse the 3-step wizard (#1, #3, #8)**
+  - One uninterrupted flow to make reels — import → review → export read as one task, not three separate screens. *(#1, core of this slice)*
+  - Import accepts a video **plus an optional `.srt`**; when no SRT is provided, WhisperX transcription starts automatically and everything loads without manual steps. *(#3 — coordinate: S-05 transcription, S-07 one-click)*
+  - Export stops being a dedicated step and becomes a small **quick-export window/popover** offering SRT, VTT, `.md`, AI-prompt copy, **and** the main timeline exports (EDL / XML / Lua). *(#8 — coordinate: S-08 export set)*
+
+  **B. Settings knob — pull config out of the flow (#2, #4, #5, #6)**
+  - API key, model, and overall settings move into a dedicated **settings window**, out of the inline flow. *(#2)*
+  - Project settings (fps, EDL file name) **auto-populate when the video is added** — no manual entry. *(#4)*
+  - Step 3's "Plik wideo źródłowy" stops being an editable settings surface — video path / name / resolution / format are **auto-detected**; anything that is genuinely a setting moves to the settings window / project settings. *(#5)*
+  - "Przerwa między Reelsami" (the merge-gap / threshold) moves into the **settings window** and its value **persists across sessions**. *(#6 — coordinate: S-04 merge-threshold slider)*
+
+  **C. Declutter & remove dead controls (#7, #9, #10, #11, #12, #14)**
+  - Remove "Minimalna długość zdania" (min sentence length / `minChars`) — redundant now that segments align to word-level precision. *(#7 — prune)*
+  - "Porównaj dostawców" (compare providers) **and** the AI cache control — **already removed in S-17**; the redesign must carry no remnant. *(#9 — done)*
+  - Rename the analyze action from "Analizuj z AI" → **"Analizuj z OpenRouter"**. *(#10)*
+  - Move the "wklej JSON z AI" panel behind a separate/optional function; the **primary** action is copying the AI prompt (as `.md`, not `.txt`), with file export demoted to a **secondary** button. *(#11 — note: standalone prompt-**export** is Parked; keep the copy-prompt affordance, treat file export as secondary/optional)*
+  - Remove the "dodaj kolejny film" (add another video) feature. *(#12 — prune)*
+  - Declutter the proposed-reels list: drop in-list playback and the per-reel timeline; surface the **component scores** (Hook/Flow/Value/Trend), not just the overall score. *(#14 — coordinate: S-02 scoring-first list)*
+
+  **Out of scope here — needs its own slice (#13)**
+  - WhisperX **transcription queue** (batch-mark several files, queue them) **and** accepting audio files (`.wav`, etc.), not only video — this is new transcription functionality, not a UX reshape. Flag as a separate slice off S-05 rather than folding it into S-16. *(#13)*
 - **Prerequisites:** — (none; prereq-free so it can land early. Decision 2026-06-15: this is a genuine step-shell rewrite, not a visual declutter, so it is best done **before** the feature surfaces fill in — S-02/S-04/S-08 then build into the new shell rather than the old `goStep` staging.)
 - **Parallel with:** S-08, S-11 (exporter/selection/hardening work the redesign re-skins but does not block on)
 - **Blockers:** —
 - **Unknowns:**
   - How much of the "simpler flow" is already delivered by S-07's one-click auto mode vs. owned here (manual-flow ergonomics)? — Owner: team. Block: no (coordinate the shared "fewer steps" goal; does not gate the rewrite).
-- **Risk:** Cross-cutting rewrite of the `goStep(n)` orchestration in `main.js` and every `src/ui/stepN-*.js` surface; the regression suite only fences parser/exporters, so UI behavior must be manually re-verified. Landing it **early** (prereq-free) is the cheaper sequencing: later slices build into the new shell, avoiding a second reshape — but anything already shipped against the old steps (none yet beyond S-01's step-2 split) would need rework if reordered. It must land **before** S-13 (keyboard) so shortcuts aren't wired against UI about to change. Keep all user-facing strings Polish. No exporter or frame-math changes — pure presentation/orchestration.
+  - Does the quick-export popover (#8) duplicate or replace the S-08 export surface, and does merge-gap-in-settings (#6) move ownership of the threshold UI out of S-04? — Owner: team. Block: no (reconcile when those slices build into the new shell).
+- **Risk:** Cross-cutting rewrite of the `goStep(n)` orchestration in `main.js` and every `src/ui/stepN-*.js` surface; the regression suite only fences parser/exporters, so UI behavior must be manually re-verified. Landing it **early** (prereq-free) is the cheaper sequencing: later slices build into the new shell, avoiding a second reshape — but anything already shipped against the old steps (none yet beyond S-01's step-2 split) would need rework if reordered. It must land **before** S-13 (keyboard) so shortcuts aren't wired against UI about to change. Several proposals overlap live slices (S-02/S-04/S-08) and one (#13 queue) is net-new functionality, not presentation — scope-gate those out so S-16 stays a pure shell/declutter rewrite. Keep all user-facing strings Polish. No exporter or frame-math changes — pure presentation/orchestration.
 - **Status:** proposed
 
 ### S-17: Feature pruning & cleanup pass
