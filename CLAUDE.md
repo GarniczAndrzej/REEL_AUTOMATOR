@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Reels EDL Automator** — a Tauri 2 desktop app (Vite + vanilla JS frontend, Rust backend) that converts SRT subtitle files into edit timelines (EDL / FCP XML / DaVinci Resolve Lua) using an LLM. The in-app MP4 render path was removed in F-01; the bundled FFmpeg sidecar remains, now used only for Whisper audio extraction and the waveform UI. All user-facing strings are Polish.
 
-`legacy/ReelAutomatorAI.html` and `ReelAutomatorAI.html` are the original single-file browser prototypes — kept for reference but not the active app.
+`legacy/ReelAutomatorAI.html` is the original single-file browser prototype — kept for reference but not the active app.
 
 ## Commands
 
@@ -59,11 +59,10 @@ ES module app served by Vite. Entry point is `src/index.html` → `src/main.js`.
 - `segments.js` — `mergeAdjacentClips(clipIds, sentences, thresholdFrames)` collapses adjacent sentence IDs whose gap is ≤ threshold into merged spans. This is the input to the exporters.
 
 **Selection support** (`src/selection/`) — relocated here from the removed `src/render/` in F-01:
-- `fillers.js` — Polish filler word sets (`ALWAYS_FILLERS`, `CONTEXT_FILLERS`) used by step-2 selection. Also still exports `expandSpansWithFillerRemoval(mergedSpans, sentences, fps)`, retained for S-04 (currently no consumer).
 - `timeline.js` — `drawTimeline(canvas, reel, sentences, fps, playheadFrame)` renders a reel's source-timeline (per-clip blocks + playhead) onto a 2D canvas. Pure draw; caller sets canvas intrinsic width first.
 - `waveform.js` — in-memory RMS-peak cache (`sentenceId → Float32Array`). `loadWaveform(...)` lazily `invoke`s the `extract_waveform` backend command; `cachedPeaks` / `invalidateWaveform` manage the cache.
 
-**AI providers** (`src/ai/providers.js`) — `callGemini`, `callClaude`, `callOpenRouter` each return a raw string; the caller strips ` ```json ` fences and `JSON.parse`s. The LLM schema is fixed in `src/ai/prompt.js` — changing it requires updating every consumer. Model names are constants in `src/ai/models.js` (`GEMINI_MODEL`, `CLAUDE_MODEL = 'claude-opus-4-7'`).
+**AI provider** (`src/ai/providers.js`) — OpenRouter-only since S-17 (Gemini and Claude were dropped). `callOpenRouter(apiKey, prompt, orModel)` returns a raw string; the caller strips ` ```json ` fences and `JSON.parse`s. The model is chosen at runtime via the OpenRouter model picker (no provider-model constants; `src/ai/models.js` was deleted). The LLM schema is fixed in `src/ai/prompt.js` — changing it requires updating every consumer.
 
 **LLM disk cache** (`src/ai/cache.js`) — `withLlmCache(cacheKey, callFn)` wraps any provider call with a Tauri-backed disk cache keyed by SHA-256 of `cacheKey`, returning `{ result, fromCache, hashShort }`. Outside Tauri it falls through and calls `callFn` directly (no cache).
 
@@ -77,12 +76,15 @@ Rust modules registered as Tauri commands in `lib.rs`:
 |---|---|---|
 | `save_project` | `project.rs` | Write `.reelproj` JSON file |
 | `load_project` | `project.rs` | Read `.reelproj` JSON file |
-| `transcribe_video` | `whisper.rs` | Extract audio + run `whisper-cli`, return SRT + word timestamps |
+| `transcribe_video` | `whisper.rs` | Extract audio (FFmpeg) + run the bundled WhisperX engine sidecar, return SRT + word timestamps (+ opt-in diarization) |
+| `align_transcript` | `whisper.rs` | Force-align an existing transcript to word-level timestamps via the WhisperX sidecar |
+| `whisperx_engine_check` | `engine.rs` | Readiness self-check (`--selftest`) for the bundled WhisperX sidecar |
+| `list_models` / `download_model` / `delete_model` | `models.rs` | Manage the local WhisperX model set (list, download, delete) |
 | `extract_waveform` | `waveform.rs` | Decode a span to mono PCM via FFmpeg sidecar, return `Vec<f32>` RMS peaks (`num_samples` buckets) for the clip-trim waveform UI; disk-cached as `<key>.bin` |
 
 **FFmpeg sidecar** lives at `src-tauri/binaries/ffmpeg-aarch64-apple-darwin`. Bundled via `tauri.conf.json → bundle.externalBin`. After F-01 it is used only by `whisper.rs` (audio extraction) and `waveform.rs` (PCM decode); the `ffmpeg.rs` module spawns it via `tauri-plugin-shell` (`run_ffmpeg_output`).
 
-**Whisper** — `transcribe_video` invokes `whisper-cli` from system PATH (not a bundled sidecar). Requires the user to install it separately (`brew install whisper-cpp` on macOS). The model path is passed from the frontend. Results (SRT + word JSON) are cached under `<appCacheDir>/whisper-cache/<hash>.{srt,json}` keyed by `(file_size + first_1MB SHA-256)`.
+**Whisper** — `transcribe_video` drives the **bundled WhisperX engine sidecar** (`whisperx-engine-<arch>`, registered in `tauri.conf.json → bundle.externalBin`, plumbed by `engine.rs`); there is **no** PATH-installed CLI and **no** `brew install` step. FFmpeg extracts the audio first, then the sidecar transcribes + word-aligns (diarization is opt-in). The wav2vec2 alignment model ships **beside** the binary (`bundle.resources → align_models/`, not baked into the onefile — a multi-GB Mach-O fails to load on macOS) and its path is passed via `--align-model-dir`. The shared spawn/poll/cancel loop lives in one helper, `drive_engine` (`whisper.rs`), used by both `transcribe_video` and `align_transcript`. Results (the full transcription payload) are cached under `<appCacheDir>/whisper-cache/v2/<hash>.json` keyed by `(file_size + first_1MB SHA-256)`, with a read-fallback to legacy whisper.cpp `whisper-cache/<hash>.{srt,json}` entries.
 
 ### Project file (`.reelproj`)
 
@@ -90,14 +92,13 @@ Plain JSON written by `save_project` / read by `load_project`. Current schema ve
 
 ## Things to know before editing
 
-- Model names live in `src/ai/models.js` (`CLAUDE_MODEL = 'claude-opus-4-7'`, `GEMINI_MODEL = 'gemini-2.0-flash'`). Update there when new models ship.
-- `callClaude` calls `api.anthropic.com` directly from the browser (CORS is allowed by Anthropic).
+- The AI layer is OpenRouter-only (S-17). There are no provider-model constants — the model is picked at runtime via the OpenRouter model picker (`src/ai/openrouter-picker.js`); `callOpenRouter` posts to `openrouter.ai/api/v1/chat/completions`.
 - XML output targets FCP7 xmeml v4 (`<sequence>` per reel, shared `<file>` reference). The structure is fragile — test imports in Premiere/Resolve when changing it.
 - Lua output uses `mediaPool:AppendToTimeline()` in a single batch call, meant to be pasted into DaVinci Resolve's Console.
-- API keys are stored in `localStorage` as `edl_apikey_<provider>`. OpenRouter model list is cached under `edl_or_models_cache`.
+- The API key is stored in `localStorage` as `edl_apikey_openrouter` (the only live provider key after S-17; old `edl_apikey_gemini`/`edl_apikey_claude` entries are orphaned and unread). OpenRouter model list is cached under `edl_or_models_cache`.
 - All user-facing strings are Polish. Keep them Polish.
 - The FFmpeg binary at `src-tauri/binaries/` is architecture-suffixed. It is **git-ignored** (~52 MB static build) and fetched by `sidecar/fetch-ffmpeg.sh` — run that after a fresh clone or `cargo check`/build will fail on the missing `externalBin`. It **must be statically linked** (no Homebrew dylib deps), or audio extraction breaks once that Homebrew ffmpeg version is gone. Adding other platforms requires a matching static binary + updating `tauri.conf.json`.
-- `whisper-cli` is NOT bundled — it must be installed on the host system. The frontend passes the model path explicitly.
+- The WhisperX engine sidecar (`whisperx-engine-<arch>`) and the `align_models/` directory are git-ignored and absent from a fresh checkout/worktree — restore via `sidecar/build.sh` (and `sidecar/fetch-ffmpeg.sh` for FFmpeg) or `cargo`/`tauri dev` hard-fails on the missing `externalBin`.
 - `cargo audit` reports ~17 `unmaintained` gtk-rs/GTK3 advisories (`atk`, `gdk`, `gtk`, `webkit2gtk`, …). These are Linux-only transitive Tauri deps; this is a macOS-only app, so they never ship. Safe to ignore — do not chase them.
 
 ## Type discipline (frontend is untyped JS — compensate explicitly)

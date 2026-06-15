@@ -273,28 +273,28 @@ No data migration. `load_project` is schema-agnostic; removing the render-queue/
 
 #### Automated
 
-- [x] 2.1 No dead whisperModelPath/fillers/isFiller references
-- [x] 2.2 Gemini/Claude providers removed (no callGemini/callClaude/buildClaudeContent/GEMINI_MODEL/CLAUDE_MODEL/currentProvider; models.js deleted)
-- [x] 2.3 Un-exported names have no importer
-- [x] 2.4 Root ReelAutomatorAI.html removed
-- [x] 2.5 Regression suite green
+- [x] 2.1 No dead whisperModelPath/fillers/isFiller references — be0e8c5
+- [x] 2.2 Gemini/Claude providers removed (no callGemini/callClaude/buildClaudeContent/GEMINI_MODEL/CLAUDE_MODEL/currentProvider; models.js deleted) — be0e8c5
+- [x] 2.3 Un-exported names have no importer — be0e8c5
+- [x] 2.4 Root ReelAutomatorAI.html removed — be0e8c5
+- [x] 2.5 Regression suite green — be0e8c5
 
 #### Manual
 
-- [x] 2.6 Step-2 clip text renders without strike-through, no console errors (word + no-words)
-- [x] 2.7 AI analysis works single-run + A/B compare via OpenRouter (no provider selector; model picker drives model)
-- [x] 2.8 Model delete control removes from disk + refreshes list + Polish confirm
-- [x] 2.9 No regressions in step-1 import / project save-load
+- [x] 2.6 Step-2 clip text renders without strike-through, no console errors (word + no-words) — be0e8c5
+- [x] 2.7 AI analysis works single-run + A/B compare via OpenRouter (no provider selector; model picker drives model) — be0e8c5
+- [x] 2.8 Model delete control removes from disk + refreshes list + Polish confirm — be0e8c5
+- [x] 2.9 No regressions in step-1 import / project save-load — be0e8c5
 
 ### Phase 3: Docs + backlog housekeeping
 
 #### Automated
 
-- [ ] 3.1 No stale doc symbols in CLAUDE.md
-- [ ] 3.2 s-04 folder deleted
-- [ ] 3.3 No orphaned S-06/S-14 slice bodies in roadmap
+- [x] 3.1 No stale doc symbols in CLAUDE.md
+- [x] 3.2 s-04 folder deleted
+- [x] 3.3 No orphaned S-06/S-14 slice bodies in roadmap
 
 #### Manual
 
-- [ ] 3.4 CLAUDE.md Whisper section accurate against whisper.rs + engine.rs
-- [ ] 3.5 roadmap.md At-a-glance / Backlog Handoff / Parked internally consistent
+- [x] 3.4 CLAUDE.md Whisper section accurate against whisper.rs + engine.rs
+- [x] 3.5 roadmap.md At-a-glance / Backlog Handoff / Parked internally consistent

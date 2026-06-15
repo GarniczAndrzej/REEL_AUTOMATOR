@@ -31,22 +31,22 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | ----- | --------------------------- | ------------------------------------------------------------ | ------------------ | --------------------------------------------- | -------- |
 | F-01  | remove-render-path          | (foundation) FFmpeg render path deleted; regression fence green | —               | FR-038                                        | done     |
 | F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | done     |
-| R1    | split-step2-analyze         | (refactor) split `step2-analyze.js` into per-surface modules so S-02/S-03/S-04/S-14 own separate files | F-01 | — (enabler; streams.md R1)                | done     |
+| R1    | split-step2-analyze         | (refactor) split `step2-analyze.js` into per-surface modules so S-02/S-03/S-04 own separate files | F-01 | — (enabler; streams.md R1)                | done     |
 | R2    | api-key-accessor            | (refactor) replace direct `localStorage.edl_apikey_*` reads with a `getApiKey()/setApiKey()` helper | —          | — (enabler; streams.md R2)                    | proposed |
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | done     |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | proposed |
-| S-04  | segment-tuning-ops          | reorder, merge, delete segments and strip filler words       | S-01               | FR-022, FR-023                                | proposed |
+| S-04  | segment-tuning-ops          | reorder, merge, delete segments (reorder/merge/delete ops need rework) | S-01      | FR-022                                        | proposed |
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
-| S-06  | word-level-boundary-trim    | nudge cut boundaries at word precision with snap-to-pause    | S-04, S-05         | FR-021                                        | proposed |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
 | S-09  | resolve-plugin-handoff      | push reels into Resolve from inside Resolve in one click     | S-01, S-08, F-02   | FR-030, FR-031, US-02                         | go-with-rework |
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | ready    |
 | S-12  | empty-error-states          | see explicit empty/error states instead of silent failures   | S-01, S-05         | FR-036                                        | proposed |
 | S-13  | keyboard-navigation         | drive review and tuning entirely from the keyboard           | S-02, S-04, S-16   | FR-037                                        | proposed |
-| S-14  | selection-quality-flags     | get source-grouping and dangling-reference flags             | S-01               | FR-013, FR-025                                | proposed |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | proposed |
+| S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | proposed |
+| S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | proposed |
 
 ## Streams
 
@@ -54,8 +54,8 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 
 | Stream | Theme                       | Chain                                                        | Note                                                                 |
 | ------ | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08` → `S-14`  | The north-star spine; quality goal fronts the scored-selection loop. |
-| B      | Local transcription         | `S-05` → `S-06` / `S-07` / `S-12`                           | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion. |
+| A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08`          | The north-star spine; quality goal fronts the scored-selection loop. |
+| B      | Local transcription         | `S-05` → `S-07` / `S-12`                                    | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion. |
 | C      | Resolve integration         | `F-02` → `S-09`                                             | Spike-first (top blocker = decisions); `S-09` joins Stream A at `S-08`. |
 | D      | Security & keyboard         | `S-11` / `S-13`                                             | `S-11` is standalone-ready; `S-13` joins Stream A at `S-04`, then gates on `S-16` so shortcuts aren't wired to UI about to be rewritten. |
 | E      | UX overhaul                 | `S-16` (prereq-free) → `S-13`                               | Step-shell rewrite; prereq-free so it can land early — later surfaces (`S-02`/`S-04`/`S-08`) build into the new shell. Must precede `S-13` and informs `S-07`'s one-click flow. |
@@ -110,10 +110,10 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 
 ### R1: Split `step2-analyze.js` into per-surface modules
 
-- **Outcome:** (refactor) the 1408-line `src/ui/step2-analyze.js` is carved into `step2-reel-list.js` (→ S-02), `step2-prompt-panel.js` (→ S-03), and `step2-segment-ops.js` (→ S-04), leaving `step2-analyze.js` as a thin orchestrator — so S-02/S-03/S-04/S-14 each own a distinct file instead of serializing on the shared hot file.
+- **Outcome:** (refactor) the 1408-line `src/ui/step2-analyze.js` is carved into `step2-reel-list.js` (→ S-02), `step2-prompt-panel.js` (→ S-03), and `step2-segment-ops.js` (→ S-04), leaving `step2-analyze.js` as a thin orchestrator — so S-02/S-03/S-04 each own a distinct file instead of serializing on the shared hot file.
 - **Change ID:** split-step2-analyze
 - **PRD refs:** — (internal enabler; no FR)
-- **Unlocks:** Wave 2 width — S-02/S-03/S-04 (and S-14) become true worktree partners rather than a serial queue on one file.
+- **Unlocks:** Wave 2 width — S-02/S-03/S-04 become true worktree partners rather than a serial queue on one file.
 - **Prerequisites:** F-01
 - **Parallel with:** none — lands as the opening move of S-01 (per `streams.md`); not co-parallel with other step2 work.
 - **Blockers:** —
@@ -155,7 +155,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** scoring-first-reel-list
 - **PRD refs:** FR-020; US-01 ("reels sort by score")
 - **Prerequisites:** S-01
-- **Parallel with:** S-03, S-04, S-08, S-14, S-11
+- **Parallel with:** S-03, S-04, S-08, S-11
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Pure UI over the S-01 schema; low risk. Sequenced right after the north star because the scored list is the editor's primary triage surface — the score is only useful if it's the lens for the list.
@@ -167,22 +167,23 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** prompt-presets
 - **PRD refs:** FR-015, FR-016
 - **Prerequisites:** S-01
-- **Parallel with:** S-02, S-04, S-08, S-14, S-05, S-11
+- **Parallel with:** S-02, S-04, S-08, S-05, S-11
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Preset persistence + import/export is straightforward; the only sharp edge is keeping the editable prompt in sync with the fixed JSON schema S-01 established — a free-form prompt must still elicit the validated shape.
 - **Status:** proposed
 
-### S-04: Segment tuning — reorder / merge / delete / filler removal
+### S-04: Segment tuning — reorder / merge / delete
 
-- **Outcome:** Editor reorders segments, merges adjacent segments (merge-threshold slider with a sensible default), deletes segments, and optionally strips filler words ("yyy", "eee", …) at word level; the filler behavior is toggleable.
+- **Outcome:** Editor reorders segments, merges adjacent segments (merge-threshold slider with a sensible default), and deletes segments.
 - **Change ID:** segment-tuning-ops
-- **PRD refs:** FR-022, FR-023
+- **PRD refs:** FR-022
 - **Prerequisites:** S-01
-- **Parallel with:** S-02, S-03, S-08, S-14, S-05, S-11
+- **Parallel with:** S-02, S-03, S-08, S-05, S-11
 - **Blockers:** —
 - **Unknowns:** —
-- **Risk:** `mergeAdjacentClips` remains the export-span source; changing merge behavior must keep integer-frame math intact and not regress the exporters (regression fence). Filler removal at word level is best-effort until S-05 supplies word timestamps — sentence-level fallback ships here.
+- **Rescope (2026-06-15):** FR-023 filler removal **dropped** — the filler feature (`src/selection/fillers.js` + strike-through preview) was removed in S-17, and FR-023's word-level removal logic was never implemented. The FR-022 reorder/merge/delete ops (`step2-segment-ops.js`) need **rework** and the owner will re-plan this slice fresh; the existing `context/changes/s-04/` plan was superseded and deleted.
+- **Risk:** `mergeAdjacentClips` remains the export-span source; changing merge behavior must keep integer-frame math intact and not regress the exporters (regression fence).
 - **Status:** proposed
 
 ### S-05: Built-in WhisperX transcription + word-level alignment + model manager
@@ -191,25 +192,12 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** builtin-whisperx-transcription
 - **PRD refs:** FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007
 - **Prerequisites:** F-01
-- **Parallel with:** S-01, S-02, S-03, S-04, S-08, S-14, S-11
+- **Parallel with:** S-01, S-02, S-03, S-04, S-08, S-11
 - **Blockers:** Hugging Face token + pyannote model access for opt-in diarization (external — opt-in only; core transcription + alignment path is never blocked by it).
 - **Unknowns:**
   - How to bundle WhisperX (+ alignment) as a built-in engine replacing the PATH `whisper-cli`, and how to migrate/preserve the existing SRT+word-JSON cache contract? — Owner: team. Block: no (a hard build task, not a viability unknown — but de-risk early).
 - **Risk:** Heaviest slice on the quality path — word-level alignment is what guarantees the ~0%-mid-word primary criterion. Engine swap changes the transcription command, packaging, and cache key/format; preserve or migrate the cache so existing projects don't re-transcribe.
 - **Status:** done
-
-### S-06: Word-level boundary trim + snap-to-pause
-
-- **Outcome:** Editor adjusts segment boundaries by adding/subtracting time front/back at word-level precision, with a "snap to nearest pause/breath" handle.
-- **Change ID:** word-level-boundary-trim
-- **PRD refs:** FR-021
-- **Prerequisites:** S-04, S-05
-- **Parallel with:** S-07, S-12
-- **Blockers:** —
-- **Unknowns:**
-  - What signal defines a "pause/breath" to snap to — silence gaps in the word timing, or an audio-energy probe? — Owner: team. Block: no.
-- **Risk:** Depends on S-05's word timestamps; the snap heuristic is the only real design call. Keep all arithmetic integer-frame.
-- **Status:** proposed
 
 ### S-07: One-click auto mode + staged progress
 
@@ -217,7 +205,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** auto-mode-pipeline
 - **PRD refs:** FR-008, FR-009
 - **Prerequisites:** S-01, S-05
-- **Parallel with:** S-06, S-08, S-12
+- **Parallel with:** S-08, S-12
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Orchestration over slices that must already exist; the sharp edges are cancelability mid-stage and not blocking the window. Sequenced after both the selection (S-01) and transcription (S-05) engines are real.
@@ -229,7 +217,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** timeline-export-set
 - **PRD refs:** FR-027, FR-028, FR-029
 - **Prerequisites:** S-01
-- **Parallel with:** S-02, S-03, S-04, S-14
+- **Parallel with:** S-02, S-03, S-04
 - **Blockers:** —
 - **Unknowns:**
   - Does the `.fcpxml` (new, distinct format) need its own marker/timecode model vs the xmeml exporter? — Owner: team. Block: no.
@@ -267,7 +255,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** empty-error-states
 - **PRD refs:** FR-036
 - **Prerequisites:** S-01, S-05
-- **Parallel with:** S-06, S-07
+- **Parallel with:** S-07
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Each state belongs to a feature that must already exist (invalid-JSON ↔ S-01, model-not-installed ↔ S-05). A thin consolidation pass; the risk is missing a state, not implementing one.
@@ -275,27 +263,15 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 
 ### S-13: Keyboard-driven actions
 
-- **Outcome:** Editor drives core actions from the keyboard: previous/next reel, accept/reject, nudge segment boundaries (word-level), and move between steps 1–2–3.
+- **Outcome:** Editor drives core actions from the keyboard: previous/next reel, accept/reject, and move between steps 1–2–3.
 - **Change ID:** keyboard-navigation
 - **PRD refs:** FR-037
 - **Prerequisites:** S-02, S-04, S-16
 - **Parallel with:** S-09
 - **Blockers:** —
 - **Unknowns:** —
-- **Risk:** Depends on the reel-list (S-02) and tuning (S-04) surfaces being keyboard-targetable — and on the S-16 redesign having settled their final layout, so shortcuts aren't wired to UI about to change. Word-level nudges degrade to sentence-level until S-06 lands. The persona explicitly values keyboard speed, so this is product-relevant, not polish.
-- **Status:** proposed
-
-### S-14: Selection-quality flags — source grouping + dangling references
-
-- **Outcome:** With multiple source files, segments are grouped and labeled (`[ŹRÓDŁO 1]`, …) and the model is forbidden to mix segments across files in one reel; reels that open on an unexplained pronoun/reference ("dangling references") are flagged and either pull in an introducing segment or have their score lowered.
-- **Change ID:** selection-quality-flags
-- **PRD refs:** FR-013, FR-025
-- **Prerequisites:** S-01
-- **Parallel with:** S-02, S-03, S-04, S-08
-- **Blockers:** —
-- **Unknowns:**
-  - Is dangling-reference detection prompt-side (the model self-flags) or a post-pass heuristic over segment text? — Owner: team. Block: no.
-- **Risk:** Both are nice-to-have refinements of the selection rule (FR-013, FR-025 are nice-to-have). They sharpen selection quality but the wedge is provable without them — kept late in Stream A.
+- **Simplify (2026-06-15):** Scope is **core hotkeys only** — prev/next reel, accept/reject, step navigation. Word-level boundary nudges are **deferred**: they depended on the now-dropped S-06 (word-level boundary trim), so there is no word-precision surface to bind to.
+- **Risk:** Depends on the reel-list (S-02) and tuning (S-04) surfaces being keyboard-targetable — and on the S-16 redesign having settled their final layout, so shortcuts aren't wired to UI about to change. The persona explicitly values keyboard speed, so this is product-relevant, not polish.
 - **Status:** proposed
 
 ### S-16: UI/UX redesign — simpler, decluttered flow
@@ -304,11 +280,37 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** ui-ux-redesign
 - **PRD refs:** — (UX overhaul; no single FR — serves the persona's review-speed goal behind US-01 and the "fewer steps" usability intent; coordinate with FR-008/FR-009 one-click flow)
 - **Prerequisites:** — (none; prereq-free so it can land early. Decision 2026-06-15: this is a genuine step-shell rewrite, not a visual declutter, so it is best done **before** the feature surfaces fill in — S-02/S-04/S-08 then build into the new shell rather than the old `goStep` staging.)
-- **Parallel with:** S-08, S-14, S-11 (exporter/selection/hardening work the redesign re-skins but does not block on)
+- **Parallel with:** S-08, S-11 (exporter/selection/hardening work the redesign re-skins but does not block on)
 - **Blockers:** —
 - **Unknowns:**
   - How much of the "simpler flow" is already delivered by S-07's one-click auto mode vs. owned here (manual-flow ergonomics)? — Owner: team. Block: no (coordinate the shared "fewer steps" goal; does not gate the rewrite).
 - **Risk:** Cross-cutting rewrite of the `goStep(n)` orchestration in `main.js` and every `src/ui/stepN-*.js` surface; the regression suite only fences parser/exporters, so UI behavior must be manually re-verified. Landing it **early** (prereq-free) is the cheaper sequencing: later slices build into the new shell, avoiding a second reshape — but anything already shipped against the old steps (none yet beyond S-01's step-2 split) would need rework if reordered. It must land **before** S-13 (keyboard) so shortcuts aren't wired against UI about to change. Keep all user-facing strings Polish. No exporter or frame-math changes — pure presentation/orchestration.
+- **Status:** proposed
+
+### S-17: Feature pruning & cleanup pass
+
+- **Outcome:** Editor (solo owner) runs a recurring de-bloating pass over the app: (1) **Identify bloat** — review both the planned backlog (Slices / Backlog Handoff) and already-implemented features against current personal needs, flagging anything that no longer earns its keep; (2) **Brainstorm & decide** — a quick sync to challenge each flagged item's usefulness and decide per item keep / simplify / drop; (3) **Execute** — instantly delete rejected *planned* tasks (slice + Backlog Handoff row, recorded under Parked), and safely refactor/remove the code for rejected *shipped* features to keep the codebase clean.
+- **Change ID:** feature-pruning-cleanup
+- **PRD refs:** — (process/maintenance slice; no FR — serves the solo-app "keep it lean" goal)
+- **Prerequisites:** —
+- **Parallel with:** essentially all slices (no prerequisite; it operates *on* the backlog/codebase rather than depending on a feature)
+- **Blockers:** —
+- **Unknowns:**
+  - Which currently-planned slices and shipped features are the first pruning candidates? — Owner: user. Block: no (resolved in the step-2 sync).
+- **Risk:** Code removal for shipped features is the sharp edge — grep all consumers, keep user-facing strings Polish, and run `node --experimental-vm-modules test/regression.js` before and after any removal touching `src/parser/`, `src/exporters/`, or the frame-math pipeline. Recurring, not one-shot: re-run whenever the backlog or UI outgrows personal need.
+- **Status:** proposed
+
+### S-18: Speed up the WhisperX engine check
+
+- **Outcome:** Editor no longer waits on a slow "checking engine" step before transcription can start — the WhisperX engine availability/readiness probe (the `whisperx-engine` sidecar version/health check that runs ahead of `transcribe_video`) is made fast: cached after first success, run asynchronously so the UI stays responsive, and surfaced with an explicit "checking…/ready/unavailable" state instead of a silent multi-second stall.
+- **Change ID:** whisperx-engine-check-speedup
+- **PRD refs:** — (performance/UX fix on the S-05 transcription path; supports FR-001 import→transcribe responsiveness)
+- **Prerequisites:** S-05
+- **Parallel with:** essentially all slices (isolated to the transcription engine bring-up path)
+- **Blockers:** —
+- **Unknowns:**
+  - What dominates the check latency — sidecar cold-start (PyInstaller onefile unpack), the align-model probe, or a redundant per-call health invocation? — Owner: team. Block: no (profile first, then choose cache vs. async vs. warm-on-launch).
+- **Risk:** Low surface — touches the engine bring-up/health path (`src-tauri/src/whisper.rs` + its frontend caller), not the transcription correctness path or the cache contract. Must not mask a genuinely-missing/broken engine: a cached "ready" has to invalidate when the sidecar/model is absent, so keep the S-12 unavailable state honest. No parser/exporter/frame-math impact.
 - **Status:** proposed
 
 ## Backlog Handoff
@@ -322,17 +324,17 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-01       | scored-selection-edl           | Scored AI selection → clean EDL export (north star)     | no                    | Needs F-01                                       |
 | S-02       | scoring-first-reel-list        | Scoring-first reel list UI                              | no                    | Needs S-01                                       |
 | S-03       | prompt-presets                 | Editable system prompt + preset management              | no                    | Needs S-01                                       |
-| S-04       | segment-tuning-ops             | Reorder / merge / delete segments + filler removal      | no                    | Needs S-01                                       |
+| S-04       | segment-tuning-ops             | Reorder / merge / delete segments (ops need rework)     | no                    | Needs S-01; FR-023 filler dropped (S-17); owner re-plans |
 | S-05       | builtin-whisperx-transcription | Built-in WhisperX transcription + word-level alignment  | no                    | Needs F-01; heavy; cache migration               |
-| S-06       | word-level-boundary-trim       | Word-level boundary trim + snap-to-pause                | no                    | Needs S-04, S-05                                 |
 | S-07       | auto-mode-pipeline             | One-click auto mode + staged progress                   | no                    | Needs S-01, S-05                                 |
 | S-08       | timeline-export-set            | Premiere XML / FCPXML / Resolve Lua export set          | no                    | Needs S-01                                       |
 | S-09       | resolve-plugin-handoff         | DaVinci Resolve embedded plugin (one-click hand-off)    | yes                   | F-02 verdict `Go-with-rework`; plan against decision.md |
 | S-11       | keychain-credentials           | Move API keys to OS keychain                            | yes                   | No prerequisite; parallel hardening              |
 | S-12       | empty-error-states             | Explicit empty/error states                             | no                    | Needs S-01, S-05                                 |
-| S-13       | keyboard-navigation            | Keyboard-driven review and tuning                       | no                    | Needs S-02, S-04, S-16                           |
-| S-14       | selection-quality-flags        | Source grouping + dangling-reference flags              | no                    | Needs S-01                                       |
+| S-13       | keyboard-navigation            | Keyboard-driven review (core hotkeys only)              | no                    | Needs S-02, S-04, S-16; word-nudges deferred (S-06 dropped) |
 | S-16       | ui-ux-redesign                 | UI/UX redesign — step-shell rewrite, simpler flow       | yes                   | Prereq-free; land early, before S-13             |
+| S-17       | feature-pruning-cleanup        | Feature pruning & cleanup pass                          | yes                   | Prereq-free; recurring de-bloat of backlog + code |
+| S-18       | whisperx-engine-check-speedup  | Speed up the WhisperX engine availability check         | yes                   | Needs S-05 (shipped); perf fix, profile first    |
 
 ## Open Roadmap Questions
 
@@ -359,6 +361,8 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **PIN / password app-lock at startup** — Why parked: PRD §Access Control — later security hardening, not this delivery.
 - **Reel preview playback (was S-15, FR-024)** — Why parked: dropped 2026-06-15 by user. Preview is redundant once reels land in DaVinci Resolve (S-09), where the editor scrubs natively; no value duplicating it in-app.
 - **EN/PL internationalization (was S-10, FR-034)** — Why parked: dropped 2026-06-15 by user. App stays Polish-only; no translation-key layer planned. Re-open only if a non-Polish audience is targeted.
+- **Word-level boundary trim + snap-to-pause (was S-06, FR-021)** — Why parked: dropped 2026-06-15 by user (S-17 pruning). The reorder/merge/delete ops in S-04 are enough boundary control for now; word-precision nudging + pause-snap is fine-grained micro-optimization not worth the surface. Re-open if cut-boundary precision becomes a felt limitation.
+- **Selection-quality flags — source grouping + dangling references (was S-14, FR-013/FR-025)** — Why parked: dropped 2026-06-15 by user (S-17 pruning). FR-013/FR-025 are nice-to-have selection refinements; the north-star wedge is provable without scoring polish. Re-open if multi-source mixing or dangling-reference reels prove a recurring quality problem.
 
 ## Done
 
@@ -368,4 +372,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **F-02: (foundation) decision recorded on Resolve plugin viability** — Archived 2026-06-11 → `context/archive/2026-06-10-f-02/`. Lesson: —.
 - **S-01: get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL** — Archived 2026-06-14 → `context/archive/2026-06-12-scored-selection-edl/`. Bundled the R1 refactor (step2-analyze split) as its opening move; scored LLM schema/prompt/providers + validate-before-use gate + EDL hook/body/punchline markers (regression Test 13). Lesson: a free-form editable prompt must still elicit the fixed validated schema — validate every LLM response before it reaches the export pipeline (FR-018).
 - **S-05: transcribe locally with word-level alignment + manage models** — Archived 2026-06-14 → `context/archive/2026-06-12-builtin-whisperx-transcription/`. Built-in WhisperX engine (frozen Python sidecar via PyInstaller) replacing PATH `whisper-cli`; model manager (download/list/delete), word-level forced alignment, opt-in diarization. Lesson: both bundled sidecars (`ffmpeg-*` and `whisperx-engine-*`) plus `binaries/align_models/` are git-ignored and absent from any fresh checkout/worktree — restore via `sidecar/fetch-ffmpeg.sh` + `sidecar/build.sh` or `cargo`/`tauri dev` hard-fails on the missing `externalBin`. Never bake the multi-GB alignment model into the onefile — ship it beside the binary.
-- **R1: (refactor) split `step2-analyze.js` into per-surface modules** — Shipped inside S-01 (no separate archive). `step2-analyze.js` reduced to a thin orchestrator over `step2-reel-list.js` / `step2-prompt-panel.js` / `step2-segment-ops.js`; unblocks parallel work on S-02/S-03/S-04/S-14. Lesson: —.
+- **R1: (refactor) split `step2-analyze.js` into per-surface modules** — Shipped inside S-01 (no separate archive). `step2-analyze.js` reduced to a thin orchestrator over `step2-reel-list.js` / `step2-prompt-panel.js` / `step2-segment-ops.js`; unblocks parallel work on S-02/S-03/S-04. Lesson: —.
