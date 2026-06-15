@@ -249,6 +249,82 @@ fn write_cache(dir: &std::path::Path, v2_hash: &str, payload: &serde_json::Value
     }
 }
 
+/// Register the spawned engine child, pump its stdout/stderr until it terminates
+/// or the run is cancelled, emitting a `transcribe-progress` event for every
+/// `PROGRESS` stderr line, then deregister the child. Shared by `transcribe_video`
+/// and `align_transcript` so the cancel-token check and the single global child
+/// handle live in exactly one place. Returns the accumulated stdout, stderr, and
+/// the process exit code (`None` when cancelled or the stream closed without a
+/// `Terminated` event).
+///
+/// Poll with a short timeout so a cancel mid-run breaks out promptly. The engine
+/// is a PyInstaller onefile: SIGKILL of the bootloader orphans its worker child,
+/// which keeps the stdout/stderr pipe open — a plain `rx.recv().await` would then
+/// block until the orphan finishes the whole (multi-minute) run, leaving the UI
+/// stuck on "Anulowano" and unable to start again. Re-checking the cancel flag
+/// every 250 ms fixes that.
+async fn drive_engine(
+    app: &AppHandle,
+    mut rx: tauri::async_runtime::Receiver<CommandEvent>,
+    child: CommandChild,
+) -> (String, String, Option<i32>) {
+    *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
+
+    let mut stdout_buf = String::new();
+    let mut stderr_buf = String::new();
+    let mut stderr_line = String::new();
+    let mut exit_code: Option<i32> = None;
+
+    loop {
+        if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
+            break;
+        }
+        let ev =
+            match tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await {
+                Ok(Some(ev)) => ev,
+                Ok(None) => break,  // stream closed normally
+                Err(_) => continue, // timeout — re-check the cancel flag
+            };
+        match ev {
+            CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
+            CommandEvent::Stderr(b) => {
+                let chunk = String::from_utf8_lossy(&b);
+                stderr_buf.push_str(&chunk);
+                // Line-buffer stderr to parse PROGRESS lines reliably.
+                stderr_line.push_str(&chunk);
+                while let Some(nl) = stderr_line.find('\n') {
+                    let line: String = stderr_line.drain(..=nl).collect();
+                    let line = line.trim_end();
+                    if let Some(rest) = line.strip_prefix("PROGRESS ") {
+                        let mut phase = "";
+                        let mut percent = 0.0_f64;
+                        for tok in rest.split_whitespace() {
+                            if let Some(v) = tok.strip_prefix("phase=") {
+                                phase = v;
+                            } else if let Some(v) = tok.strip_prefix("percent=") {
+                                percent = v.parse().unwrap_or(0.0);
+                            }
+                        }
+                        let (label, overall) = map_progress(phase, percent);
+                        let _ = app.emit(
+                            "transcribe-progress",
+                            serde_json::json!({ "phase": phase, "label": label, "percent": overall }),
+                        );
+                    }
+                }
+            }
+            CommandEvent::Terminated(p) => {
+                exit_code = p.code;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    *TRANSCRIBE_CHILD.lock().unwrap() = None;
+    (stdout_buf, stderr_buf, exit_code)
+}
+
 #[tauri::command]
 pub async fn transcribe_video(
     app: AppHandle,
@@ -420,70 +496,13 @@ pub async fn transcribe_video(
         crate::engine::with_hf_offline(sidecar)
     };
 
-    let (mut rx, child) = sidecar.spawn().map_err(|e| {
+    let (rx, child) = sidecar.spawn().map_err(|e| {
         let _ = std::fs::remove_file(&wav_path);
         format!("Nie udało się uruchomić silnika WhisperX: {e}")
     })?;
-    *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
 
-    let mut stdout_buf = String::new();
-    let mut stderr_buf = String::new();
-    let mut stderr_line = String::new();
-    let mut exit_code: Option<i32> = None;
+    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, rx, child).await;
 
-    // Poll with a short timeout so a cancel mid-run breaks out promptly. The
-    // engine is a PyInstaller onefile: SIGKILL of the bootloader orphans its
-    // worker child, which keeps the stdout/stderr pipe open — a plain
-    // `rx.recv().await` would then block until the orphan finishes the whole
-    // (multi-minute) run, leaving the UI stuck on "Anulowano" and unable to
-    // start again. Re-checking the cancel flag every 250 ms fixes that.
-    loop {
-        if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
-            break;
-        }
-        let ev =
-            match tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await {
-                Ok(Some(ev)) => ev,
-                Ok(None) => break,  // stream closed normally
-                Err(_) => continue, // timeout — re-check the cancel flag
-            };
-        match ev {
-            CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
-            CommandEvent::Stderr(b) => {
-                let chunk = String::from_utf8_lossy(&b);
-                stderr_buf.push_str(&chunk);
-                // Line-buffer stderr to parse PROGRESS lines reliably.
-                stderr_line.push_str(&chunk);
-                while let Some(nl) = stderr_line.find('\n') {
-                    let line: String = stderr_line.drain(..=nl).collect();
-                    let line = line.trim_end();
-                    if let Some(rest) = line.strip_prefix("PROGRESS ") {
-                        let mut phase = "";
-                        let mut percent = 0.0_f64;
-                        for tok in rest.split_whitespace() {
-                            if let Some(v) = tok.strip_prefix("phase=") {
-                                phase = v;
-                            } else if let Some(v) = tok.strip_prefix("percent=") {
-                                percent = v.parse().unwrap_or(0.0);
-                            }
-                        }
-                        let (label, overall) = map_progress(phase, percent);
-                        let _ = app.emit(
-                            "transcribe-progress",
-                            serde_json::json!({ "phase": phase, "label": label, "percent": overall }),
-                        );
-                    }
-                }
-            }
-            CommandEvent::Terminated(p) => {
-                exit_code = p.code;
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    *TRANSCRIBE_CHILD.lock().unwrap() = None;
     let _ = tokio::fs::remove_file(&wav_path).await;
 
     if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
@@ -678,69 +697,13 @@ pub async fn align_transcript(
             .args(align_args),
     );
 
-    let (mut rx, child) = sidecar.spawn().map_err(|e| {
+    let (rx, child) = sidecar.spawn().map_err(|e| {
         cleanup_temps();
         format!("Nie udało się uruchomić silnika WhisperX: {e}")
     })?;
-    *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
 
-    let mut stdout_buf = String::new();
-    let mut stderr_buf = String::new();
-    let mut stderr_line = String::new();
-    let mut exit_code: Option<i32> = None;
+    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, rx, child).await;
 
-    // Poll with a short timeout so a cancel mid-run breaks out promptly. The
-    // engine is a PyInstaller onefile: SIGKILL of the bootloader orphans its
-    // worker child, which keeps the stdout/stderr pipe open — a plain
-    // `rx.recv().await` would then block until the orphan finishes the whole
-    // (multi-minute) run, leaving the UI stuck on "Anulowano" and unable to
-    // start again. Re-checking the cancel flag every 250 ms fixes that.
-    loop {
-        if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
-            break;
-        }
-        let ev =
-            match tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await {
-                Ok(Some(ev)) => ev,
-                Ok(None) => break,  // stream closed normally
-                Err(_) => continue, // timeout — re-check the cancel flag
-            };
-        match ev {
-            CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
-            CommandEvent::Stderr(b) => {
-                let chunk = String::from_utf8_lossy(&b);
-                stderr_buf.push_str(&chunk);
-                stderr_line.push_str(&chunk);
-                while let Some(nl) = stderr_line.find('\n') {
-                    let line: String = stderr_line.drain(..=nl).collect();
-                    let line = line.trim_end();
-                    if let Some(rest) = line.strip_prefix("PROGRESS ") {
-                        let mut phase = "";
-                        let mut percent = 0.0_f64;
-                        for tok in rest.split_whitespace() {
-                            if let Some(v) = tok.strip_prefix("phase=") {
-                                phase = v;
-                            } else if let Some(v) = tok.strip_prefix("percent=") {
-                                percent = v.parse().unwrap_or(0.0);
-                            }
-                        }
-                        let (label, overall) = map_progress(phase, percent);
-                        let _ = app.emit(
-                            "transcribe-progress",
-                            serde_json::json!({ "phase": phase, "label": label, "percent": overall }),
-                        );
-                    }
-                }
-            }
-            CommandEvent::Terminated(p) => {
-                exit_code = p.code;
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    *TRANSCRIBE_CHILD.lock().unwrap() = None;
     let _ = tokio::fs::remove_file(&wav_path).await;
     let _ = std::fs::remove_file(&transcript_path);
 
