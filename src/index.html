@@ -155,40 +155,6 @@
                   <option value="auto">Auto-detekcja</option>
                 </select>
               </div>
-              <div class="setting-item" style="grid-column: 1/-1">
-                <label style="display: flex; align-items: center; gap: 8px">
-                  <input
-                    type="checkbox"
-                    id="diarizeToggle"
-                    style="width: auto"
-                  />
-                  Rozpoznawanie mówców (diaryzacja, opcjonalnie)
-                </label>
-                <div
-                  id="diarizeTokenRow"
-                  style="display: none; margin-top: 8px"
-                >
-                  <div style="display: flex; gap: 8px">
-                    <input
-                      type="password"
-                      id="hfTokenInput"
-                      placeholder="Token Hugging Face (hf_…)"
-                      style="flex: 1"
-                      autocomplete="off"
-                    />
-                  </div>
-                  <div
-                    style="
-                      font-size: 11px;
-                      color: var(--text3);
-                      margin-top: 4px;
-                    "
-                  >
-                    Wymaga tokenu HF z dostępem do modelu pyannote. Token jest
-                    zapisywany lokalnie.
-                  </div>
-                </div>
-              </div>
             </div>
             <div class="btn-row" style="margin-top: 12px">
               <button class="btn btn-primary" id="transcribeBtn" disabled>
@@ -334,18 +300,9 @@
             </div>
           </div>
 
-          <!-- F18 — Additional video sources -->
-          <div class="card" id="additionalSourcesCard" style="display: none">
-            <div class="card-title">Dodatkowe źródła wideo</div>
-            <div id="additionalSourcesList"></div>
-          </div>
-
           <div class="btn-row" style="flex-wrap: wrap; gap: 8px">
             <button class="btn btn-primary" id="parseBtn" disabled>
               Analizuj SRT →
-            </button>
-            <button class="btn btn-secondary" id="addSourceBtn">
-              + Dodaj kolejne źródło wideo
             </button>
           </div>
         </section>
@@ -376,10 +333,13 @@
 
           <div class="btn-row">
             <button class="btn btn-primary" id="analyzeBtn">
-              Analizuj z AI →
+              Analizuj z OpenRouter →
+            </button>
+            <button class="btn btn-secondary" id="copyPromptBtn">
+              📋 Kopiuj prompt (.md)
             </button>
             <button class="btn btn-secondary" id="downloadPromptBtn">
-              ⬇ Eksportuj prompt .txt (do ręcznego użycia)
+              ⬇ Eksportuj prompt .txt
             </button>
           </div>
 
@@ -431,37 +391,44 @@
             </div>
           </div>
 
-          <!-- Wklejanie JSON od zewnętrznego AI -->
-          <div class="card" id="pasteJsonCard">
-            <div
-              class="card-title"
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-              "
-            >
-              <span>Wklej JSON od AI</span>
-              <span
+          <!-- Wklejanie JSON od zewnętrznego AI — demoted behind a details (S-16 #11) -->
+          <details class="paste-json-details">
+            <summary>
+              Wklej JSON od AI ręcznie (alternatywa bez API key)
+            </summary>
+            <div class="card" id="pasteJsonCard">
+              <div
+                class="card-title"
                 style="
-                  font-size: 11px;
-                  color: var(--text3);
-                  font-weight: 400;
-                  text-transform: none;
-                  letter-spacing: 0;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
                 "
-                >alternatywa — bez API key</span
               >
-            </div>
-            <div class="info-box" style="margin-bottom: 12px; font-size: 12px">
-              Pobierz prompt (.txt), wklej do ChatGPT / Gemini / Claude web, a
-              odpowiedź JSON wklej tutaj.
-            </div>
-            <textarea
-              class="json-editor"
-              id="pasteJsonInput"
-              rows="8"
-              placeholder='Wklej tutaj odpowiedź od AI, np:
+                <span>Wklej JSON od AI</span>
+                <span
+                  style="
+                    font-size: 11px;
+                    color: var(--text3);
+                    font-weight: 400;
+                    text-transform: none;
+                    letter-spacing: 0;
+                  "
+                  >alternatywa — bez API key</span
+                >
+              </div>
+              <div
+                class="info-box"
+                style="margin-bottom: 12px; font-size: 12px"
+              >
+                Pobierz prompt (.txt), wklej do ChatGPT / Gemini / Claude web, a
+                odpowiedź JSON wklej tutaj.
+              </div>
+              <textarea
+                class="json-editor"
+                id="pasteJsonInput"
+                rows="8"
+                placeholder='Wklej tutaj odpowiedź od AI, np:
 [
   {
     "reel_name": "Reel 1 - Hook sprzedażowy",
@@ -472,20 +439,21 @@
     "clip_ids": [22, 23, 8]
   }
 ]'
-            ></textarea>
-            <div style="margin-top: 10px" class="btn-row">
-              <button class="btn btn-primary" id="applyPastedJsonBtn">
-                Zastosuj →
-              </button>
-              <button class="btn btn-secondary" id="clearPastedJsonBtn">
-                Wyczyść
-              </button>
-              <span
-                id="pasteJsonStatus"
-                style="font-size: 12px; margin-left: 8px"
-              ></span>
+              ></textarea>
+              <div style="margin-top: 10px" class="btn-row">
+                <button class="btn btn-primary" id="applyPastedJsonBtn">
+                  Zastosuj →
+                </button>
+                <button class="btn btn-secondary" id="clearPastedJsonBtn">
+                  Wyczyść
+                </button>
+                <span
+                  id="pasteJsonStatus"
+                  style="font-size: 12px; margin-left: 8px"
+                ></span>
+              </div>
             </div>
-          </div>
+          </details>
 
           <div class="btn-row" id="step2Next" style="display: none">
             <button class="btn btn-primary" id="toExportBtn">
@@ -513,211 +481,55 @@
             </div>
           </div>
 
-          <!-- Plik wideo -->
+          <!-- Plik wideo źródłowy — auto-wykryty przy imporcie, tylko do odczytu -->
           <div class="card">
-            <div class="card-title">Plik wideo źródłowy</div>
+            <div
+              class="card-title"
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span>Plik wideo źródłowy</span>
+              <button
+                class="btn btn-secondary"
+                style="padding: 4px 10px; font-size: 11px"
+                id="exBrowseVideoBtn"
+                title="Podmień plik wideo (ponowne wykrycie fps i rozdzielczości)"
+              >
+                Przeglądaj…
+              </button>
+            </div>
             <div class="settings-grid">
               <div class="setting-item">
-                <label>Nazwa pliku (do EDL/XML)</label>
-                <div style="display: flex; gap: 8px">
-                  <input
-                    type="text"
-                    id="videoFilenameExport"
-                    placeholder="np. webinar.mp4"
-                    style="flex: 1"
-                  />
-                  <button
-                    class="btn btn-secondary"
-                    style="padding: 6px 12px; font-size: 12px"
-                    id="browseVideoBtn"
-                  >
-                    Przeglądaj
-                  </button>
-                </div>
+                <label>Nazwa pliku</label>
+                <div class="ro-field" id="exVideoFilename">—</div>
               </div>
               <div class="setting-item">
-                <label>Pełna ścieżka (do XML/Lua)</label>
-                <input
-                  type="text"
-                  id="videoFullPath"
-                  placeholder="np. /Users/jan/Videos/webinar.mp4 lub C:\Videos\webinar.mp4"
-                />
-                <div class="fps-note">
-                  Wymagane dla XML i skryptu DaVinci — musi być absolutna
-                  ścieżka na twoim komputerze.
-                </div>
+                <label>Pełna ścieżka</label>
+                <div class="ro-field" id="exVideoPath">—</div>
               </div>
               <div class="setting-item">
-                <label>Rozdzielczość wideo</label>
-                <select id="resolutionSelect">
-                  <option value="1920x1080">1920×1080 (Full HD)</option>
-                  <option value="3840x2160">3840×2160 (4K UHD)</option>
-                  <option value="1280x720">1280×720 (HD)</option>
-                  <option value="2560x1440">2560×1440 (2K)</option>
-                </select>
+                <label>Rozdzielczość (auto)</label>
+                <div class="ro-field" id="exVideoResolution">—</div>
               </div>
               <div class="setting-item">
                 <label>Nazwa projektu</label>
-                <input
-                  type="text"
-                  id="projectName"
-                  placeholder="Reels 2024"
-                  value="Reels"
-                />
+                <div class="ro-field" id="exProjectName">—</div>
               </div>
+            </div>
+            <div class="fps-note" style="margin-top: 8px">
+              Wykrywane automatycznie z importowanego wideo. XML/Lua wymagają
+              pełnej ścieżki — użyj „Przeglądaj…", jeśli importowano tylko
+              napisy.
             </div>
           </div>
 
-          <!-- Zakładki eksportu -->
-          <div class="export-tabs">
-            <button class="export-tab active" id="tabBtnEdl">
-              <span class="tab-icon">📋</span>
-              <span class="tab-label">EDL</span>
-              <span class="tab-sub">Premiere & DaVinci</span>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="openExportBtn">
+              ⬇ Eksportuj… (EDL / XML / Lua / więcej)
             </button>
-            <button class="export-tab" id="tabBtnXml">
-              <span class="tab-icon">🎬</span>
-              <span class="tab-label">XML</span>
-              <span class="tab-sub">Premiere Pro (bogaty)</span>
-            </button>
-            <button class="export-tab" id="tabBtnLua">
-              <span class="tab-icon">⚡</span>
-              <span class="tab-label">Skrypt DaVinci</span>
-              <span class="tab-sub">1 klik → gotowy timeline</span>
-            </button>
-          </div>
-
-          <!-- EDL tab -->
-          <div class="export-panel active" id="tabEdl">
-            <div class="info-box" style="margin-bottom: 14px">
-              <strong>EDL (CMX 3600)</strong> — Uniwersalny format. Importuj w
-              Premiere: <em>File → Import</em> lub DaVinci:
-              <em>File → Import Timeline → Import AAF, EDL, XML</em>
-            </div>
-            <div class="btn-row">
-              <button class="btn btn-primary" id="generateEdlBtn">
-                ⚡ Generuj EDL
-              </button>
-            </div>
-            <div
-              class="card"
-              id="edlCard"
-              style="display: none; margin-top: 14px"
-            >
-              <div class="card-title">Podgląd</div>
-              <div class="edl-output" id="edlOutput"></div>
-              <div style="margin-top: 14px" class="btn-row">
-                <button class="btn btn-success" id="downloadEdlBtn">
-                  ⬇ Pobierz .edl
-                </button>
-                <button class="btn btn-secondary" id="copyEdlBtn">
-                  Kopiuj
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- XML tab -->
-          <div class="export-panel" id="tabXml">
-            <div class="info-box" style="margin-bottom: 14px">
-              <strong>XML (xmeml / FCP7)</strong> — Bogaty format z pełnymi
-              ścieżkami do plików i nazwami klipów. Importuj w Premiere:
-              <em>File → Import</em> lub DaVinci:
-              <em>File → Import Timeline → Import AAF, EDL, XML</em>.<br />
-              <strong style="color: var(--amber)"
-                >Wymagana pełna ścieżka</strong
-              >
-              do pliku wideo powyżej.
-            </div>
-            <div class="btn-row">
-              <button class="btn btn-primary" id="generateXmlBtn">
-                ⚡ Generuj XML
-              </button>
-            </div>
-            <div
-              class="card"
-              id="xmlCard"
-              style="display: none; margin-top: 14px"
-            >
-              <div
-                class="card-title"
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                "
-              >
-                <span>Podgląd XML</span>
-                <span id="xmlSeqCount" class="badge badge-purple"></span>
-              </div>
-              <div
-                class="edl-output"
-                id="xmlOutput"
-                style="color: #7dd3fc"
-              ></div>
-              <div style="margin-top: 14px" class="btn-row">
-                <button class="btn btn-success" id="downloadXmlBtn">
-                  ⬇ Pobierz .xml
-                </button>
-                <button class="btn btn-secondary" id="copyXmlBtn">
-                  Kopiuj
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- DaVinci Lua tab -->
-          <div class="export-panel" id="tabLua">
-            <div class="info-box" style="margin-bottom: 16px">
-              <strong>Skrypt Lua — DaVinci Resolve API</strong><br />
-              Skrypt tworzy <strong>jeden timeline</strong> ze wszystkimi
-              reelsami ułożonymi jeden po drugim, z przerwą (gap) ustawioną w
-              kroku 1.<br /><br />
-              <strong>Jak uruchomić:</strong><br />
-              1. Otwórz DaVinci Resolve i projekt<br />
-              2. <em>Workspace → Console</em> (lub Ctrl+F12)<br />
-              3. Wklej skrypt → kliknij <strong>Run</strong><br />
-              4. Gotowe — timelines pojawią się w Media Pool 🎉<br /><br />
-              <strong style="color: var(--amber)"
-                >Wymagana pełna ścieżka</strong
-              >
-              do pliku wideo powyżej.
-            </div>
-            <div class="btn-row">
-              <button class="btn btn-primary" id="generateLuaBtn">
-                ⚡ Generuj skrypt Lua
-              </button>
-            </div>
-            <div
-              class="card"
-              id="luaCard"
-              style="display: none; margin-top: 14px"
-            >
-              <div
-                class="card-title"
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                "
-              >
-                <span>Skrypt Lua</span>
-                <span id="luaInfo" class="badge badge-green"></span>
-              </div>
-              <div
-                class="edl-output"
-                id="luaOutput"
-                style="color: #a5f3a0; font-size: 11px"
-              ></div>
-              <div style="margin-top: 14px" class="btn-row">
-                <button class="btn btn-success" id="copyLuaBtn">
-                  📋 Kopiuj skrypt (wklej do DaVinci Console)
-                </button>
-                <button class="btn btn-secondary" id="downloadLuaBtn">
-                  ⬇ Pobierz .lua
-                </button>
-              </div>
-            </div>
           </div>
         </section>
       </div>
@@ -870,9 +682,32 @@
               margin: 18px 0 10px;
             "
           >
-            Diaryzacja (gdy włączona)
+            Diaryzacja (rozpoznawanie mówców)
           </div>
           <div class="settings-grid">
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label style="display: flex; align-items: center; gap: 8px">
+                <input type="checkbox" id="diarizeToggle" style="width: auto" />
+                Rozpoznawanie mówców (diaryzacja, opcjonalnie)
+              </label>
+              <div id="diarizeTokenRow" style="display: none; margin-top: 8px">
+                <div style="display: flex; gap: 8px">
+                  <input
+                    type="password"
+                    id="hfTokenInput"
+                    placeholder="Token Hugging Face (hf_…)"
+                    style="flex: 1"
+                    autocomplete="off"
+                  />
+                </div>
+                <div
+                  style="font-size: 11px; color: var(--text3); margin-top: 4px"
+                >
+                  Wymaga tokenu HF z dostępem do modelu pyannote. Token jest
+                  zapisywany lokalnie.
+                </div>
+              </div>
+            </div>
             <div class="setting-item">
               <label>Min. liczba mówców</label>
               <input
@@ -1013,6 +848,88 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S-16 Phase 3b — Quick-export popover (EDL/XML/Lua + more) -->
+    <div id="exportModal" class="modal-overlay" style="display: none">
+      <div class="modal-box" style="width: 560px">
+        <div class="modal-header">
+          <span
+            style="
+              font-family: var(--display);
+              font-weight: 700;
+              font-size: 15px;
+            "
+            >Eksport</span
+          >
+          <button
+            class="btn btn-secondary"
+            id="exportClose"
+            style="padding: 4px 10px"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="export-format-row">
+            <div>
+              <strong>EDL</strong>
+              <div class="fps-note">Premiere &amp; DaVinci (CMX 3600)</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="exEdlGen">
+                ⬇ Generuj i zapisz
+              </button>
+              <button class="btn btn-secondary" id="exEdlCopy">Kopiuj</button>
+            </div>
+          </div>
+          <div class="export-format-row">
+            <div>
+              <strong>XML</strong>
+              <div class="fps-note">Premiere Pro (xmeml / FCP7)</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="exXmlGen">
+                ⬇ Generuj i zapisz
+              </button>
+              <button class="btn btn-secondary" id="exXmlCopy">Kopiuj</button>
+            </div>
+          </div>
+          <div class="export-format-row">
+            <div>
+              <strong>Skrypt DaVinci (Lua)</strong>
+              <div class="fps-note">Wklej do DaVinci Console</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="exLuaGen">
+                ⬇ Generuj i zapisz
+              </button>
+              <button class="btn btn-secondary" id="exLuaCopy">Kopiuj</button>
+            </div>
+          </div>
+
+          <details class="export-more">
+            <summary>Więcej formatów (transkrypcja, prompt)</summary>
+            <div
+              class="btn-row"
+              style="margin-top: 12px; flex-wrap: wrap; gap: 8px"
+            >
+              <button class="btn btn-secondary" id="exSrtBtn">
+                ⬇ Transkrypcja .srt
+              </button>
+              <button class="btn btn-secondary" id="exVttBtn">
+                ⬇ Transkrypcja .vtt
+              </button>
+              <button class="btn btn-secondary" id="exMdBtn">
+                ⬇ Segmenty .md
+              </button>
+              <button class="btn btn-secondary" id="exPromptBtn">
+                📋 Kopiuj prompt
+              </button>
+            </div>
+          </details>
         </div>
       </div>
     </div>

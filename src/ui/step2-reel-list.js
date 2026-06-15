@@ -1,26 +1,21 @@
-// Step-2 reel-list rendering plus the timeline/preview surface. Owns the
-// playhead/preview module state and attaches the timeline scrub / play-pause
-// listeners via initReelList(listEl). (R1 split — pure move.)
+// Step-2 reel-list rendering plus the floating preview surface. S-16 Phase 3b
+// (#14) removed the per-reel scrub timeline, the play button, and the per-reel
+// merge-threshold slider: the list now reads as compact reel cards with
+// component-score badges, and the floating preview is seeked by clicking a clip
+// body. Owns the playhead/preview module state.
 
 import { state, subscribe } from '../state.js';
-import { framesToTC } from '../parser/srt.js';
 import {
   loadWaveform,
   drawWaveform,
   cachedPeaks,
 } from '../selection/waveform.js';
-import {
-  drawTimeline,
-  frameFromX,
-  reelSourceSpan,
-} from '../selection/timeline.js';
 
-// ── Timeline / preview state ────────────────────────────────────────
+// ── Preview state ───────────────────────────────────────────────────
 
 const playheadState = new Map(); // reelIdx → current playhead frame (source)
 let activeReelIdx = null; // reel that owns the preview video
 let previewVideoEl = null;
-let isDraggingTimeline = false;
 let cachedAssetUrl = '';
 
 /** @returns {HTMLVideoElement|null} the shared preview <video> element */
@@ -38,16 +33,7 @@ export function getPlayhead(ri) {
   return playheadState.get(ri);
 }
 
-// ── Timeline helpers ───────────────────────────────────────────────
-
-function frameToDisplayTime(frame, fps) {
-  const secs = frame / fps;
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  const ms = Math.round((secs % 1) * 1000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
-}
+// ── Preview helpers ─────────────────────────────────────────────────
 
 function showPreviewPanel() {
   const panel = document.getElementById('previewPanel');
@@ -71,76 +57,21 @@ async function updatePreviewVideoSrc() {
       previewVideoEl.load();
     }
   } catch {
-    // Not in Tauri context or asset protocol unavailable — video preview disabled
+    // Not in Tauri context or asset protocol unavailable — preview disabled
   }
 }
 
 function seekToFrame(ri, frame) {
   const reel = state.reelsData[ri];
   if (!reel) return;
-
   playheadState.set(ri, frame);
   activeReelIdx = ri;
-
-  // Redraw this reel's timeline
-  const canvas = document.querySelector(
-    `.reel-timeline[data-reel-idx="${ri}"]`,
-  );
-  if (canvas) drawTimeline(canvas, reel, state.sentences, state.fps, frame);
-
-  // Update tc display
-  const tc = document.querySelector(`.tl-tc[data-reel-idx="${ri}"]`);
-  if (tc) tc.textContent = frameToDisplayTime(frame, state.fps);
-
-  // Seek video (readyState ≥ 1 means metadata loaded)
   if (previewVideoEl && previewVideoEl.readyState >= 1) {
     try {
       previewVideoEl.currentTime = frame / state.fps;
     } catch {}
   }
-
   showPreviewPanel();
-}
-
-function updateGapColors(ri) {
-  const reel = state.reelsData[ri];
-  if (!reel) return;
-  const threshold = reel.mergeThreshold ?? state.mergeThreshold;
-  document
-    .querySelectorAll(`.clip-gap[data-reel-idx="${ri}"]`)
-    .forEach((gap) => {
-      const gapFrames = +gap.dataset.gapFrames;
-      const willMerge = gapFrames <= threshold;
-      gap.classList.toggle('will-merge', willMerge);
-      gap.classList.toggle('separate', !willMerge);
-      const label = gap.querySelector('.clip-gap-label');
-      if (label) {
-        label.textContent =
-          gapFrames <= 0
-            ? '0 kl. — scalony'
-            : willMerge
-              ? `${gapFrames} kl. — będzie scalony`
-              : `${gapFrames} kl. — osobny span`;
-      }
-    });
-}
-
-function drawAllTimelines() {
-  const list = document.getElementById('reelsList');
-  list.querySelectorAll('.reel-timeline[data-reel-idx]').forEach((canvas) => {
-    const ri = +canvas.dataset.reelIdx;
-    const reel = state.reelsData[ri];
-    if (!reel || !reel.clip_ids.length) return;
-    const w = canvas.clientWidth;
-    if (w > 0 && canvas.width !== w) canvas.width = w;
-    drawTimeline(
-      canvas,
-      reel,
-      state.sentences,
-      state.fps,
-      playheadState.get(ri),
-    );
-  });
 }
 
 function initPreviewVideo() {
@@ -153,42 +84,6 @@ function initPreviewVideo() {
     if (activeReelIdx === null) return;
     const frame = Math.round(previewVideoEl.currentTime * state.fps);
     playheadState.set(activeReelIdx, frame);
-
-    const canvas = document.querySelector(
-      `.reel-timeline[data-reel-idx="${activeReelIdx}"]`,
-    );
-    const reel = state.reelsData[activeReelIdx];
-    if (canvas && reel)
-      drawTimeline(canvas, reel, state.sentences, state.fps, frame);
-
-    const tc = document.querySelector(
-      `.tl-tc[data-reel-idx="${activeReelIdx}"]`,
-    );
-    if (tc) tc.textContent = frameToDisplayTime(frame, state.fps);
-  });
-
-  previewVideoEl.addEventListener('pause', () => {
-    if (activeReelIdx === null) return;
-    const btn = document.querySelector(
-      `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
-    );
-    if (btn) btn.textContent = '▶';
-  });
-
-  previewVideoEl.addEventListener('ended', () => {
-    if (activeReelIdx === null) return;
-    const btn = document.querySelector(
-      `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
-    );
-    if (btn) btn.textContent = '▶';
-  });
-
-  previewVideoEl.addEventListener('play', () => {
-    if (activeReelIdx === null) return;
-    const btn = document.querySelector(
-      `.tl-play-btn[data-reel-idx="${activeReelIdx}"]`,
-    );
-    if (btn) btn.textContent = '⏸';
   });
 
   // Refresh video src whenever videoPath changes
@@ -204,92 +99,56 @@ export function initReelList(list) {
   // ── Reel header toggle (delegated) ───────────────────────────────
   list.addEventListener('click', (e) => {
     if (e.target.closest('.clip-del-btn')) return;
-    if (e.target.closest('.reel-threshold-wrap')) return;
     const h = e.target.closest('[data-toggle-reel]');
     if (!h) return;
     h.classList.toggle('expanded');
     h.nextElementSibling.classList.toggle('open');
   });
 
-  // ── Per-reel threshold slider ─────────────────────────────────────
-  list.addEventListener('input', (e) => {
-    const slider = e.target.closest('.reel-threshold');
-    if (!slider) return;
-    const ri = +slider.dataset.reelIdx;
-    const val = +slider.value;
-    state.reelsData[ri].mergeThreshold = val;
-    const valEl = slider.parentElement.querySelector('.reel-threshold-val');
-    if (valEl) valEl.textContent = val;
-    updateGapColors(ri);
-  });
-
-  // ── Timeline scrubbing ───────────────────────────────────────────
-  list.addEventListener('pointerdown', (e) => {
-    const canvas = e.target.closest('.reel-timeline');
-    if (!canvas) return;
-    e.preventDefault();
-    const ri = +canvas.dataset.reelIdx;
-    canvas.setPointerCapture(e.pointerId);
-    isDraggingTimeline = true;
-    seekToFrame(
-      ri,
-      frameFromX(canvas, state.reelsData[ri], state.sentences, e.clientX),
-    );
-  });
-
-  list.addEventListener('pointermove', (e) => {
-    if (!isDraggingTimeline) return;
-    const canvas = e.target.closest('.reel-timeline');
-    if (!canvas) return;
-    const ri = +canvas.dataset.reelIdx;
-    seekToFrame(
-      ri,
-      frameFromX(canvas, state.reelsData[ri], state.sentences, e.clientX),
-    );
-  });
-
-  list.addEventListener('pointerup', () => {
-    if (isDraggingTimeline) isDraggingTimeline = false;
-  });
-
-  list.addEventListener('pointercancel', () => {
-    isDraggingTimeline = false;
-  });
-
-  // ── Timeline play/pause button ───────────────────────────────────
+  // ── Clip body click → seek the floating preview there ────────────
   list.addEventListener('click', (e) => {
-    const btn = e.target.closest('.tl-play-btn');
-    if (!btn || !previewVideoEl) return;
-    const ri = +btn.dataset.reelIdx;
-    const reel = state.reelsData[ri];
-    if (!reel) return;
-
-    if (activeReelIdx !== ri) {
-      // Switch active reel — seek to its current playhead (or first clip start)
-      const { minFrame } = reelSourceSpan(reel, state.sentences);
-      const ph = playheadState.get(ri) ?? minFrame;
-      activeReelIdx = ri;
-      if (previewVideoEl.readyState >= 1) {
-        try {
-          previewVideoEl.currentTime = ph / state.fps;
-        } catch {}
-      }
-      showPreviewPanel();
-    }
-
-    if (previewVideoEl.paused) {
-      previewVideoEl.play().catch(() => {});
-    } else {
-      previewVideoEl.pause();
-    }
+    if (
+      e.target.closest(
+        '.clip-del-btn, .clip-merge-btn, .trim-handle, .clip-grip',
+      )
+    )
+      return;
+    const row = e.target.closest('.clip-row');
+    if (!row) return;
+    const ri = +row.dataset.reelIdx;
+    const sid = +row.dataset.sentenceId;
+    const s = state.sentences.find((x) => x.id === sid);
+    if (s) seekToFrame(ri, s.start_frame);
   });
 }
 
 // ── Render ─────────────────────────────────────────────────────────
 
+// Component-score axes (S-01 Reel.scores) rendered as compact badges beside the
+// overall virality score. Each axis is optional/backward-compat (older projects
+// may omit `scores`), so we render only the ones present.
+function renderAxisBadges(scores) {
+  if (!scores || typeof scores !== 'object') return '';
+  const axes = [
+    ['hook', 'H', 'Hook'],
+    ['flow', 'F', 'Flow'],
+    ['value', 'V', 'Value'],
+    ['trend', 'T', 'Trend'],
+  ];
+  const parts = axes
+    .filter(([k]) => typeof scores[k] === 'number')
+    .map(
+      ([k, label, title]) =>
+        `<span class="reel-axis-badge" title="${title}">${label} ${Math.round(scores[k])}</span>`,
+    );
+  return parts.length ? `<span class="reel-axes">${parts.join('')}</span>` : '';
+}
+
 export function renderReels() {
   const fps = state.fps;
   const list = document.getElementById('reelsList');
+  // Single global merge-gap (S-16 3b removed the per-reel override).
+  const threshold = state.mergeThreshold;
 
   list.innerHTML = state.reelsData
     .map((r, ri) => {
@@ -300,13 +159,12 @@ export function renderReels() {
         }, 0)
         .toFixed(1);
 
-      const threshold = r.mergeThreshold ?? state.mergeThreshold;
-
-      // S-01 minimal read-only score display (no sorting / greying / breakdown)
+      // S-01 read-only score display + component-axis badges.
       const hasScore = typeof r.virality_score === 'number';
       const scoreBadge = hasScore
         ? `<span class="reel-score-badge" title="Virality score">${Math.round(r.virality_score)}</span>`
         : `<span class="reel-score-badge muted" title="Brak oceny">brak oceny</span>`;
+      const axesHtml = renderAxisBadges(r.scores);
       const reasonHtml =
         hasScore && r.reason
           ? `<span class="reel-reason">${esc(r.reason)}</span>`
@@ -361,27 +219,16 @@ export function renderReels() {
             .join('')
         : '<div class="clip-empty">Upuść klipy tutaj</div>';
 
-      const timelineHtml = r.clip_ids.length
-        ? `
-  <div class="reel-timeline-wrap" data-reel-idx="${ri}">
-    <div class="reel-preview-bar">
-      <button class="tl-play-btn" data-reel-idx="${ri}" title="Odtwórz / Pauza">▶</button>
-      <span class="tl-tc" data-reel-idx="${ri}">--:--:--.---</span>
-    </div>
-    <canvas class="reel-timeline" data-reel-idx="${ri}" height="40"></canvas>
-  </div>`
-        : '';
-
       return `<div class="reel-card" data-reel-idx="${ri}">
   <div class="reel-header expanded" data-toggle-reel>
     <span class="reel-badge">REEL ${ri + 1}</span>
     ${scoreBadge}
+    ${axesHtml}
     <span class="reel-name">${esc(r.reel_name)}</span>
     <span class="reel-meta">${r.clip_ids.length} klipów • ${totalDur}s</span>
-    <label class="reel-threshold-wrap" title="Próg scalania dla tego reela (override globalnego)">Próg: <input type="range" class="reel-threshold" data-reel-idx="${ri}" min="0" max="60" value="${threshold}"><span class="reel-threshold-val">${threshold}</span> kl.</label>
     ${reasonHtml}
   </div>
-  <div class="reel-clips open" data-reel-idx="${ri}">${clipsHtml}</div>${timelineHtml}
+  <div class="reel-clips open" data-reel-idx="${ri}">${clipsHtml}</div>
 </div>`;
     })
     .join('');
@@ -389,7 +236,6 @@ export function renderReels() {
   document.getElementById('reelsCount').textContent =
     state.reelsData.length + ' reelsów';
   scheduleWaveformLoad();
-  requestAnimationFrame(() => drawAllTimelines());
 }
 
 function scheduleWaveformLoad() {

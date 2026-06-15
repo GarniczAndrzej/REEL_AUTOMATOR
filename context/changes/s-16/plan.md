@@ -378,31 +378,31 @@ The progressive single surface renders all sections in one DOM; gating is visibi
 
 #### Automated
 
-- [x] 3a.1 Rust type-check passes
-- [x] 3a.2 Regression suite passes
-- [x] 3a.3 Prettier clean
+- [x] 3a.1 Rust type-check passes — fd2c6f7
+- [x] 3a.2 Regression suite passes — fd2c6f7
+- [x] 3a.3 Prettier clean — fd2c6f7
 
 #### Manual
 
-- [x] 3a.4 Import → analyze → export happy path behaves exactly as before the split (control for 3b)
-- [x] 3a.5 Transcription, save/load, segment preview unchanged
+- [x] 3a.4 Import → analyze → export happy path behaves exactly as before the split (control for 3b) — fd2c6f7
+- [x] 3a.5 Transcription, save/load, segment preview unchanged — fd2c6f7
 
 ### Phase 3b: Re-home & declutter
 
 #### Automated
 
-- [ ] 3b.1 Rust type-check passes
-- [ ] 3b.2 Regression suite passes
-- [ ] 3b.3 No pruned-control references remain (UI surfaces; `--exclude-dir=parser`)
-- [ ] 3b.4 Prettier clean
+- [x] 3b.1 Rust type-check passes
+- [x] 3b.2 Regression suite passes
+- [x] 3b.3 No pruned-control references remain (UI surfaces; `--exclude-dir=parser`)
+- [x] 3b.4 Prettier clean
 
 #### Manual
 
-- [ ] 3b.5 Import auto-populates fps/filename/resolution
-- [ ] 3b.6 Reel list shows score badges, no timeline/play; preview works
-- [ ] 3b.7 "Analizuj z OpenRouter" runs; copy-prompt `.md`; paste-JSON secondary
-- [ ] 3b.8 Quick-export popover produces all formats correctly
-- [ ] 3b.9 Diarization controls work from the advanced modal
+- [x] 3b.5 Import auto-populates fps/filename/resolution
+- [x] 3b.6 Reel list shows score badges, no timeline/play; preview works
+- [x] 3b.7 "Analizuj z OpenRouter" runs; copy-prompt `.md`; paste-JSON secondary
+- [x] 3b.8 Quick-export popover produces all formats correctly
+- [x] 3b.9 Diarization controls work from the advanced modal
 
 ### Phase 4: Restyle + acceptance
 

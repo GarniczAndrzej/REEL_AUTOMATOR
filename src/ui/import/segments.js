@@ -127,49 +127,17 @@ function _parseSubtitle(content, isVtt, fps, minLen) {
 }
 
 function doParseBtn() {
-  if (!state.srtContent && (!state.sources || !state.sources.length)) return;
+  if (!state.srtContent) return;
 
-  if (state.sources && state.sources.length > 0) {
-    // F18 — multi-source: parse primary + additional sources, merge with source_idx
-    state.sentences = [];
-    const primarySentences = state.srtContent
-      ? _parseSubtitle(state.srtContent, state._srtIsVtt, state.fps, MIN_CHARS)
-      : [];
-    primarySentences.forEach((s) => {
-      s.source_idx = 0;
-    });
-    state.sentences.push(...primarySentences);
-
-    let idOffset = primarySentences.length;
-    for (let si = 0; si < state.sources.length; si++) {
-      const src = state.sources[si];
-      if (!src.srtContent) continue;
-      const srcSentences = _parseSubtitle(
-        src.srtContent,
-        src._isVtt,
-        state.fps,
-        MIN_CHARS,
-      );
-      for (const s of srcSentences) {
-        s.id = idOffset + s.id;
-        s.source_idx = si + 1;
-        state.sentences.push(s);
-      }
-      idOffset += srcSentences.length;
-    }
-  } else {
-    // Single source (existing behavior)
-    if (!state.srtContent) return;
-    state.sentences = _parseSubtitle(
-      state.srtContent,
-      state._srtIsVtt,
-      state.fps,
-      MIN_CHARS,
-    );
-    state.sentences.forEach((s) => {
-      s.source_idx = 0;
-    });
-  }
+  state.sentences = _parseSubtitle(
+    state.srtContent,
+    state._srtIsVtt,
+    state.fps,
+    MIN_CHARS,
+  );
+  state.sentences.forEach((s) => {
+    s.source_idx = 0;
+  });
 
   // Merge Whisper word timestamps into sentences when available (F4)
   if (state._pendingWhisperWords && state._pendingWhisperWords.length) {

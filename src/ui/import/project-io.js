@@ -5,7 +5,6 @@
 import { state, emit } from '../../state.js';
 import { escHtml } from './segments.js';
 import { renderModelManager } from './transcribe.js';
-import { renderAdditionalSources } from './multi-source.js';
 
 export function initProjectIO() {
   document
@@ -68,9 +67,10 @@ async function writeProject(path) {
     const { invoke } = await import('@tauri-apps/api/core');
     const payload = {
       // v5 (S-16) drops the consolidated/removed keys: the duplicate per-export
-      // filename (folded into videoFilename) and the min-sentence-length knob
-      // (now a module constant). v3/v4 files still load — applyProjectData
-      // tolerates the legacy keys.
+      // filename (folded into videoFilename), the min-sentence-length knob (now
+      // a module constant), the multi-source `sources` repeater, and the
+      // per-reel merge-threshold override (folded into the single global gap).
+      // v3/v4 files still load — applyProjectData tolerates the legacy keys.
       version: 5,
       srtName: state.srtName,
       srtContent: state.srtContent,
@@ -87,7 +87,6 @@ async function writeProject(path) {
       diarize: state.diarize,
       sentences: state.sentences,
       reelsData: state.reelsData,
-      sources: state.sources || [],
     };
     await invoke('save_project', { path, payload });
   } catch (e) {
@@ -114,7 +113,7 @@ function applyProjectData(data) {
   if (data.diarize != null) state.diarize = data.diarize;
   if (data.sentences) state.sentences = data.sentences;
   if (data.reelsData) state.reelsData = data.reelsData;
-  if (data.sources) state.sources = data.sources;
+  // Legacy `sources` (multi-source repeater, removed in S-16 3b) is ignored.
 
   // Sync DOM — Step 1 fields
   document.getElementById('fpsSelect').value = state.fps;
@@ -156,12 +155,6 @@ function applyProjectData(data) {
       </div>`,
       )
       .join('');
-  }
-
-  // F18 — restore additional sources UI
-  if (state.sources && state.sources.length) {
-    document.getElementById('additionalSourcesCard').style.display = '';
-    renderAdditionalSources();
   }
 
   emit();

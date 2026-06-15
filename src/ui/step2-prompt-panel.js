@@ -12,6 +12,7 @@ import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache } from '../ai/cache.js';
 import { renderReels, esc } from './step2-reel-list.js';
 import { snap, pushUndo } from './step2-segment-ops.js';
+import { toast } from './toast.js';
 
 // ── Init ───────────────────────────────────────────────────────────
 
@@ -19,6 +20,9 @@ export function initPromptPanel() {
   document
     .getElementById('analyzeBtn')
     .addEventListener('click', runAIAnalysis);
+  document
+    .getElementById('copyPromptBtn')
+    ?.addEventListener('click', copyPromptMD);
   document
     .getElementById('downloadPromptBtn')
     .addEventListener('click', downloadPromptTXT);
@@ -43,7 +47,7 @@ async function runAIAnalysis() {
     document.getElementById('apiKeyInput').value.trim() ||
     getApiKey('openrouter');
   if (!apiKey) {
-    alert('Wklej API key w nagłówku!');
+    alert('Otwórz „⚙ Ustawienia" i wklej API key OpenRouter!');
     return;
   }
   if (!state.sentences.length) {
@@ -72,7 +76,7 @@ async function runAIAnalysis() {
   const prompt = buildPrompt(
     state.userPrompt,
     state.sentences,
-    state.sources?.length ? state.sources : null,
+    null,
     state.videoFilename || '',
   );
   log('Przygotowano prompt. Segmentów: ' + state.sentences.length, 'info');
@@ -150,6 +154,9 @@ function revealPasteFix(rawText, message) {
     status.style.color = 'var(--red)';
     status.textContent = message;
   }
+  // The paste-JSON path is demoted behind a <details> (S-16 3b); open it so the
+  // stashed raw response is visible for paste-and-fix.
+  document.querySelector('.paste-json-details')?.setAttribute('open', '');
   document
     .getElementById('pasteJsonCard')
     ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -220,16 +227,37 @@ function clearPastedJSON() {
 
 async function downloadPromptTXT() {
   if (!state.sentences.length) {
-    alert('Najpierw przeanalizuj SRT (Krok 1)!');
+    alert('Najpierw przeanalizuj plik napisów (sekcja Import)!');
     return;
   }
   const content = buildPrompt(
     state.userPrompt,
     state.sentences,
-    state.sources?.length ? state.sources : null,
+    null,
     state.videoFilename || '',
   );
   await saveTextToPath({ defaultName: 'PROMPT_DLA_AI.txt', content });
+}
+
+// #11 — copy-prompt-as-.md is the primary manual path (paste into ChatGPT /
+// Gemini / Claude web when not using the API key).
+async function copyPromptMD() {
+  if (!state.sentences.length) {
+    alert('Najpierw przeanalizuj plik napisów (sekcja Import)!');
+    return;
+  }
+  const content = buildPrompt(
+    state.userPrompt,
+    state.sentences,
+    null,
+    state.videoFilename || '',
+  );
+  try {
+    await navigator.clipboard.writeText(content);
+    toast('Prompt skopiowany do schowka ✓', 'success');
+  } catch {
+    toast('Nie udało się skopiować — użyj „Eksportuj prompt .txt".', 'error');
+  }
 }
 
 function setPS(n, s) {

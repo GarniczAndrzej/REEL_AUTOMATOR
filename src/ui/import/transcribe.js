@@ -11,6 +11,7 @@ import {
 } from '../../exporters/transcript.js';
 import { getApiKey, setApiKey } from '../../ai/api-key.js';
 import { saveTextToPath } from '../../util/save-file.js';
+import { populateVideoMeta } from '../../util/video-meta.js';
 import {
   MIN_CHARS,
   renderSegments,
@@ -516,14 +517,17 @@ async function browseWhisperVideo() {
     });
     if (!path) return;
     state._whisperVideoPath = path;
-    const name = path.split('/').pop().split('\\').pop();
     document.getElementById('whisperVideoPath').value = path;
-    // Pre-fill video fields
-    state.videoFilename = name;
-    state.videoPath = path;
-    document.getElementById('videoFilename').value = name;
+    // Auto-populate the project settings from the file itself (#4/#5): fps +
+    // resolution come from the FFmpeg probe, filename + path from the picker.
+    // Tolerant — on probe failure the fields keep their editable defaults.
+    await populateVideoMeta(path);
+    document.getElementById('videoFilename').value = state.videoFilename || '';
+    const fpsEl = document.getElementById('fpsSelect');
+    if (fpsEl) fpsEl.value = String(state.fps);
     syncTranscribeBtn();
     syncAlignBtn();
+    emit();
   } catch (e) {
     alert('Nie udało się wybrać pliku: ' + e);
   }

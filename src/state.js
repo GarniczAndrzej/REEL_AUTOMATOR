@@ -89,9 +89,6 @@ Zasady:
     minSpeakers: null, // diaryzacja: null = auto
     maxSpeakers: null, // diaryzacja: null = auto
   },
-
-  // F18 — additional video sources (source 0 = state.videoPath / state.srtContent)
-  sources: [], // [{videoFilename, videoPath, srtName, srtContent}] for sources index 1+
 };
 
 const listeners = new Set();

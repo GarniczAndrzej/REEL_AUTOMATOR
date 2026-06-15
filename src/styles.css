@@ -769,6 +769,20 @@ textarea::placeholder {
   color: var(--text3);
   font-weight: 600;
 }
+/* S-16 #14 — component-score axis badges (Hook/Flow/Value/Trend) */
+.reel-axes {
+  display: inline-flex;
+  gap: 4px;
+}
+.reel-axis-badge {
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
 .reel-reason {
   flex-basis: 100%;
   font-size: 11px;
@@ -1184,82 +1198,9 @@ textarea::placeholder {
   opacity: 1;
 }
 
-.reel-threshold-wrap {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  color: var(--text3);
-  font-family: var(--mono);
-  cursor: default;
-  flex-shrink: 0;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: background 0.15s;
-}
-.reel-threshold-wrap:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.reel-threshold {
-  width: 56px;
-  accent-color: var(--accent);
-  cursor: pointer;
-  vertical-align: middle;
-}
-.reel-threshold-val {
-  min-width: 16px;
-  text-align: right;
-  color: var(--text2);
-}
-
-/* ── FN2 — Timeline + preview player ─────────────────────────── */
-
-.reel-timeline-wrap {
-  padding: 6px 16px 10px;
-  border-top: 1px solid var(--border);
-}
-
-.reel-preview-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
-}
-
-.tl-play-btn {
-  background: var(--surface3);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  line-height: 1;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-.tl-play-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent2);
-}
-
-.tl-tc {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text3);
-  letter-spacing: 0.5px;
-}
-
-.reel-timeline {
-  display: block;
-  width: 100%;
-  height: 40px;
-  border-radius: 4px;
-  cursor: crosshair;
-  background: rgba(255, 255, 255, 0.03);
-}
+/* ── FN2 — Floating preview player ───────────────────────────── */
+/* (S-16 3b removed the per-reel scrub timeline + play button + threshold
+   slider; the floating preview below stays, seeked by clicking a clip body.) */
 
 /* Preview panel — fixed overlay, top-right */
 #previewPanel {
@@ -1334,4 +1275,44 @@ textarea::placeholder {
 }
 .diff-b-only {
   background: rgba(245, 166, 35, 0.08);
+}
+
+/* ── S-16 Phase 3b — read-only export source card + quick-export popover ── */
+.ro-field {
+  font-size: 13px;
+  color: var(--text2);
+  background: var(--surface2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-all;
+  min-height: 19px;
+}
+.export-format-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--surface2);
+}
+.export-format-row:first-child {
+  padding-top: 0;
+}
+.export-more {
+  margin-top: 14px;
+}
+.export-more > summary,
+.paste-json-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text2);
+  padding: 6px 0;
+  user-select: none;
+}
+.export-more > summary:hover,
+.paste-json-details > summary:hover {
+  color: var(--text);
+}
+.paste-json-details {
+  margin-top: 4px;
 }

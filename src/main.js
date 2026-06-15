@@ -1,7 +1,7 @@
 import { state, subscribe } from './state.js';
 import * as step1 from './ui/step1-import.js';
 import * as step2 from './ui/step2-analyze.js';
-import * as step3 from './ui/step3-export.js';
+import * as step3 from './ui/export-popover.js';
 import { init as initOrPicker } from './ai/openrouter-picker.js';
 import { loadSettings } from './settings.js';
 import { initSurface } from './ui/surface.js';
