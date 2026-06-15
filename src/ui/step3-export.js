@@ -4,6 +4,8 @@ import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
 import { mergeAdjacentClips } from '../parser/segments.js';
 import { saveTextToPath } from '../util/save-file.js';
+import { toast } from './toast.js';
+import { saveSettings } from '../settings.js';
 
 export function init() {
   // Tab switching
@@ -18,10 +20,12 @@ export function init() {
     .addEventListener('click', () => switchTab('Lua'));
 
   // Video filename inputs
-  document.getElementById('videoFilename2').addEventListener('input', (e) => {
-    state.videoFilename2 = e.target.value;
-    emit();
-  });
+  document
+    .getElementById('videoFilenameExport')
+    .addEventListener('input', (e) => {
+      state.videoFilename = e.target.value;
+      emit();
+    });
   document.getElementById('videoFullPath').addEventListener('input', (e) => {
     state.videoPath = e.target.value;
     emit();
@@ -38,6 +42,8 @@ export function init() {
   });
   document.getElementById('mergeThreshold').addEventListener('input', (e) => {
     state.mergeThreshold = +e.target.value;
+    // Persist across sessions (S-16 #6) — merge-gap lives in the settings bag.
+    saveSettings({ mergeThreshold: state.mergeThreshold });
     emit();
   });
 
@@ -102,7 +108,8 @@ export function updateSummary() {
   document.getElementById('sumReels').textContent =
     state.reelsData.length + ' reelsów';
   document.getElementById('sumClips').textContent = totalClips + ' klipów';
-  document.getElementById('videoFilename2').value = state.videoFilename2 || '';
+  document.getElementById('videoFilenameExport').value =
+    state.videoFilename || '';
   document.getElementById('videoFullPath').value = state.videoPath || '';
   document.getElementById('mergeThreshold').value = state.mergeThreshold;
   document.getElementById('projectName').value = state.projectName;
@@ -125,10 +132,10 @@ function switchTab(name) {
 
 function doGenerateEDL() {
   if (!state.reelsData.length) {
-    alert('Brak danych reelsów! Wróć do kroku 2.');
+    toast('Brak danych reelsów! Wróć do kroku 2.', 'info');
     return;
   }
-  const videoFile = state.videoFilename2 || 'source_video.mp4';
+  const videoFile = state.videoFilename || 'source_video.mp4';
   state.edlContent = generateEDL({
     reelsData: state.reelsData,
     sentences: state.sentences,
@@ -146,10 +153,10 @@ function doGenerateEDL() {
 
 function doGenerateXML() {
   if (!state.reelsData.length) {
-    alert('Brak danych reelsów!');
+    toast('Brak danych reelsów!', 'info');
     return;
   }
-  const videoFile = state.videoFilename2 || 'source_video.mp4';
+  const videoFile = state.videoFilename || 'source_video.mp4';
   const videoPath = state.videoPath || videoFile;
   state.xmlContent = generateXML({
     reelsData: state.reelsData,
@@ -174,12 +181,15 @@ function doGenerateXML() {
 
 function doGenerateLua() {
   if (!state.reelsData.length) {
-    alert('Brak danych reelsów!');
+    toast('Brak danych reelsów!', 'info');
     return;
   }
   const videoPath = state.videoPath;
   if (!videoPath) {
-    alert('Wpisz pełną ścieżkę do pliku wideo (pole "Pełna ścieżka" powyżej)!');
+    toast(
+      'Wpisz pełną ścieżkę do pliku wideo (pole "Pełna ścieżka" powyżej)!',
+      'info',
+    );
     return;
   }
   state.luaContent = generateLua({
@@ -220,28 +230,30 @@ async function browseVideo() {
     if (!path) return;
     state.videoPath = path;
     const name = path.split('/').pop().split('\\').pop();
-    state.videoFilename2 = name;
-    document.getElementById('videoFilename2').value = name;
+    state.videoFilename = name;
+    document.getElementById('videoFilenameExport').value = name;
     document.getElementById('videoFilename').value = name;
     document.getElementById('videoFullPath').value = path;
     emit();
   } catch (e) {
-    alert('Nie udało się wybrać pliku: ' + e);
+    toast('Nie udało się wybrać pliku: ' + e, 'error');
   }
 }
 
 // ── utilities ──────────────────────────────────────────────────────
 
 function videoBase() {
-  const name = state.videoFilename2 || 'reels';
+  const name = state.videoFilename || 'reels';
   const lastDot = name.lastIndexOf('.');
   const base = lastDot > 0 ? name.slice(0, lastDot) : name;
   return base || 'reels';
 }
 
-function downloadFile(name, content) {
+async function downloadFile(name, content) {
   // Always prompt for a location — never silently save to ~/Downloads.
-  return saveTextToPath({ defaultName: name, content });
+  const saved = await saveTextToPath({ defaultName: name, content });
+  if (saved) toast('Zapisano plik ✓', 'success');
+  return saved;
 }
 
 function copyEl(elId) {
@@ -254,5 +266,7 @@ function copyEl(elId) {
       btn.textContent = '✓ Skopiowano!';
       setTimeout(() => (btn.textContent = orig), 1800);
     })
-    .catch(() => alert('Nie udało się skopiować — zaznacz i skopiuj ręcznie.'));
+    .catch(() =>
+      toast('Nie udało się skopiować — zaznacz i skopiuj ręcznie.', 'error'),
+    );
 }

@@ -8,6 +8,12 @@ import {
 import { getApiKey, setApiKey } from '../ai/api-key.js';
 import { saveTextToPath } from '../util/save-file.js';
 
+// Minimum sentence length (chars) for SRT/VTT/word segmentation. Formerly a
+// rarely-touched UI knob (pruned in S-16, #7) but kept as a module-level
+// constant so the parser signatures (`src/parser/*`, no-touch zone) keep
+// receiving it.
+const MIN_CHARS = 20;
+
 export function init() {
   const srtFileInput = document.getElementById('srtFile');
   const dropZone = document.getElementById('dropZone');
@@ -109,10 +115,6 @@ export function init() {
     state.gapFrames = +e.target.value;
     emit();
   });
-  document.getElementById('minChars').addEventListener('input', (e) => {
-    state.minChars = +e.target.value;
-    emit();
-  });
 
   // Project save/load
   document
@@ -138,9 +140,7 @@ function loadSRTFile(file) {
     state._srtIsVtt = file.name.toLowerCase().endsWith('.vtt');
     const vf = file.name.replace(/\.(srt|vtt)$/i, '');
     state.videoFilename = vf;
-    state.videoFilename2 = vf;
     document.getElementById('videoFilename').value = vf;
-    document.getElementById('videoFilename2').value = vf;
     document.getElementById('dropZone').style.display = 'none';
     document.getElementById('fileLoaded').style.display = 'flex';
     document.getElementById('fileName').textContent = file.name;
@@ -177,10 +177,10 @@ function clearFile() {
   emit();
 }
 
-function _parseSubtitle(content, isVtt, fps, minChars) {
+function _parseSubtitle(content, isVtt, fps, minLen) {
   return isVtt
-    ? parseVTT(content, fps, minChars)
-    : parseSRT(content, fps, minChars);
+    ? parseVTT(content, fps, minLen)
+    : parseSRT(content, fps, minLen);
 }
 
 function doParseBtn() {
@@ -190,12 +190,7 @@ function doParseBtn() {
     // F18 — multi-source: parse primary + additional sources, merge with source_idx
     state.sentences = [];
     const primarySentences = state.srtContent
-      ? _parseSubtitle(
-          state.srtContent,
-          state._srtIsVtt,
-          state.fps,
-          state.minChars,
-        )
+      ? _parseSubtitle(state.srtContent, state._srtIsVtt, state.fps, MIN_CHARS)
       : [];
     primarySentences.forEach((s) => {
       s.source_idx = 0;
@@ -210,7 +205,7 @@ function doParseBtn() {
         src.srtContent,
         src._isVtt,
         state.fps,
-        state.minChars,
+        MIN_CHARS,
       );
       for (const s of srcSentences) {
         s.id = idOffset + s.id;
@@ -226,7 +221,7 @@ function doParseBtn() {
       state.srtContent,
       state._srtIsVtt,
       state.fps,
-      state.minChars,
+      MIN_CHARS,
     );
     state.sentences.forEach((s) => {
       s.source_idx = 0;
@@ -358,19 +353,19 @@ async function writeProject(path) {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const payload = {
-      // v4 adds per-sentence words[] (engine forced-alignment). v3 loads
-      // tolerantly (no words → word-trim simply unavailable until re-aligned).
-      version: 4,
+      // v5 (S-16) drops the consolidated/removed keys: the duplicate per-export
+      // filename (folded into videoFilename) and the min-sentence-length knob
+      // (now a module constant). v3/v4 files still load — applyProjectData
+      // tolerates the legacy keys.
+      version: 5,
       srtName: state.srtName,
       srtContent: state.srtContent,
       fps: state.fps,
       videoFilename: state.videoFilename,
-      videoFilename2: state.videoFilename2,
       videoPath: state.videoPath,
       videoResolution: state.videoResolution,
       projectName: state.projectName,
       gapFrames: state.gapFrames,
-      minChars: state.minChars,
       mergeThreshold: state.mergeThreshold,
       userPrompt: state.userPrompt,
       whisperLanguage: state.whisperLanguage,
@@ -391,12 +386,13 @@ function applyProjectData(data) {
   if (data.srtContent) state.srtContent = data.srtContent;
   if (data.fps) state.fps = data.fps;
   if (data.videoFilename) state.videoFilename = data.videoFilename;
-  if (data.videoFilename2) state.videoFilename2 = data.videoFilename2;
   if (data.videoPath) state.videoPath = data.videoPath;
   if (data.videoResolution) state.videoResolution = data.videoResolution;
   if (data.projectName) state.projectName = data.projectName;
   if (data.gapFrames != null) state.gapFrames = data.gapFrames;
-  if (data.minChars != null) state.minChars = data.minChars;
+  // Legacy v3/v4 keys (the duplicate per-export filename, the min-sentence
+  // knob) are simply ignored here — old files still carried videoFilename, so
+  // the filename restores from that; the removed knobs never error on load.
   if (data.mergeThreshold != null) state.mergeThreshold = data.mergeThreshold;
   if (data.userPrompt) state.userPrompt = data.userPrompt;
   if (data.whisperLanguage) state.whisperLanguage = data.whisperLanguage;
@@ -410,7 +406,6 @@ function applyProjectData(data) {
   document.getElementById('fpsSelect').value = state.fps;
   document.getElementById('videoFilename').value = state.videoFilename || '';
   document.getElementById('gapFrames').value = state.gapFrames;
-  document.getElementById('minChars').value = state.minChars;
   document.getElementById('userPrompt').value = state.userPrompt || '';
   const wlEl = document.getElementById('whisperLanguage');
   if (wlEl) wlEl.value = state.whisperLanguage || 'pl';
@@ -592,7 +587,12 @@ async function deleteModel(id) {
   const { ask } = await import('@tauri-apps/plugin-dialog');
   const confirmed = await ask(
     `Usunąć model „${label}" z dysku? Tej operacji nie można cofnąć.`,
-    { title: 'Usuń model', kind: 'warning', okLabel: 'Usuń', cancelLabel: 'Anuluj' },
+    {
+      title: 'Usuń model',
+      kind: 'warning',
+      okLabel: 'Usuń',
+      cancelLabel: 'Anuluj',
+    },
   );
   if (!confirmed) return;
   try {
@@ -917,11 +917,8 @@ async function browseWhisperVideo() {
     document.getElementById('whisperVideoPath').value = path;
     // Pre-fill video fields
     state.videoFilename = name;
-    state.videoFilename2 = name;
     state.videoPath = path;
     document.getElementById('videoFilename').value = name;
-    const vf2 = document.getElementById('videoFilename2');
-    if (vf2) vf2.value = name;
     syncTranscribeBtn();
     syncAlignBtn();
   } catch (e) {
@@ -978,11 +975,7 @@ async function transcribeWithWhisper() {
 
     if (result.segments && result.segments.length) {
       // Word-driven segmentation: gap-free sentences carrying words[].
-      state.sentences = segmentFromWords(
-        result.segments,
-        state.fps,
-        state.minChars,
-      );
+      state.sentences = segmentFromWords(result.segments, state.fps, MIN_CHARS);
       state.sentences.forEach((s) => {
         s.source_idx = 0;
       });

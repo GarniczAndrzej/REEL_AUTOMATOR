@@ -314,16 +314,6 @@
                   max="500"
                 />
               </div>
-              <div class="setting-item">
-                <label>Min. długość zdania (znaki)</label>
-                <input
-                  type="number"
-                  id="minChars"
-                  value="20"
-                  min="5"
-                  max="100"
-                />
-              </div>
             </div>
           </div>
 
@@ -415,18 +405,8 @@
             <button class="btn btn-primary" id="analyzeBtn">
               Analizuj z AI →
             </button>
-            <button class="btn btn-secondary" id="compareBtn">
-              ⚖ Porównaj dostawców
-            </button>
             <button class="btn btn-secondary" id="downloadPromptBtn">
               ⬇ Eksportuj prompt .txt (do ręcznego użycia)
-            </button>
-            <button
-              class="btn btn-secondary"
-              id="clearLlmCacheBtn"
-              title="Usuń pamięć podręczną odpowiedzi AI"
-            >
-              🗑 Cache AI
             </button>
           </div>
 
@@ -567,7 +547,7 @@
                 <div style="display: flex; gap: 8px">
                   <input
                     type="text"
-                    id="videoFilename2"
+                    id="videoFilenameExport"
                     placeholder="np. webinar.mp4"
                     style="flex: 1"
                   />
@@ -962,151 +942,6 @@
               Przywróć domyślne
             </button>
             <button class="btn btn-primary" id="advSaveBtn">Zapisz</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- F8 — Compare two AI runs modal -->
-    <div id="compareModal" class="modal-overlay" style="display: none">
-      <div class="modal-box">
-        <div class="modal-header">
-          <span
-            style="
-              font-family: var(--display);
-              font-weight: 700;
-              font-size: 15px;
-            "
-            >Porównaj dwóch dostawców AI</span
-          >
-          <button
-            class="btn btn-secondary"
-            id="compareModalClose"
-            style="padding: 4px 10px"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="modal-body">
-          <div
-            style="
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 16px;
-              margin-bottom: 16px;
-            "
-          >
-            <!-- Provider A -->
-            <div class="card" style="padding: 14px">
-              <div
-                style="
-                  font-size: 12px;
-                  color: var(--text3);
-                  text-transform: uppercase;
-                  letter-spacing: 0.8px;
-                  margin-bottom: 10px;
-                "
-              >
-                Dostawca A
-              </div>
-              <div class="setting-item" style="margin-bottom: 8px">
-                <select id="compareProviderA">
-                  <option value="openrouter">OpenRouter</option>
-                </select>
-              </div>
-              <div class="setting-item" style="margin-bottom: 8px">
-                <input
-                  type="password"
-                  id="compareKeyA"
-                  placeholder="API key A…"
-                  autocomplete="off"
-                />
-              </div>
-              <div
-                class="setting-item"
-                id="compareModelRowA"
-                style="display: none"
-              >
-                <input
-                  type="text"
-                  id="compareModelA"
-                  placeholder="Model (np. mistralai/mistral-7b-instruct)"
-                />
-              </div>
-            </div>
-            <!-- Provider B -->
-            <div class="card" style="padding: 14px">
-              <div
-                style="
-                  font-size: 12px;
-                  color: var(--text3);
-                  text-transform: uppercase;
-                  letter-spacing: 0.8px;
-                  margin-bottom: 10px;
-                "
-              >
-                Dostawca B
-              </div>
-              <div class="setting-item" style="margin-bottom: 8px">
-                <select id="compareProviderB">
-                  <option value="openrouter">OpenRouter</option>
-                </select>
-              </div>
-              <div class="setting-item" style="margin-bottom: 8px">
-                <input
-                  type="password"
-                  id="compareKeyB"
-                  placeholder="API key B…"
-                  autocomplete="off"
-                />
-              </div>
-              <div
-                class="setting-item"
-                id="compareModelRowB"
-                style="display: none"
-              >
-                <input
-                  type="text"
-                  id="compareModelB"
-                  placeholder="Model (np. mistralai/mistral-7b-instruct)"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="btn-row" style="margin-bottom: 14px">
-            <button class="btn btn-primary" id="compareRunBtn">
-              ⚡ Uruchom porównanie
-            </button>
-          </div>
-
-          <div
-            id="compareLog"
-            style="
-              display: none;
-              font-size: 12px;
-              font-family: var(--mono);
-              color: var(--text2);
-              background: var(--surface2);
-              border-radius: 6px;
-              padding: 10px;
-              margin-bottom: 12px;
-              max-height: 100px;
-              overflow-y: auto;
-            "
-          ></div>
-
-          <div
-            id="compareDiff"
-            style="display: none; margin-bottom: 14px"
-          ></div>
-
-          <div id="compareActions" style="display: none; gap: 10px">
-            <button class="btn btn-primary" id="compareUseA">✓ Użyj A</button>
-            <button class="btn btn-primary" id="compareUseB">✓ Użyj B</button>
-            <button class="btn btn-secondary" id="compareMerge">
-              ⊕ Scal oba
-            </button>
           </div>
         </div>
       </div>

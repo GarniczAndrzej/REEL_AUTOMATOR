@@ -1,9 +1,10 @@
-import { subscribe } from './state.js';
+import { state, subscribe } from './state.js';
 import * as step1 from './ui/step1-import.js';
 import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/step3-export.js';
 import { init as initOrPicker } from './ai/openrouter-picker.js';
 import { getApiKey, setApiKey } from './ai/api-key.js';
+import { loadSettings } from './settings.js';
 
 export function goStep(n) {
   [1, 2, 3].forEach((i) => {
@@ -14,6 +15,13 @@ export function goStep(n) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Seed persisted app settings (S-16) before step inits read state. The
+  // merge-gap survives sessions via the `edl_app_settings` bag; fall back to
+  // the in-state default (12) when unset.
+  const settings = loadSettings();
+  if (settings.mergeThreshold != null)
+    state.mergeThreshold = settings.mergeThreshold;
+
   // Register nav first — before inits, so a throwing init never blocks navigation
   document.getElementById('nav1').addEventListener('click', () => goStep(1));
   document.getElementById('nav2').addEventListener('click', () => goStep(2));

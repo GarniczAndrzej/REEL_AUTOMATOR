@@ -1,5 +1,6 @@
 mod engine;
 mod ffmpeg;
+mod metadata;
 mod models;
 mod project;
 mod whisper;
@@ -26,6 +27,7 @@ pub fn run() {
             models::download_model,
             models::delete_model,
             waveform::extract_waveform,
+            metadata::probe_video_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

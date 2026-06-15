@@ -951,78 +951,48 @@ textarea::placeholder {
   display: block;
 }
 
-/* Render progress bars */
-.render-reel-row {
+/* ── Toasts (S-16) — non-blocking feedback ────────────────────── */
+
+#toastContainer {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-}
-.render-reel-row:last-child {
-  border-bottom: none;
-}
-.render-reel-label {
-  font-size: 12px;
-  color: var(--text2);
-}
-.render-progress-bar {
-  height: 6px;
-  background: var(--surface3);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.render-progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-.render-progress-pct {
-  font-size: 11px;
-  color: var(--text3);
-}
-
-/* Queue row status */
-.render-reel-meta {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  pointer-events: none;
 }
-.status-pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
+.toast {
+  min-width: 220px;
+  max-width: 360px;
+  padding: 10px 14px;
+  border-radius: 8px;
   font-family: var(--mono);
-  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-left: 3px solid var(--accent);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
-.status-pending {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text3);
+.toast-visible {
+  opacity: 1;
+  transform: translateY(0);
 }
-.status-running {
-  background: rgba(124, 109, 250, 0.2);
-  color: var(--accent2);
+.toast-success {
+  border-left-color: var(--green);
 }
-.status-done {
-  background: rgba(61, 214, 140, 0.15);
-  color: var(--green);
+.toast-error {
+  border-left-color: var(--red);
 }
-.status-cancelled {
-  background: rgba(245, 166, 35, 0.15);
-  color: var(--amber);
-}
-.status-error {
-  background: rgba(255, 77, 79, 0.15);
-  color: var(--red);
-}
-.aspect-badge {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text3);
+.toast-info {
+  border-left-color: var(--accent);
 }
 
 /* ── F3 — Drag-to-reorder + trim handles ──────────────────────── */

@@ -43,7 +43,6 @@ export const state = {
   fps: 25,
   videoFilename: '',
   gapFrames: 60,
-  minChars: 20,
   sentences: [],
 
   // step 2
@@ -58,7 +57,6 @@ Zasady:
   reelsData: [],
 
   // step 3
-  videoFilename2: '',
   videoPath: '',
   videoResolution: '1920x1080',
   projectName: 'Reels',
