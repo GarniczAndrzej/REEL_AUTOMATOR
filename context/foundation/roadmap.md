@@ -45,7 +45,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-12  | empty-error-states          | see explicit empty/error states instead of silent failures   | S-01, S-05         | FR-036                                        | proposed |
 | S-13  | keyboard-navigation         | drive review and tuning entirely from the keyboard           | S-02, S-04, S-16   | FR-037                                        | proposed |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | proposed |
-| S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | proposed |
+| S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | proposed |
 
 ## Streams
@@ -298,7 +298,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Unknowns:**
   - Which currently-planned slices and shipped features are the first pruning candidates? — Owner: user. Block: no (resolved in the step-2 sync).
 - **Risk:** Code removal for shipped features is the sharp edge — grep all consumers, keep user-facing strings Polish, and run `node --experimental-vm-modules test/regression.js` before and after any removal touching `src/parser/`, `src/exporters/`, or the frame-math pipeline. Recurring, not one-shot: re-run whenever the backlog or UI outgrows personal need.
-- **Status:** proposed
+- **Status:** done
 
 ### S-18: Speed up the WhisperX engine check
 
@@ -373,3 +373,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-01: get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL** — Archived 2026-06-14 → `context/archive/2026-06-12-scored-selection-edl/`. Bundled the R1 refactor (step2-analyze split) as its opening move; scored LLM schema/prompt/providers + validate-before-use gate + EDL hook/body/punchline markers (regression Test 13). Lesson: a free-form editable prompt must still elicit the fixed validated schema — validate every LLM response before it reaches the export pipeline (FR-018).
 - **S-05: transcribe locally with word-level alignment + manage models** — Archived 2026-06-14 → `context/archive/2026-06-12-builtin-whisperx-transcription/`. Built-in WhisperX engine (frozen Python sidecar via PyInstaller) replacing PATH `whisper-cli`; model manager (download/list/delete), word-level forced alignment, opt-in diarization. Lesson: both bundled sidecars (`ffmpeg-*` and `whisperx-engine-*`) plus `binaries/align_models/` are git-ignored and absent from any fresh checkout/worktree — restore via `sidecar/fetch-ffmpeg.sh` + `sidecar/build.sh` or `cargo`/`tauri dev` hard-fails on the missing `externalBin`. Never bake the multi-GB alignment model into the onefile — ship it beside the binary.
 - **R1: (refactor) split `step2-analyze.js` into per-surface modules** — Shipped inside S-01 (no separate archive). `step2-analyze.js` reduced to a thin orchestrator over `step2-reel-list.js` / `step2-prompt-panel.js` / `step2-segment-ops.js`; unblocks parallel work on S-02/S-03/S-04. Lesson: —.
+- **S-17: run a recurring pass to identify, decide on, and remove backlog/feature bloat** — Archived 2026-06-15 → `context/archive/2026-06-15-s-17/`. Lesson: —.
