@@ -6,8 +6,7 @@ const formatSentence = (s) => ({
   duration_frames: s.duration_frame,
 });
 
-// Static response-format spec + scoring guidance. Independent of userPrompt, so
-// it can sit in the cached Claude prefix (see buildClaudeContent).
+// Static response-format spec + scoring guidance. Independent of userPrompt.
 const FORMAT_SPEC = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
 [
   {
@@ -71,7 +70,6 @@ function buildSegmentsSection(sentences, sources, primaryFilename) {
 }
 
 // The static instruction block: multi-source note + segments + format spec.
-// Same text for every provider; forms the cached Claude prefix.
 function buildStaticBlock(sentences, sources, primaryFilename) {
   const { segmentsBlock, multiSourceNote } = buildSegmentsSection(
     sentences,
@@ -86,7 +84,7 @@ ${FORMAT_SPEC}`;
 }
 
 /**
- * String prompt for Gemini / OpenRouter / compare / download / disk-cache key.
+ * String prompt for OpenRouter / compare / download / disk-cache key.
  * @param {string} userPrompt
  * @param {import('../state.js').Sentence[]} sentences
  * @param {Array|null} sources
@@ -101,27 +99,4 @@ export function buildPrompt(
 ) {
   return `${userPrompt}
 ${buildStaticBlock(sentences, sources, primaryFilename)}`;
-}
-
-/**
- * Claude message content with a cached static prefix. The static block (segments
- * + format spec) comes first with `cache_control: ephemeral` so the cache
- * breakpoint covers it; the variable user prompt comes second.
- * @param {string} userPrompt
- * @param {import('../state.js').Sentence[]} sentences
- * @param {Array|null} sources
- * @param {string} primaryFilename
- * @returns {Array<{type:string, text:string, cache_control?:object}>}
- */
-export function buildClaudeContent(
-  userPrompt,
-  sentences,
-  sources = null,
-  primaryFilename = '',
-) {
-  const staticBlock = buildStaticBlock(sentences, sources, primaryFilename);
-  return [
-    { type: 'text', text: staticBlock, cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: userPrompt },
-  ];
 }

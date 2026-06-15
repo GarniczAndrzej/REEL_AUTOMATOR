@@ -1,4 +1,4 @@
-import { state, subscribe, emit } from './state.js';
+import { subscribe } from './state.js';
 import * as step1 from './ui/step1-import.js';
 import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/step3-export.js';
@@ -50,25 +50,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('[initOrPicker]', e);
   }
 
-  // API key bar
-  const modelSelect = document.getElementById('modelSelect');
+  // API key bar — OpenRouter only
   const apiKeyInput = document.getElementById('apiKeyInput');
-
-  modelSelect.addEventListener('change', () => {
-    state.currentProvider = modelSelect.value;
-    const wrap = document.getElementById('orModelWrap');
-    if (state.currentProvider === 'gemini') {
-      apiKeyInput.placeholder = 'Google AI Studio API key...';
-      wrap.classList.remove('visible');
-    } else if (state.currentProvider === 'claude') {
-      apiKeyInput.placeholder = 'Anthropic API key (sk-ant-...)...';
-      wrap.classList.remove('visible');
-    } else {
-      apiKeyInput.placeholder = 'OpenRouter API key (sk-or-...)...';
-      wrap.classList.add('visible');
-    }
-    loadApiKey();
-  });
+  apiKeyInput.placeholder = 'OpenRouter API key (sk-or-...)...';
+  document.getElementById('orModelWrap').classList.add('visible');
 
   document
     .getElementById('saveApiKeyBtn')
@@ -106,12 +91,12 @@ function saveApiKey() {
     showStatus('Pusty klucz — nie zapisano', 'err');
     return;
   }
-  setApiKey(state.currentProvider, key);
+  setApiKey('openrouter', key);
   showStatus('Zapisano ✓', 'ok');
 }
 
 function loadApiKey() {
-  const key = getApiKey(state.currentProvider);
+  const key = getApiKey('openrouter');
   document.getElementById('apiKeyInput').value = key;
   const s = document.getElementById('apiStatus');
   if (key) {

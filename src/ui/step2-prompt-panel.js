@@ -3,10 +3,10 @@
 // listeners via initPromptPanel(). (R1 split — pure move.)
 
 import { state, emit } from '../state.js';
-import { buildPrompt, buildClaudeContent } from '../ai/prompt.js';
+import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
 import { validateReels } from '../ai/validate.js';
-import { callGemini, callClaude, callOpenRouter } from '../ai/providers.js';
+import { callOpenRouter } from '../ai/providers.js';
 import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache, clearLlmCache } from '../ai/cache.js';
 import { renderReels, esc } from './step2-reel-list.js';
@@ -72,7 +72,7 @@ export function initPromptPanel() {
 async function runAIAnalysis() {
   const apiKey =
     document.getElementById('apiKeyInput').value.trim() ||
-    getApiKey(state.currentProvider);
+    getApiKey('openrouter');
   if (!apiKey) {
     alert('Wklej API key w nagłówku!');
     return;
@@ -81,7 +81,7 @@ async function runAIAnalysis() {
     alert('Najpierw przeanalizuj plik SRT (Krok 1)!');
     return;
   }
-  if (state.currentProvider === 'openrouter' && !state.orSelectedModel) {
+  if (!state.orSelectedModel) {
     alert(
       'Wybierz model OpenRouter! Kliknij "Załaduj modele" obok pola API key.',
     );
@@ -107,25 +107,17 @@ async function runAIAnalysis() {
     state.videoFilename || '',
   );
   log('Przygotowano prompt. Segmentów: ' + state.sentences.length, 'info');
-  log(
-    'Provider: ' +
-      state.currentProvider +
-      (state.currentProvider === 'openrouter'
-        ? ' / ' + state.orSelectedModel
-        : ''),
-    'info',
-  );
+  log('Provider: OpenRouter / ' + state.orSelectedModel, 'info');
   setPS(1, 'done');
   setPS(2, 'running');
 
   let rawResponse = '';
   try {
     const orModel = state.orSelectedModel;
-    if (state.currentProvider === 'openrouter')
-      log('Model: ' + orModel, 'info');
+    log('Model: ' + orModel, 'info');
 
     const cacheKey = JSON.stringify({
-      provider: state.currentProvider,
+      provider: 'openrouter',
       model: orModel || '',
       prompt,
     });
@@ -133,20 +125,9 @@ async function runAIAnalysis() {
       result: responseText,
       fromCache,
       hashShort,
-    } = await withLlmCache(cacheKey, () => {
-      if (state.currentProvider === 'gemini') return callGemini(apiKey, prompt);
-      if (state.currentProvider === 'claude')
-        return callClaude(
-          apiKey,
-          buildClaudeContent(
-            state.userPrompt,
-            state.sentences,
-            state.sources?.length ? state.sources : null,
-            state.videoFilename || '',
-          ),
-        );
-      return callOpenRouter(apiKey, prompt, orModel);
-    });
+    } = await withLlmCache(cacheKey, () =>
+      callOpenRouter(apiKey, prompt, orModel),
+    );
 
     rawResponse = responseText;
     if (fromCache) {
@@ -336,20 +317,9 @@ async function runComparison() {
       model: cfg.model,
       prompt,
     });
-    const { result } = await withLlmCache(cacheKey, () => {
-      if (cfg.provider === 'gemini') return callGemini(cfg.key, prompt);
-      if (cfg.provider === 'claude')
-        return callClaude(
-          cfg.key,
-          buildClaudeContent(
-            state.userPrompt,
-            state.sentences,
-            state.sources?.length ? state.sources : null,
-            state.videoFilename || '',
-          ),
-        );
-      return callOpenRouter(cfg.key, prompt, cfg.model);
-    });
+    const { result } = await withLlmCache(cacheKey, () =>
+      callOpenRouter(cfg.key, prompt, cfg.model),
+    );
     return validateReels(
       JSON.parse(result.replace(/```json|```/g, '').trim()),
       state.sentences,
@@ -462,11 +432,11 @@ async function downloadPromptTXT() {
   await saveTextToPath({ defaultName: 'PROMPT_DLA_AI.txt', content });
 }
 
-export function setPS(n, s) {
+function setPS(n, s) {
   const el = document.getElementById('ps' + n);
   el.className = 'p-step' + (s ? ' ' + s : '');
 }
-export function logClear() {
+function logClear() {
   document.getElementById('logBox').innerHTML = '';
 }
 export function log(msg, type = '') {

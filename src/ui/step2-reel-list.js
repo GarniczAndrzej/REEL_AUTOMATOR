@@ -4,7 +4,6 @@
 
 import { state, subscribe } from '../state.js';
 import { framesToTC } from '../parser/srt.js';
-import { isFiller } from '../selection/fillers.js';
 import {
   loadWaveform,
   drawWaveform,
@@ -109,7 +108,7 @@ function seekToFrame(ri, frame) {
   showPreviewPanel();
 }
 
-export function updateGapColors(ri) {
+function updateGapColors(ri) {
   const reel = state.reelsData[ri];
   if (!reel) return;
   const threshold = reel.mergeThreshold ?? state.mergeThreshold;
@@ -132,7 +131,7 @@ export function updateGapColors(ri) {
     });
 }
 
-export function drawAllTimelines() {
+function drawAllTimelines() {
   const list = document.getElementById('reelsList');
   list.querySelectorAll('.reel-timeline[data-reel-idx]').forEach((canvas) => {
     const ri = +canvas.dataset.reelIdx;
@@ -404,7 +403,7 @@ export function renderReels() {
   requestAnimationFrame(() => drawAllTimelines());
 }
 
-export function scheduleWaveformLoad() {
+function scheduleWaveformLoad() {
   if (!state.videoPath) return;
   const fps = state.fps;
   const list = document.getElementById('reelsList');
@@ -444,8 +443,8 @@ export function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-// Render clip text with filler words struck-through in red (F4)
-export function renderClipText(s) {
+// Render clip text, truncated at word boundaries (MAX chars).
+function renderClipText(s) {
   const MAX = 120;
   if (!s.words || !s.words.length) {
     const t = s.text.substring(0, MAX);
@@ -460,10 +459,7 @@ export function renderClipText(s) {
     }
     const t = w.text.trim();
     if (!t) continue;
-    const safe = esc(t);
-    html += isFiller(t)
-      ? `<s style="color:var(--red);opacity:0.7">${safe}</s> `
-      : `${safe} `;
+    html += `${esc(t)} `;
     chars += t.length + 1;
   }
   return html.trim();

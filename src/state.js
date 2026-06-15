@@ -55,7 +55,6 @@ Zasady:
 - Możesz zmieniać kolejność segmentów zachowując logiczny sens
 - Szukaj emocjonalnych momentów, konkretnych liczb, historii i CTA
 - Stwórz tyle Reelsów ile możesz z wartościowego materiału`,
-  currentProvider: 'gemini',
   reelsData: [],
 
   // step 3
@@ -73,7 +72,6 @@ Zasady:
   orSelectedModel: null,
 
   // Phase 4 F1 / S-05 model manager
-  whisperModelPath: '', // legacy raw .bin path — retired, ignored on load
   modelId: '', // selected managed faster-whisper model id (S-05)
   whisperLanguage: 'pl',
   diarize: false, // opt-in speaker diarization (S-05 Phase 6)

@@ -260,31 +260,31 @@ No data migration. `load_project` is schema-agnostic; removing the render-queue/
 
 #### Automated
 
-- [x] 1.1 Rust type-checks (`cargo check`)
-- [x] 1.2 No lingering render_queue/render_preset/sanitize_name references
-- [x] 1.3 Regression suite green
+- [x] 1.1 Rust type-checks (`cargo check`) — cd30361
+- [x] 1.2 No lingering render_queue/render_preset/sanitize_name references — cd30361
+- [x] 1.3 Regression suite green — cd30361
 
 #### Manual
 
-- [ ] 1.4 Transcription runs + cancels cleanly (no stray child process)
-- [ ] 1.5 Word-alignment pass runs end-to-end after `drive_engine` extraction
+- [x] 1.4 Transcription runs + cancels cleanly (no stray child process) — cd30361
+- [x] 1.5 Word-alignment pass runs end-to-end after `drive_engine` extraction — cd30361
 
 ### Phase 2: Frontend de-bloat + filler removal
 
 #### Automated
 
-- [ ] 2.1 No dead whisperModelPath/fillers/isFiller references
-- [ ] 2.2 Gemini/Claude providers removed (no callGemini/callClaude/buildClaudeContent/GEMINI_MODEL/CLAUDE_MODEL/currentProvider; models.js deleted)
-- [ ] 2.3 Un-exported names have no importer
-- [ ] 2.4 Root ReelAutomatorAI.html removed
-- [ ] 2.5 Regression suite green
+- [x] 2.1 No dead whisperModelPath/fillers/isFiller references
+- [x] 2.2 Gemini/Claude providers removed (no callGemini/callClaude/buildClaudeContent/GEMINI_MODEL/CLAUDE_MODEL/currentProvider; models.js deleted)
+- [x] 2.3 Un-exported names have no importer
+- [x] 2.4 Root ReelAutomatorAI.html removed
+- [x] 2.5 Regression suite green
 
 #### Manual
 
-- [ ] 2.6 Step-2 clip text renders without strike-through, no console errors (word + no-words)
-- [ ] 2.7 AI analysis works single-run + A/B compare via OpenRouter (no provider selector; model picker drives model)
-- [ ] 2.8 Model delete control removes from disk + refreshes list + Polish confirm
-- [ ] 2.9 No regressions in step-1 import / project save-load
+- [x] 2.6 Step-2 clip text renders without strike-through, no console errors (word + no-words)
+- [x] 2.7 AI analysis works single-run + A/B compare via OpenRouter (no provider selector; model picker drives model)
+- [x] 2.8 Model delete control removes from disk + refreshes list + Polish confirm
+- [x] 2.9 No regressions in step-1 import / project save-load
 
 ### Phase 3: Docs + backlog housekeeping
 

@@ -65,7 +65,7 @@ let dragSrc = null;
 
 let focusedClip = null; // { reelIdx, clipIdx, sentenceId }
 
-export function setFocusedClip(reelIdx, clipIdx, sentenceId) {
+function setFocusedClip(reelIdx, clipIdx, sentenceId) {
   focusedClip = { reelIdx, clipIdx, sentenceId };
   document
     .querySelectorAll('.clip-row.focused')
@@ -83,7 +83,7 @@ let trimWarnShown = false;
 
 // ── Mutations ──────────────────────────────────────────────────────
 
-export function moveClip(srcReel, srcIdx, dstReel, dstBefore) {
+function moveClip(srcReel, srcIdx, dstReel, dstBefore) {
   // No-op check
   if (srcReel === dstReel) {
     const adjusted = srcIdx < dstBefore ? dstBefore - 1 : dstBefore;
@@ -101,7 +101,7 @@ export function moveClip(srcReel, srcIdx, dstReel, dstBefore) {
   emit();
 }
 
-export function removeClip(reelIdx, clipIdx) {
+function removeClip(reelIdx, clipIdx) {
   const before = snap();
   state.reelsData[reelIdx].clip_ids.splice(clipIdx, 1);
   pushUndo(before);
@@ -109,7 +109,7 @@ export function removeClip(reelIdx, clipIdx) {
   emit();
 }
 
-export function mergeWithNext(reelIdx, clipIdx) {
+function mergeWithNext(reelIdx, clipIdx) {
   const reel = state.reelsData[reelIdx];
   if (!reel) return;
   const id1 = reel.clip_ids[clipIdx];
@@ -130,7 +130,7 @@ export function mergeWithNext(reelIdx, clipIdx) {
   emit();
 }
 
-export function applyTrim(sentenceId, side, newFrame) {
+function applyTrim(sentenceId, side, newFrame) {
   invalidateWaveform(sentenceId);
   const s = state.sentences.find((x) => x.id === sentenceId);
   if (!s) return;

@@ -400,7 +400,6 @@ function applyProjectData(data) {
   if (data.mergeThreshold != null) state.mergeThreshold = data.mergeThreshold;
   if (data.userPrompt) state.userPrompt = data.userPrompt;
   if (data.whisperLanguage) state.whisperLanguage = data.whisperLanguage;
-  // Migration: prefer managed modelId; ignore stale raw whisperModelPath.
   if (data.modelId) state.modelId = data.modelId;
   if (data.diarize != null) state.diarize = data.diarize;
   if (data.sentences) state.sentences = data.sentences;
@@ -560,6 +559,11 @@ async function renderModelManager() {
       ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-download-model="${selModel.id}" ${disabledAttr}>⬇ Pobierz</button>`
       : ''
   }
+  ${
+    selDownloaded
+      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-delete-model="${selModel.id}" ${disabledAttr}>🗑 Usuń</button>`
+      : ''
+  }
 </div>
 <div class="model-dl-progress" id="modelDlProgress" style="display:none;font-size:11px;color:var(--text2);margin-top:6px;"></div>`;
 
@@ -570,6 +574,38 @@ async function renderModelManager() {
     dlBtn.addEventListener('click', () =>
       downloadModel(dlBtn.dataset.downloadModel),
     );
+  }
+  const delBtn = container.querySelector('[data-delete-model]');
+  if (delBtn) {
+    delBtn.addEventListener('click', () =>
+      deleteModel(delBtn.dataset.deleteModel),
+    );
+  }
+}
+
+async function deleteModel(id) {
+  const { getModel } = await import('../transcription/model-registry.js');
+  const model = getModel(id);
+  const label = model ? model.label : id;
+  // Use Tauri's native dialog — window.confirm() does not reliably show a panel
+  // in the WKWebView and can resolve without prompting.
+  const { ask } = await import('@tauri-apps/plugin-dialog');
+  const confirmed = await ask(
+    `Usunąć model „${label}" z dysku? Tej operacji nie można cofnąć.`,
+    { title: 'Usuń model', kind: 'warning', okLabel: 'Usuń', cancelLabel: 'Anuluj' },
+  );
+  if (!confirmed) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('delete_model', { modelId: id });
+    if (state.modelId === id) {
+      state.modelId = '';
+      emit();
+    }
+    await refreshModelStatus();
+    await renderModelManager();
+  } catch (e) {
+    alert('Nie udało się usunąć modelu: ' + e);
   }
 }
 
