@@ -405,27 +405,27 @@ here for manual confirmation from the human that the manual testing was successf
 
 #### Automated
 
-- [x] 2.1 `cargo check` passes
-- [x] 2.2 `cargo build` passes
-- [x] 2.3 Regression suite passes (`node --experimental-vm-modules test/regression.js`)
+- [x] 2.1 `cargo check` passes — dd5efd2
+- [x] 2.2 `cargo build` passes — dd5efd2
+- [x] 2.3 Regression suite passes (`node --experimental-vm-modules test/regression.js`) — dd5efd2
 
 #### Manual
 
-- [x] 2.4 Cold cache: badge resolves via cheap probe; `engine-readiness/<hash>.json` appears
-- [x] 2.5 Warm cache: badge paints with no sidecar spawn
-- [x] 2.6 Deleting cache / changing align dir forces a fresh probe
-- [x] 2.7 A simulated hang trips the timeout → amber error, no hang
+- [x] 2.4 Cold cache: badge resolves via cheap probe; `engine-readiness/<hash>.json` appears — dd5efd2
+- [x] 2.5 Warm cache: badge paints with no sidecar spawn — dd5efd2
+- [x] 2.6 Deleting cache / changing align dir forces a fresh probe — dd5efd2
+- [x] 2.7 A simulated hang trips the timeout → amber error, no hang — dd5efd2
 
 ### Phase 3: Frontend — instant cached badge + manual re-verify
 
 #### Automated
 
-- [ ] 3.1 Prettier clean (`npx prettier --check "src/**/*.{js,css,html}"`)
-- [ ] 3.2 Regression suite passes
+- [x] 3.1 Prettier clean (`npx prettier --check "src/**/*.{js,css,html}"`)
+- [x] 3.2 Regression suite passes
 
 #### Manual
 
-- [ ] 3.3 Cold launch shows "Sprawdzanie silnika…" then the amber "✓ Silnik wykryty … — pełna weryfikacja zalecana" tier (not green); warm launch is effectively instant
-- [ ] 3.4 "Pełna weryfikacja silnika" runs the real align, paints the authoritative green "✓ Silnik gotowy" (only path that earns green), re-enables button
-- [ ] 3.5 Transcribe enablement unchanged (no new gating)
-- [ ] 3.6 All readiness strings Polish
+- [x] 3.3 Launch is cache-read-only (no sidecar spawn): with no cached verdict the badge shows "Silnik niezweryfikowany — kliknij „Pełna weryfikacja silnika”"; after a verify, relaunch paints the cached verdict instantly (deviation — see change.md)
+- [x] 3.4 "Pełna weryfikacja silnika" runs the real align, paints the authoritative green "✓ Silnik gotowy" (only path that earns green), re-enables button
+- [x] 3.5 Transcribe enablement unchanged (no new gating)
+- [x] 3.6 All readiness strings Polish

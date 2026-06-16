@@ -76,6 +76,13 @@ pub struct EngineStatus {
     pub gpu: bool,
     pub device: String,
     pub alignment_model_ready: bool,
+    /// Whether this verdict was earned by the heavy `--selftest` (which actually
+    /// imports whisperx + runs a real align) versus the cheap `--capability`
+    /// probe. Only an authoritative verdict may paint the green "gotowy" badge.
+    /// Not part of the sidecar JSON — set by the Rust command before caching, so
+    /// `#[serde(default)]` keeps pre-existing cache files (which lack it) readable.
+    #[serde(default)]
+    pub authoritative: bool,
 }
 
 /// Run the sidecar with the given args, collecting (stdout, stderr, exit_code),
@@ -142,6 +149,8 @@ fn parse_engine_status(out: &str) -> Result<EngineStatus, String> {
         gpu: v["gpu"].as_bool().unwrap_or(false),
         device: v["device"].as_str().unwrap_or("").to_string(),
         alignment_model_ready: v["alignment_model_ready"].as_bool().unwrap_or(false),
+        // Not in the sidecar JSON — the calling command stamps this before caching.
+        authoritative: false,
     })
 }
 
@@ -219,15 +228,32 @@ pub async fn whisperx_engine_check(app: AppHandle) -> Result<EngineStatus, Strin
             err.trim()
         ));
     }
-    let status = parse_engine_status(&out)?;
+    let mut status = parse_engine_status(&out)?;
+    // The self-test actually imported whisperx + ran a real align — this verdict
+    // is authoritative and is the only path allowed to earn the green badge.
+    status.authoritative = true;
     write_readiness_cache(&app, &readiness_cache_key(&app), &status);
     Ok(status)
 }
 
-/// The badge's entry point: return a cached verdict instantly on a hit, else run
+/// Launch-time badge read: return the cached verdict if present, else `None`.
+/// **Never spawns the sidecar.** A cold probe (290 MB onefile extraction + torch
+/// import) measured 37–67 s on the dev machine — too slow and too variable for
+/// the launch path, so the badge paints only from a prior verification's cached
+/// result. A miss surfaces the "kliknij, aby zweryfikować" prompt; the heavy
+/// verify (`whisperx_engine_check`) runs only on explicit user action.
+#[tauri::command]
+pub async fn whisperx_engine_cached(app: AppHandle) -> Result<Option<EngineStatus>, String> {
+    Ok(read_readiness_cache(&app, &readiness_cache_key(&app)))
+}
+
+/// On-demand cheap probe: return a cached verdict instantly on a hit, else run
 /// the cheap `--capability` probe (device detect + dir check, no model load, no
 /// align, no HF network), bounded by a timeout, and cache the result. Cache is
-/// best-effort — any error falls through to a live probe.
+/// best-effort — any error falls through to a live probe. NOTE: the launch badge
+/// no longer calls this (it uses `whisperx_engine_cached`, which never spawns) —
+/// kept as the cheap on-demand primitive; the spawn here is still too slow/
+/// variable (37–67 s cold) to sit on the launch path.
 #[tauri::command]
 pub async fn whisperx_engine_capability(app: AppHandle) -> Result<EngineStatus, String> {
     let key = readiness_cache_key(&app);
@@ -248,7 +274,10 @@ pub async fn whisperx_engine_capability(app: AppHandle) -> Result<EngineStatus, 
             err.trim()
         ));
     }
-    let status = parse_engine_status(&out)?;
+    let mut status = parse_engine_status(&out)?;
+    // Capability is a device-detect + dir-check; it cannot verify the frozen
+    // import chain, so its verdict is non-authoritative (amber "wykryty" tier).
+    status.authoritative = false;
     write_readiness_cache(&app, &key, &status);
     Ok(status)
 }

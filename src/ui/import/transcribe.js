@@ -64,6 +64,11 @@ export function initTranscribe() {
   hfTokenInput.addEventListener('input', (e) => {
     setApiKey('huggingface', e.target.value.trim());
   });
+  // S-18 — manual full self-test (heavy align), the only path that earns the
+  // authoritative green "Silnik gotowy" badge. The launch probe is the cheap
+  // cached capability check (see refreshEngineReadiness).
+  const fullVerifyBtn = document.getElementById('fullEngineVerifyBtn');
+  if (fullVerifyBtn) fullVerifyBtn.addEventListener('click', fullEngineVerify);
   initModelManager();
   initWhisperAdvanced();
 }
@@ -83,13 +88,42 @@ let _modelStatus = {};
 let _downloadingId = null;
 
 async function initModelManager() {
-  // Render the model list immediately. The engine readiness probe spawns a cold
-  // sidecar self-test (heavy: imports torch, loads the bundled align model, runs
-  // a real forced-align) and can take tens of seconds — do NOT gate the model UI
-  // on it. Kick it off without awaiting; it updates its own badge when it lands.
+  // Render the model list immediately. The launch badge is a pure cache READ
+  // (whisperx_engine_cached) — it never spawns the sidecar, because even the
+  // "cheap" probe pays a 37–67 s cold cost (290 MB onefile extraction + torch
+  // import). The badge paints only from a prior "Pełna weryfikacja" result; a
+  // miss invites the user to run it on demand. Kick it off without awaiting.
   await refreshModelStatus();
   await renderModelManager();
   refreshEngineReadiness();
+}
+
+/**
+ * Paint the engine-readiness badge from a status verdict.
+ * @param {HTMLElement|null} el
+ * @param {{ok:boolean, device?:string, gpu?:boolean, alignment_model_ready?:boolean}} status
+ * @param {{authoritative:boolean}} opts - `authoritative` is true ONLY for the full
+ *   `--selftest` path, which is the sole path allowed to paint the green "Silnik gotowy"
+ *   tier. The cheap capability probe cannot `import whisperx`, so it cannot verify the
+ *   frozen import chain (the false-positive documented in whisperx_engine.py) — it paints
+ *   the distinct, non-authoritative amber "Silnik wykryty" tier instead.
+ */
+function renderEngineBadge(el, status, { authoritative }) {
+  if (!el) return;
+  if (status.ok) {
+    const dev = `${status.device || 'cpu'}${status.gpu ? ', GPU' : ''}`;
+    if (authoritative) {
+      el.textContent = `✓ Silnik gotowy (${dev})${status.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
+      el.style.color = 'var(--green)';
+    } else {
+      el.textContent = `✓ Silnik wykryty (${dev}) — pełna weryfikacja zalecana`;
+      el.style.color = 'var(--amber)';
+    }
+  } else {
+    el.textContent =
+      '⚠ Silnik WhisperX nie jest jeszcze zbudowany. Uruchom sidecar/build.sh.';
+    el.style.color = 'var(--amber)';
+  }
 }
 
 async function refreshEngineReadiness() {
@@ -97,18 +131,46 @@ async function refreshEngineReadiness() {
   if (!el) return;
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const s = await invoke('whisperx_engine_check');
-    if (s.ok) {
-      el.textContent = `✓ Silnik gotowy (${s.device || 'cpu'}${s.gpu ? ', GPU' : ''})${s.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
-      el.style.color = 'var(--green)';
+    // Pure cache read — never spawns the sidecar (see initModelManager). `null`
+    // = no prior verification on this machine for the current engine version.
+    const s = await invoke('whisperx_engine_cached');
+    if (s) {
+      // Cached verdict carries its own `authoritative` flag (true only when a
+      // full self-test wrote it), so the badge paints the correct tier.
+      renderEngineBadge(el, s, { authoritative: !!s.authoritative });
     } else {
       el.textContent =
-        '⚠ Silnik WhisperX nie jest jeszcze zbudowany. Uruchom sidecar/build.sh.';
-      el.style.color = 'var(--amber)';
+        'Silnik niezweryfikowany — kliknij „Pełna weryfikacja silnika”.';
+      el.style.color = 'var(--text3)';
     }
   } catch (e) {
     el.textContent = '⚠ Nie można sprawdzić silnika: ' + e;
     el.style.color = 'var(--amber)';
+  }
+}
+
+// Manual full self-test: the heavy `--selftest` (loads the align model, runs a
+// real forced-align) — also refreshes the Rust readiness cache. The only path
+// that earns the authoritative green badge.
+async function fullEngineVerify() {
+  const el = document.getElementById('engineReadyIndicator');
+  const btn = document.getElementById('fullEngineVerifyBtn');
+  if (btn) btn.disabled = true;
+  if (el) {
+    el.textContent = 'Pełna weryfikacja silnika…';
+    el.style.color = 'var(--text3)';
+  }
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const s = await invoke('whisperx_engine_check');
+    renderEngineBadge(el, s, { authoritative: true });
+  } catch (e) {
+    if (el) {
+      el.textContent = '⚠ Nie można sprawdzić silnika: ' + e;
+      el.style.color = 'var(--amber)';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

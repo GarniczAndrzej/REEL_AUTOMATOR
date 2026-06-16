@@ -24,6 +24,7 @@ pub fn run() {
             whisper::cancel_transcription,
             engine::whisperx_engine_check,
             engine::whisperx_engine_capability,
+            engine::whisperx_engine_cached,
             models::list_models,
             models::download_model,
             models::delete_model,
