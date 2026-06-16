@@ -149,7 +149,7 @@ export async function renderModelManager() {
 
   container.innerHTML = `
 <div style="display:flex;gap:8px;align-items:center;">
-  <select id="modelSelect" style="flex:1;font-size:13px;" ${disabledAttr}>
+  <select id="modelSelect" style="flex:1;min-width:0;font-size:13px;" ${disabledAttr}>
     <option value=""${state.modelId ? '' : ' selected'} disabled>— wybierz model —</option>
     ${options}
   </select>

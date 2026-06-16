@@ -27,12 +27,6 @@ export function initPromptPanel() {
     .getElementById('downloadPromptBtn')
     .addEventListener('click', downloadPromptTXT);
   document
-    .getElementById('editJsonBtn')
-    .addEventListener('click', editReelsJSON);
-  document
-    .getElementById('applyManualJsonBtn')
-    .addEventListener('click', applyManualJSON);
-  document
     .getElementById('applyPastedJsonBtn')
     .addEventListener('click', applyPastedJSON);
   document
@@ -160,37 +154,6 @@ function revealPasteFix(rawText, message) {
   document
     .getElementById('pasteJsonCard')
     ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-function editReelsJSON() {
-  const card = document.getElementById('jsonEditorCard');
-  card.style.display = card.style.display === 'none' ? 'block' : 'none';
-  document.getElementById('jsonEditor').value = JSON.stringify(
-    state.reelsData,
-    null,
-    2,
-  );
-}
-
-function applyManualJSON() {
-  try {
-    const parsed = validateReels(
-      JSON.parse(document.getElementById('jsonEditor').value),
-      state.sentences,
-    );
-    const before = snap();
-    state.reelsData = parsed;
-    pushUndo(before);
-    renderReels();
-    document.getElementById('statusReels').textContent = state.reelsData.length;
-    document.getElementById('reelsCard').style.display = 'block';
-    document.getElementById('step2Next').style.display = 'flex';
-    document.getElementById('jsonEditorCard').style.display = 'none';
-    log('JSON zastosowany: ' + state.reelsData.length + ' reelsów', 'ok');
-    emit();
-  } catch (e) {
-    alert('Błąd parsowania JSON:\n' + e.message);
-  }
 }
 
 function applyPastedJSON() {

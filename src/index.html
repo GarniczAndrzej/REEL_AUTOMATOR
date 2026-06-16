@@ -18,6 +18,7 @@
         </button>
         <button class="api-save-btn" id="saveProjectBtn">Zapisz</button>
         <button class="api-save-btn" id="saveProjectAsBtn">Zapisz jako…</button>
+        <button class="api-save-btn" id="openExportBtn">⬇ Eksportuj…</button>
         <button class="api-save-btn" id="settingsBtn">⚙ Ustawienia</button>
       </div>
     </header>
@@ -42,7 +43,7 @@
           <div class="step-num">3</div>
           <div class="step-info">
             <div class="step-title">Eksport EDL</div>
-            <div class="step-desc">Gotowy timeline do Premiere/DaVinci</div>
+            <div class="step-desc">Otwórz okno eksportu (EDL / XML / Lua)</div>
           </div>
         </div>
         <div class="sidebar-divider"></div>
@@ -88,170 +89,138 @@
             </p>
           </div>
 
-          <div class="card">
-            <div class="card-title">Plik napisów</div>
-            <div id="dropZone" class="drop-zone">
-              <input type="file" id="srtFile" accept=".srt,.vtt" />
-              <div class="drop-icon">📄</div>
-              <div class="drop-label">Przeciągnij plik .srt lub .vtt</div>
-              <div class="drop-sub">Obsługiwane: SRT, WebVTT (UTF-8)</div>
-            </div>
-            <div id="fileLoaded" style="display: none" class="file-loaded">
-              <span class="file-loaded-icon">✓</span>
-              <span class="file-loaded-name" id="fileName">—</span>
-              <span class="file-loaded-meta" id="fileMeta">—</span>
-              <button class="file-clear" id="clearFileBtn">✕</button>
-            </div>
-          </div>
-
-          <!-- S-05 — Built-in WhisperX transcription -->
-          <div class="card">
-            <div class="card-title">Transkrypcja wideo (WhisperX)</div>
-            <div class="info-box" style="margin-bottom: 12px; font-size: 12px">
-              Transkrypcja w pełni lokalnie z wbudowanym silnikiem WhisperX (bez
-              osobnej instalacji). Słowa są dopasowywane czasowo (forced
-              alignment).
-              <span
+          <div class="card-row">
+            <!-- S-05 — Built-in WhisperX transcription -->
+            <div class="card">
+              <div class="card-title">Transkrypcja wideo (WhisperX)</div>
+              <div
                 id="engineReadyIndicator"
-                style="display: block; margin-top: 6px; color: var(--text3)"
-                >Sprawdzanie silnika…</span
-              >
-            </div>
-            <div class="settings-grid">
-              <div class="setting-item" style="grid-column: 1/-1">
-                <label>Plik wideo</label>
-                <div style="display: flex; gap: 8px">
-                  <input
-                    type="text"
-                    id="whisperVideoPath"
-                    placeholder="Wybierz plik wideo…"
-                    style="flex: 1"
-                    readonly
-                  />
-                  <button
-                    class="btn btn-secondary"
-                    style="padding: 6px 12px; font-size: 12px"
-                    id="browseWhisperVideoBtn"
-                  >
-                    Przeglądaj
-                  </button>
-                </div>
-              </div>
-              <div class="setting-item" style="grid-column: 1/-1">
-                <label>Model transkrypcji</label>
-                <div
-                  id="modelManagerList"
-                  style="display: flex; flex-direction: column; gap: 8px"
-                ></div>
-              </div>
-              <div class="setting-item">
-                <label>Język transkrypcji</label>
-                <select id="whisperLanguage">
-                  <option value="pl">Polski</option>
-                  <option value="en">Angielski</option>
-                  <option value="de">Niemiecki</option>
-                  <option value="fr">Francuski</option>
-                  <option value="es">Hiszpański</option>
-                  <option value="auto">Auto-detekcja</option>
-                </select>
-              </div>
-            </div>
-            <div class="btn-row" style="margin-top: 12px">
-              <button class="btn btn-primary" id="transcribeBtn" disabled>
-                🎙 Transkrybuj wideo
-              </button>
-              <button
-                class="btn btn-secondary"
-                id="cancelTranscribeBtn"
-                style="display: none"
-              >
-                ✕ Anuluj
-              </button>
-              <button
-                class="btn btn-secondary"
-                id="whisperAdvancedBtn"
-                style="margin-left: auto"
-                title="Ustawienia zaawansowane silnika WhisperX"
-              >
-                ⚙ Ustawienia zaawansowane
-              </button>
-            </div>
-            <div
-              id="whisperProgressBox"
-              style="display: none; margin-top: 12px"
-            >
-              <div
-                style="font-size: 12px; color: var(--text2); margin-bottom: 6px"
-                id="whisperProgressLabel"
-              >
-                Inicjalizacja…
-              </div>
-              <div
                 style="
-                  height: 6px;
-                  background: var(--surface2);
-                  border-radius: 3px;
-                  overflow: hidden;
+                  margin-bottom: 12px;
+                  font-size: 12px;
+                  color: var(--text3);
                 "
               >
-                <div
-                  id="whisperProgressFill"
-                  style="
-                    height: 100%;
-                    width: 0%;
-                    background: var(--accent);
-                    transition: width 0.3s;
-                  "
-                ></div>
+                Sprawdzanie silnika…
               </div>
-            </div>
-            <div
-              id="whisperExportRow"
-              class="btn-row"
-              style="display: none; margin-top: 12px"
-            >
-              <button class="btn btn-secondary" id="exportSrtBtn">
-                ⬇ Eksport .srt
-              </button>
-              <button class="btn btn-secondary" id="exportVttBtn">
-                ⬇ Eksport .vtt
-              </button>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Ustawienia projektu</div>
-            <div class="settings-grid">
-              <div class="setting-item">
-                <label>FPS materiału</label>
-                <select id="fpsSelect">
-                  <option value="25">25 fps (PAL / Europa)</option>
-                  <option value="24">24 fps (Kino)</option>
-                  <option value="30">30 fps (NTSC)</option>
-                  <option value="50">50 fps (Slow motion)</option>
-                  <option value="60">60 fps</option>
-                </select>
-                <div class="fps-note">
-                  Musi zgadzać się z twoim materiałem wideo!
+              <div class="settings-grid">
+                <div class="setting-item" style="grid-column: 1/-1">
+                  <label>Plik wideo</label>
+                  <div style="display: flex; gap: 8px">
+                    <input
+                      type="text"
+                      id="whisperVideoPath"
+                      placeholder="Wybierz plik wideo…"
+                      style="flex: 1"
+                      readonly
+                    />
+                    <button
+                      class="btn btn-secondary"
+                      style="padding: 6px 12px; font-size: 12px"
+                      id="browseWhisperVideoBtn"
+                    >
+                      Przeglądaj
+                    </button>
+                  </div>
+                </div>
+                <div class="setting-item" style="grid-column: 1/-1">
+                  <label>Model transkrypcji</label>
+                  <div
+                    id="modelManagerList"
+                    style="display: flex; flex-direction: column; gap: 8px"
+                  ></div>
+                </div>
+                <div class="setting-item">
+                  <label>Język transkrypcji</label>
+                  <select id="whisperLanguage">
+                    <option value="pl">Polski</option>
+                    <option value="en">Angielski</option>
+                    <option value="de">Niemiecki</option>
+                    <option value="fr">Francuski</option>
+                    <option value="es">Hiszpański</option>
+                    <option value="auto">Auto-detekcja</option>
+                  </select>
                 </div>
               </div>
-              <div class="setting-item">
-                <label>Nazwa pliku wideo (do EDL)</label>
-                <input
-                  type="text"
-                  id="videoFilename"
-                  placeholder="np. webinar_2024.mp4"
-                />
+              <div class="btn-row" style="margin-top: 12px">
+                <button class="btn btn-primary" id="transcribeBtn" disabled>
+                  🎙 Transkrybuj wideo
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="cancelTranscribeBtn"
+                  style="display: none"
+                >
+                  ✕ Anuluj
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="whisperAdvancedBtn"
+                  title="Ustawienia zaawansowane silnika WhisperX"
+                >
+                  ⚙ Ustawienia zaawansowane
+                </button>
               </div>
-              <div class="setting-item">
-                <label>Przerwa między reelsami (klatki)</label>
-                <input
-                  type="number"
-                  id="gapFrames"
-                  value="60"
-                  min="0"
-                  max="500"
-                />
+              <div
+                id="whisperProgressBox"
+                style="display: none; margin-top: 12px"
+              >
+                <div
+                  style="
+                    font-size: 12px;
+                    color: var(--text2);
+                    margin-bottom: 6px;
+                  "
+                  id="whisperProgressLabel"
+                >
+                  Inicjalizacja…
+                </div>
+                <div
+                  style="
+                    height: 6px;
+                    background: var(--surface2);
+                    border-radius: 3px;
+                    overflow: hidden;
+                  "
+                >
+                  <div
+                    id="whisperProgressFill"
+                    style="
+                      height: 100%;
+                      width: 0%;
+                      background: var(--accent);
+                      transition: width 0.3s;
+                    "
+                  ></div>
+                </div>
+              </div>
+              <div
+                id="whisperExportRow"
+                class="btn-row"
+                style="display: none; margin-top: 12px"
+              >
+                <button class="btn btn-secondary" id="exportSrtBtn">
+                  ⬇ Eksport .srt
+                </button>
+                <button class="btn btn-secondary" id="exportVttBtn">
+                  ⬇ Eksport .vtt
+                </button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Plik napisów</div>
+              <div id="dropZone" class="drop-zone">
+                <input type="file" id="srtFile" accept=".srt,.vtt" />
+                <div class="drop-icon">📄</div>
+                <div class="drop-label">Przeciągnij plik .srt lub .vtt</div>
+                <div class="drop-sub">Obsługiwane: SRT, WebVTT (UTF-8)</div>
+              </div>
+              <div id="fileLoaded" style="display: none" class="file-loaded">
+                <span class="file-loaded-icon">✓</span>
+                <span class="file-loaded-name" id="fileName">—</span>
+                <span class="file-loaded-meta" id="fileMeta">—</span>
+                <button class="file-clear" id="clearFileBtn">✕</button>
               </div>
             </div>
           </div>
@@ -374,21 +343,6 @@
               <span id="reelsCount" class="badge badge-green">0 reelsów</span>
             </div>
             <div class="reels-list" id="reelsList"></div>
-            <div style="margin-top: 14px" class="btn-row">
-              <button class="btn btn-secondary" id="editJsonBtn">
-                ✏ Edytuj JSON ręcznie
-              </button>
-            </div>
-          </div>
-
-          <div class="card" id="jsonEditorCard" style="display: none">
-            <div class="card-title">Edytor JSON (ręczne poprawki)</div>
-            <textarea class="json-editor" id="jsonEditor" rows="12"></textarea>
-            <div style="margin-top: 10px" class="btn-row">
-              <button class="btn btn-primary" id="applyManualJsonBtn">
-                Zastosuj JSON →
-              </button>
-            </div>
           </div>
 
           <!-- Wklejanie JSON od zewnętrznego AI — demoted behind a details (S-16 #11) -->
@@ -461,86 +415,10 @@
             </button>
           </div>
         </section>
-
-        <!-- SECTION: Export -->
-        <section class="surface-section section-locked" id="sectionExport">
-          <div class="panel-header">
-            <h2>Eksport</h2>
-            <p>
-              Wybierz format i pobierz gotowe pliki do Premiere Pro, DaVinci
-              Resolve lub uruchom skrypt bezpośrednio w DaVinci.
-            </p>
-          </div>
-
-          <div class="card">
-            <div class="card-title">Podsumowanie projektu</div>
-            <div class="badge-row" id="summaryBadges">
-              <span class="badge badge-purple" id="sumSegs">0 segmentów</span>
-              <span class="badge badge-green" id="sumReels">0 reelsów</span>
-              <span class="badge badge-amber" id="sumClips">0 klipów</span>
-            </div>
-          </div>
-
-          <!-- Plik wideo źródłowy — auto-wykryty przy imporcie, tylko do odczytu -->
-          <div class="card">
-            <div
-              class="card-title"
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-              "
-            >
-              <span>Plik wideo źródłowy</span>
-              <button
-                class="btn btn-secondary"
-                style="padding: 4px 10px; font-size: 11px"
-                id="exBrowseVideoBtn"
-                title="Podmień plik wideo (ponowne wykrycie fps i rozdzielczości)"
-              >
-                Przeglądaj…
-              </button>
-            </div>
-            <div class="settings-grid">
-              <div class="setting-item">
-                <label>Nazwa pliku</label>
-                <div class="ro-field" id="exVideoFilename">—</div>
-              </div>
-              <div class="setting-item">
-                <label>Pełna ścieżka</label>
-                <div class="ro-field" id="exVideoPath">—</div>
-              </div>
-              <div class="setting-item">
-                <label>Rozdzielczość (auto)</label>
-                <div class="ro-field" id="exVideoResolution">—</div>
-              </div>
-              <div class="setting-item">
-                <label>Nazwa projektu</label>
-                <div class="ro-field" id="exProjectName">—</div>
-              </div>
-            </div>
-            <div class="fps-note" style="margin-top: 8px">
-              Wykrywane automatycznie z importowanego wideo. XML/Lua wymagają
-              pełnej ścieżki — użyj „Przeglądaj…", jeśli importowano tylko
-              napisy.
-            </div>
-          </div>
-
-          <div class="btn-row">
-            <button class="btn btn-primary" id="openExportBtn">
-              ⬇ Eksportuj… (EDL / XML / Lua / więcej)
-            </button>
-          </div>
-        </section>
       </div>
     </main>
 
     <script type="module" src="./main.js"></script>
-
-    <!-- FN2 — Preview video panel (fixed, shown when user interacts with a timeline) -->
-    <div id="previewPanel" style="display: none">
-      <video id="previewVideo" preload="metadata" playsinline></video>
-    </div>
 
     <!-- S-05 Phase 7 — WhisperX advanced settings modal -->
     <div id="whisperAdvancedModal" class="modal-overlay" style="display: none">
@@ -831,9 +709,71 @@
               margin: 18px 0 10px;
             "
           >
-            Eksport
+            Projekt i eksport
+          </div>
+          <div class="fps-note" style="margin: -4px 0 12px">
+            fps, nazwa pliku i rozdzielczość wykrywane są automatycznie przy
+            imporcie wideo — możesz je tutaj nadpisać.
           </div>
           <div class="settings-grid">
+            <div class="setting-item">
+              <label>FPS materiału</label>
+              <select id="fpsSelect">
+                <option value="25">25 fps (PAL / Europa)</option>
+                <option value="24">24 fps (Kino)</option>
+                <option value="30">30 fps (NTSC)</option>
+                <option value="50">50 fps (Slow motion)</option>
+                <option value="60">60 fps</option>
+              </select>
+              <div class="fps-note" id="fpsNote">
+                Musi zgadzać się z twoim materiałem wideo!
+              </div>
+            </div>
+            <div class="setting-item">
+              <label>Nazwa pliku wideo (do EDL)</label>
+              <input
+                type="text"
+                id="videoFilename"
+                placeholder="np. webinar_2024.mp4"
+              />
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Pełna ścieżka wideo (XML / Lua)</label>
+              <div style="display: flex; gap: 8px">
+                <input
+                  type="text"
+                  id="videoPath"
+                  placeholder="/ścieżka/do/wideo.mp4"
+                  style="flex: 1"
+                />
+                <button
+                  class="btn btn-secondary"
+                  id="browseVideoMetaBtn"
+                  style="padding: 6px 12px; font-size: 12px"
+                  title="Wybierz plik wideo (auto-wykrycie fps i rozdzielczości)"
+                >
+                  Przeglądaj…
+                </button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label>Rozdzielczość</label>
+              <input type="text" id="videoResolution" placeholder="1920x1080" />
+            </div>
+            <div class="setting-item">
+              <label>Nazwa projektu</label>
+              <input type="text" id="projectName" placeholder="Reels" />
+            </div>
+            <div class="setting-item">
+              <label>Przerwa między reelsami (klatki)</label>
+              <input
+                type="number"
+                id="gapFrames"
+                value="60"
+                min="0"
+                max="500"
+              />
+            </div>
             <div class="setting-item">
               <label>Domyślny próg scalania (klatki)</label>
               <input
@@ -873,6 +813,11 @@
           </button>
         </div>
         <div class="modal-body">
+          <div class="badge-row" id="summaryBadges" style="margin-bottom: 16px">
+            <span class="badge badge-purple" id="sumSegs">0 segmentów</span>
+            <span class="badge badge-green" id="sumReels">0 reelsów</span>
+            <span class="badge badge-amber" id="sumClips">0 klipów</span>
+          </div>
           <div class="export-format-row">
             <div>
               <strong>EDL</strong>

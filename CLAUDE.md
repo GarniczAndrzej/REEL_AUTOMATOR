@@ -47,10 +47,10 @@ ES module app served by Vite. Entry point is `src/index.html` → `src/main.js`.
 
 **State** lives in `src/state.js` as a single mutable object exported as `state`. Changes are broadcast via a minimal pub-sub: `emit()` notifies all `subscribe(fn)` listeners. Nothing is reactive beyond this — components read `state` directly. (The "call `emit()` after every mutation" rule lives in *Frontend state & module conventions* below.)
 
-**Three-step pipeline** driven by `goStep(n)` in `main.js`:
-1. `src/ui/step1-import.js` — SRT/video file drop/parse, Whisper transcription trigger, project save/load
-2. `src/ui/step2-analyze.js` — AI analysis, reel JSON editor
-3. `src/ui/step3-export.js` — EDL/XML/Lua export tabs
+**Progressive single surface** (S-16 replaced the old `goStep(n)` three-step wizard). `src/ui/surface.js` is a render-on-change controller that subscribes to `emit()` and reveals/gates the import → review → export sections from real state (`state.srtContent` / `sentences.length` / `reelsData.length`) instead of toggling three `.active` panels. App-level config (API key, OpenRouter model, merge-gap, project defaults) lives in a settings modal (`src/ui/settings-modal.js`); export is a quick-export popover (`src/ui/export-popover.js`). The three section modules:
+1. `src/ui/step1-import.js` — thin orchestrator over `src/ui/import/{transcribe,project-io,segments}.js`: SRT/video file drop/parse, Whisper transcription trigger, project save/load, fps/resolution auto-populate
+2. `src/ui/step2-analyze.js` — AI analysis orchestrator over `step2-prompt-panel.js` / `step2-reel-list.js` / `step2-segment-ops.js` (decluttered reel review, component-score badges)
+3. `src/ui/export-popover.js` — EDL/XML/Lua quick-export with an expander for SRT/VTT/`.md`/prompt-copy
 
 **Exporters** (`src/exporters/`) are pure functions: `generateEDL(opts)`, `generateXML(opts)`, `generateLua(opts)`. They read `sentences` + `reelsData` and return strings.
 
@@ -88,7 +88,7 @@ Rust modules registered as Tauri commands in `lib.rs`:
 
 ### Project file (`.reelproj`)
 
-Plain JSON written by `save_project` / read by `load_project`. Current schema version: 3. Contains the `state` snapshot: `srtContent`, `sentences`, `reelsData`, `mergeThreshold`, and core metadata. F-01 dropped the dead `renderConfig`/`reelsMetadata` blobs; older v2 files load tolerantly (those keys are simply ignored, never assigned to state).
+Plain JSON written by `save_project` / read by `load_project`. Current schema version: 5. Contains the `state` snapshot: `srtContent`, `sentences`, `reelsData`, `mergeThreshold`, and core metadata. F-01 dropped the dead `renderConfig`/`reelsMetadata` blobs; S-16 bumped to v5, dropping the duplicated `videoFilename2`, the pruned `minChars` UI knob, the `sources[]` multi-source repeater, and the per-reel `reelsData[ri].mergeThreshold` override (now folded into the single global merge-gap). Older v2/v3/v4 files load tolerantly — legacy keys are mapped (`videoFilename2` → `videoFilename` when the primary is absent) or simply ignored, never assigned to state.
 
 ## Things to know before editing
 

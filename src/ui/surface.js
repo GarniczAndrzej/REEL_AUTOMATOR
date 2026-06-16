@@ -16,7 +16,6 @@ import { state, subscribe } from '../state.js';
 const SECTIONS = [
   { id: 'sectionImport', nav: 'nav1' },
   { id: 'sectionReview', nav: 'nav2', gate: (s) => s.sentences.length > 0 },
-  { id: 'sectionExport', nav: 'nav3', gate: (s) => s.reelsData.length > 0 },
 ];
 
 let pendingFrame = null;

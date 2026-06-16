@@ -1,101 +1,16 @@
-// Step-2 reel-list rendering plus the floating preview surface. S-16 Phase 3b
-// (#14) removed the per-reel scrub timeline, the play button, and the per-reel
-// merge-threshold slider: the list now reads as compact reel cards with
-// component-score badges, and the floating preview is seeked by clicking a clip
-// body. Owns the playhead/preview module state.
+// Step-2 reel-list rendering. S-16 Phase 3b (#14) removed the per-reel scrub
+// timeline, the play button, and the per-reel merge-threshold slider; a later
+// acceptance pass removed the floating video preview. The S-16 phase-4
+// declutter pass stripped the clip waveform, the trim handles, and the per-clip
+// timecode — each clip row now shows just its transcript text (drag-reorder +
+// delete + merge-gap remain). The reel header leads with the reel name; scores
+// sit on the right.
 
-import { state, subscribe } from '../state.js';
-import {
-  loadWaveform,
-  drawWaveform,
-  cachedPeaks,
-} from '../selection/waveform.js';
-
-// ── Preview state ───────────────────────────────────────────────────
-
-const playheadState = new Map(); // reelIdx → current playhead frame (source)
-let activeReelIdx = null; // reel that owns the preview video
-let previewVideoEl = null;
-let cachedAssetUrl = '';
-
-/** @returns {HTMLVideoElement|null} the shared preview <video> element */
-export function getPreviewVideo() {
-  return previewVideoEl;
-}
-
-/** @returns {number|null} the reel index that currently owns the preview */
-export function getActiveReelIdx() {
-  return activeReelIdx;
-}
-
-/** @param {number} ri reel index @returns {number|undefined} playhead frame */
-export function getPlayhead(ri) {
-  return playheadState.get(ri);
-}
-
-// ── Preview helpers ─────────────────────────────────────────────────
-
-function showPreviewPanel() {
-  const panel = document.getElementById('previewPanel');
-  if (panel) panel.style.display = 'block';
-}
-
-function updatePreviewPanelSize() {
-  if (!previewVideoEl) return;
-  previewVideoEl.style.width = '320px';
-  previewVideoEl.style.height = '180px';
-}
-
-async function updatePreviewVideoSrc() {
-  if (!previewVideoEl || !state.videoPath) return;
-  try {
-    const { convertFileSrc } = await import('@tauri-apps/api/core');
-    const url = convertFileSrc(state.videoPath);
-    if (cachedAssetUrl !== url) {
-      cachedAssetUrl = url;
-      previewVideoEl.src = url;
-      previewVideoEl.load();
-    }
-  } catch {
-    // Not in Tauri context or asset protocol unavailable — preview disabled
-  }
-}
-
-function seekToFrame(ri, frame) {
-  const reel = state.reelsData[ri];
-  if (!reel) return;
-  playheadState.set(ri, frame);
-  activeReelIdx = ri;
-  if (previewVideoEl && previewVideoEl.readyState >= 1) {
-    try {
-      previewVideoEl.currentTime = frame / state.fps;
-    } catch {}
-  }
-  showPreviewPanel();
-}
-
-function initPreviewVideo() {
-  previewVideoEl = document.getElementById('previewVideo');
-  if (!previewVideoEl) return;
-
-  updatePreviewPanelSize();
-
-  previewVideoEl.addEventListener('timeupdate', () => {
-    if (activeReelIdx === null) return;
-    const frame = Math.round(previewVideoEl.currentTime * state.fps);
-    playheadState.set(activeReelIdx, frame);
-  });
-
-  // Refresh video src whenever videoPath changes
-  subscribe(() => updatePreviewVideoSrc());
-  updatePreviewVideoSrc();
-}
+import { state } from '../state.js';
 
 // ── Init ───────────────────────────────────────────────────────────
 
 export function initReelList(list) {
-  initPreviewVideo();
-
   // ── Reel header toggle (delegated) ───────────────────────────────
   list.addEventListener('click', (e) => {
     if (e.target.closest('.clip-del-btn')) return;
@@ -103,22 +18,6 @@ export function initReelList(list) {
     if (!h) return;
     h.classList.toggle('expanded');
     h.nextElementSibling.classList.toggle('open');
-  });
-
-  // ── Clip body click → seek the floating preview there ────────────
-  list.addEventListener('click', (e) => {
-    if (
-      e.target.closest(
-        '.clip-del-btn, .clip-merge-btn, .trim-handle, .clip-grip',
-      )
-    )
-      return;
-    const row = e.target.closest('.clip-row');
-    if (!row) return;
-    const ri = +row.dataset.reelIdx;
-    const sid = +row.dataset.sentenceId;
-    const s = state.sentences.find((x) => x.id === sid);
-    if (s) seekToFrame(ri, s.start_frame);
   });
 }
 
@@ -165,10 +64,6 @@ export function renderReels() {
         ? `<span class="reel-score-badge" title="Virality score">${Math.round(r.virality_score)}</span>`
         : `<span class="reel-score-badge muted" title="Brak oceny">brak oceny</span>`;
       const axesHtml = renderAxisBadges(r.scores);
-      const reasonHtml =
-        hasScore && r.reason
-          ? `<span class="reel-reason">${esc(r.reason)}</span>`
-          : '';
 
       const clipsHtml = r.clip_ids.length
         ? r.clip_ids
@@ -179,14 +74,10 @@ export function renderReels() {
               const clipHtml = `<div class="clip-row" draggable="true"
   data-reel-idx="${ri}" data-clip-idx="${ci}" data-sentence-id="${id}">
   <div class="clip-grip" title="Przeciągnij aby zmienić kolejność">⠿</div>
-  <div class="trim-handle trim-start" data-sentence-id="${id}" data-side="start" title="Przytnij lewy koniec — przeciągnij">◀</div>
   <div class="clip-body">
-    <canvas class="clip-waveform" data-sentence-id="${id}" width="400" height="48"></canvas>
-    <div class="clip-tc">#${s.id} ${esc(s.start_tc)}→${esc(s.end_tc)}</div>
-    <div class="clip-dur">${dur}s</div>
     <div class="clip-txt">${renderClipText(s)}</div>
   </div>
-  <div class="trim-handle trim-end" data-sentence-id="${id}" data-side="end" title="Przytnij prawy koniec — przeciągnij">▶</div>
+  <div class="clip-dur">${dur}s</div>
   <button class="clip-del-btn" data-reel-idx="${ri}" data-clip-idx="${ci}" title="Usuń z reela">✕</button>
 </div>`;
 
@@ -221,12 +112,10 @@ export function renderReels() {
 
       return `<div class="reel-card" data-reel-idx="${ri}">
   <div class="reel-header expanded" data-toggle-reel>
-    <span class="reel-badge">REEL ${ri + 1}</span>
-    ${scoreBadge}
-    ${axesHtml}
     <span class="reel-name">${esc(r.reel_name)}</span>
     <span class="reel-meta">${r.clip_ids.length} klipów • ${totalDur}s</span>
-    ${reasonHtml}
+    ${scoreBadge}
+    ${axesHtml}
   </div>
   <div class="reel-clips open" data-reel-idx="${ri}">${clipsHtml}</div>
 </div>`;
@@ -235,39 +124,6 @@ export function renderReels() {
 
   document.getElementById('reelsCount').textContent =
     state.reelsData.length + ' reelsów';
-  scheduleWaveformLoad();
-}
-
-function scheduleWaveformLoad() {
-  if (!state.videoPath) return;
-  const fps = state.fps;
-  const list = document.getElementById('reelsList');
-  list
-    .querySelectorAll('.clip-waveform[data-sentence-id]')
-    .forEach((canvas) => {
-      const sid = +canvas.dataset.sentenceId;
-      const s = state.sentences.find((x) => x.id === sid);
-      if (!s) return;
-      const peaks = cachedPeaks(sid);
-      if (peaks) {
-        drawWaveform(canvas, peaks, 0, 1);
-        return;
-      }
-      loadWaveform(
-        sid,
-        state.videoPath,
-        s.start_frame / fps,
-        s.end_frame / fps,
-        400,
-      ).then((p) => {
-        if (!p) return;
-        // Canvas may have been replaced by another renderReels call; re-query by sentenceId
-        const el = list.querySelector(
-          `.clip-waveform[data-sentence-id="${sid}"]`,
-        );
-        if (el) drawWaveform(el, p, 0, 1);
-      });
-    });
 }
 
 export function esc(str) {

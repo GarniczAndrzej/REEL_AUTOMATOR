@@ -6,6 +6,8 @@
 import { state, emit } from '../state.js';
 import { getApiKey, setApiKey } from '../ai/api-key.js';
 import { saveSettings } from '../settings.js';
+import { populateVideoMeta } from '../util/video-meta.js';
+import { toast } from './toast.js';
 
 /**
  * Wire the settings modal: open/close, API key load/save, model-picker
@@ -34,6 +36,16 @@ export function initSettingsModal() {
     });
   }
 
+  // Project/source fields re-homed here (acceptance feedback): fps, video
+  // filename and gap are wired in import/segments.js (same IDs); path,
+  // resolution and project name are project state, wired here.
+  bindProjectInput('videoPath', 'videoPath');
+  bindProjectInput('videoResolution', 'videoResolution');
+  bindProjectInput('projectName', 'projectName');
+  document
+    .getElementById('browseVideoMetaBtn')
+    ?.addEventListener('click', browseVideoMeta);
+
   loadApiKey();
 
   const openBtn = document.getElementById('settingsBtn');
@@ -56,8 +68,55 @@ export function initSettingsModal() {
 
 function fillSettingsForm() {
   loadApiKey();
-  const mergeEl = document.getElementById('mergeThreshold');
-  if (mergeEl) mergeEl.value = state.mergeThreshold;
+  setVal('mergeThreshold', state.mergeThreshold);
+  setVal('fpsSelect', state.fps);
+  setVal('videoFilename', state.videoFilename || '');
+  setVal('gapFrames', state.gapFrames);
+  setVal('videoPath', state.videoPath || '');
+  setVal('videoResolution', state.videoResolution || '');
+  setVal('projectName', state.projectName || '');
+}
+
+function setVal(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+/**
+ * Wire a text input to a `state` field: write-through on input + emit.
+ * @param {string} id element id
+ * @param {keyof typeof state} key state field
+ * @returns {void}
+ */
+function bindProjectInput(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', (e) => {
+    state[key] = e.target.value;
+    emit();
+  });
+}
+
+// Pick a video file and auto-detect fps + resolution; user can still override
+// the populated fields afterwards. Mirrors the old export-card browse button.
+async function browseVideoMeta() {
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const path = await open({
+      filters: [
+        {
+          name: 'Wideo',
+          extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'r3d'],
+        },
+      ],
+    });
+    if (!path) return;
+    await populateVideoMeta(path);
+    fillSettingsForm();
+    emit();
+  } catch (e) {
+    toast('Nie udało się wybrać pliku: ' + e, 'error');
+  }
 }
 
 function saveApiKey() {

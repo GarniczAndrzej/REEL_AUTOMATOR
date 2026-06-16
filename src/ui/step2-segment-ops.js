@@ -4,17 +4,8 @@
 
 import { state, emit } from '../state.js';
 import { framesToTC } from '../parser/srt.js';
-import {
-  drawWaveform,
-  cachedPeaks,
-  invalidateWaveform,
-} from '../selection/waveform.js';
-import {
-  renderReels,
-  getPreviewVideo,
-  getActiveReelIdx,
-  getPlayhead,
-} from './step2-reel-list.js';
+import { invalidateWaveform } from '../selection/waveform.js';
+import { renderReels } from './step2-reel-list.js';
 
 // ── Undo / redo (F16 — covers reelsData, sentences) ────────────────────
 
@@ -76,11 +67,6 @@ function setFocusedClip(reelIdx, clipIdx, sentenceId) {
   if (row) row.classList.add('focused');
 }
 
-// ── Trim state ─────────────────────────────────────────────────────
-
-let trimState = null;
-let trimWarnShown = false;
-
 // ── Mutations ──────────────────────────────────────────────────────
 
 function moveClip(srcReel, srcIdx, dstReel, dstBefore) {
@@ -126,23 +112,6 @@ function mergeWithNext(reelIdx, clipIdx) {
   reel.clip_ids.splice(clipIdx + 1, 1);
   invalidateWaveform(id1);
   pushUndo(before);
-  renderReels();
-  emit();
-}
-
-function applyTrim(sentenceId, side, newFrame) {
-  invalidateWaveform(sentenceId);
-  const s = state.sentences.find((x) => x.id === sentenceId);
-  if (!s) return;
-  const fps = state.fps;
-  if (side === 'start') {
-    s.start_frame = Math.max(0, Math.min(newFrame, s.end_frame - 1));
-    s.start_tc = framesToTC(s.start_frame, fps);
-  } else {
-    s.end_frame = Math.max(s.start_frame + 1, newFrame);
-    s.end_tc = framesToTC(s.end_frame, fps);
-  }
-  s.duration_frame = s.end_frame - s.start_frame;
   renderReels();
   emit();
 }
@@ -240,98 +209,9 @@ export function initSegmentOps(list) {
     dragSrc = null;
   });
 
-  // ── Trim handles ─────────────────────────────────────────────────
-  list.addEventListener('pointerdown', (e) => {
-    const handle = e.target.closest('.trim-handle');
-    if (!handle) return;
-    e.preventDefault();
-    const sentenceId = +handle.dataset.sentenceId;
-    const side = handle.dataset.side;
-    const s = state.sentences.find((x) => x.id === sentenceId);
-    if (!s) return;
-    if (!trimWarnShown) {
-      if (
-        !confirm(
-          'Trymowanie zmienia segmenty SRT — działanie nieodwracalne.\nCmd-Z cofa zmianę. Kontynuować?',
-        )
-      )
-        return;
-      trimWarnShown = true;
-    }
-    handle.setPointerCapture(e.pointerId);
-    trimState = {
-      sentenceId,
-      side,
-      startX: e.clientX,
-      origFrame: side === 'start' ? s.start_frame : s.end_frame,
-      currentFrame: side === 'start' ? s.start_frame : s.end_frame,
-      preSnap: snap(),
-    };
-  });
-
-  list.addEventListener('pointermove', (e) => {
-    if (!trimState) return;
-    const s = state.sentences.find((x) => x.id === trimState.sentenceId);
-    if (!s) return;
-    const fps = state.fps;
-    const deltaFrames = Math.round(
-      ((e.clientX - trimState.startX) * fps) / 100,
-    );
-    let newFrame = trimState.origFrame + deltaFrames;
-    let trimStartFrac = 0,
-      trimEndFrac = 1;
-    if (trimState.side === 'start') {
-      newFrame = Math.max(0, Math.min(newFrame, s.end_frame - 1));
-      trimState.currentFrame = newFrame;
-      const row = list.querySelector(
-        `.clip-row[data-sentence-id="${trimState.sentenceId}"]`,
-      );
-      if (row)
-        row.querySelector('.clip-tc').textContent =
-          `#${s.id} ${framesToTC(newFrame, fps)}→${s.end_tc}`;
-      trimStartFrac =
-        (newFrame - s.start_frame) / Math.max(1, s.duration_frame);
-    } else {
-      newFrame = Math.max(s.start_frame + 1, newFrame);
-      trimState.currentFrame = newFrame;
-      const row = list.querySelector(
-        `.clip-row[data-sentence-id="${trimState.sentenceId}"]`,
-      );
-      if (row)
-        row.querySelector('.clip-tc').textContent =
-          `#${s.id} ${s.start_tc}→${framesToTC(newFrame, fps)}`;
-      trimEndFrac = (newFrame - s.start_frame) / Math.max(1, s.duration_frame);
-    }
-    const peaks = cachedPeaks(trimState.sentenceId);
-    if (peaks) {
-      const canvas = list.querySelector(
-        `.clip-waveform[data-sentence-id="${trimState.sentenceId}"]`,
-      );
-      if (canvas) drawWaveform(canvas, peaks, trimStartFrac, trimEndFrac);
-    }
-  });
-
-  list.addEventListener('pointerup', () => {
-    if (!trimState) return;
-    if (trimState.currentFrame !== trimState.origFrame) {
-      pushUndo(trimState.preSnap);
-      applyTrim(trimState.sentenceId, trimState.side, trimState.currentFrame);
-    }
-    trimState = null;
-  });
-
-  list.addEventListener('pointercancel', () => {
-    trimState = null;
-  });
-
   // ── Clip row click → set focus (F14) ─────────────────────────────
   list.addEventListener('click', (e) => {
-    if (
-      e.target.closest(
-        '.clip-del-btn, .clip-merge-btn, .trim-handle, .clip-grip',
-      )
-    )
-      return;
+    if (e.target.closest('.clip-del-btn, .clip-merge-btn, .clip-grip')) return;
     const row = e.target.closest('.clip-row');
     if (!row) return;
     setFocusedClip(
@@ -352,37 +232,7 @@ export function initSegmentOps(list) {
     )
       return;
 
-    const previewVideoEl = getPreviewVideo();
-    const activeReelIdx = getActiveReelIdx();
-
     switch (e.key) {
-      case ' ':
-        e.preventDefault();
-        if (previewVideoEl) {
-          if (previewVideoEl.paused) previewVideoEl.play().catch(() => {});
-          else previewVideoEl.pause();
-        }
-        break;
-      case 'i':
-      case 'I':
-        if (focusedClip && activeReelIdx !== null) {
-          const ph = getPlayhead(activeReelIdx);
-          if (ph != null) {
-            pushUndo(snap());
-            applyTrim(focusedClip.sentenceId, 'start', ph);
-          }
-        }
-        break;
-      case 'o':
-      case 'O':
-        if (focusedClip && activeReelIdx !== null) {
-          const ph = getPlayhead(activeReelIdx);
-          if (ph != null) {
-            pushUndo(snap());
-            applyTrim(focusedClip.sentenceId, 'end', ph);
-          }
-        }
-        break;
       case 'ArrowUp':
         e.preventDefault();
         if (focusedClip && focusedClip.clipIdx > 0) {
@@ -408,24 +258,6 @@ export function initSegmentOps(list) {
           removeClip(focusedClip.reelIdx, focusedClip.clipIdx);
           focusedClip = null;
         }
-        break;
-      case 'j':
-      case 'J':
-        if (previewVideoEl) {
-          previewVideoEl.pause();
-          previewVideoEl.currentTime = Math.max(
-            0,
-            previewVideoEl.currentTime - 5 / state.fps,
-          );
-        }
-        break;
-      case 'k':
-      case 'K':
-        if (previewVideoEl) previewVideoEl.pause();
-        break;
-      case 'l':
-      case 'L':
-        if (previewVideoEl) previewVideoEl.play().catch(() => {});
         break;
     }
   });

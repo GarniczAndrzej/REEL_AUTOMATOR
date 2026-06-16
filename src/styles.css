@@ -25,6 +25,32 @@
   --text3: #555468;
   --mono: 'DM Mono', monospace;
   --display: 'Syne', sans-serif;
+
+  /* S-16 Phase 4 — spacing / radius / type scale (4px base).
+     Values map 1:1 onto the previously hard-coded literals: the restyle
+     regularizes the scale without shifting the dark-only palette. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
 }
 
 body {
@@ -48,7 +74,7 @@ header {
 .logo {
   font-family: var(--display);
   font-weight: 800;
-  font-size: 18px;
+  font-size: var(--fs-xl);
   letter-spacing: -0.5px;
   color: var(--text);
   display: flex;
@@ -60,11 +86,11 @@ header {
   width: 28px;
   height: 28px;
   background: var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: var(--fs-lg);
 }
 
 .api-bar {
@@ -74,7 +100,7 @@ header {
 }
 
 .api-bar label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -86,9 +112,9 @@ header {
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   outline: none;
   cursor: pointer;
 }
@@ -98,9 +124,9 @@ header {
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   width: 220px;
   outline: none;
   transition: border-color 0.2s;
@@ -117,9 +143,9 @@ header {
   border: 1px solid var(--border);
   color: var(--text2);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
@@ -130,9 +156,9 @@ header {
 }
 
 .api-status {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: none;
   white-space: nowrap;
 }
@@ -162,9 +188,9 @@ header {
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   width: 200px;
   outline: none;
   transition: border-color 0.2s;
@@ -185,7 +211,7 @@ header {
   overflow-y: auto;
   background: var(--surface2);
   border: 1px solid var(--border2);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   z-index: 999;
   display: none;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -207,11 +233,11 @@ header {
   background: var(--surface3);
 }
 .or-model-item .or-model-id {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 .or-model-item .or-model-ctx {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--text3);
   margin-top: 2px;
 }
@@ -219,7 +245,7 @@ header {
   background: rgba(124, 109, 250, 0.15);
 }
 .or-model-item .or-model-price {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--accent2);
   float: right;
 }
@@ -231,9 +257,9 @@ header {
 .or-selected-badge {
   background: rgba(124, 109, 250, 0.2);
   color: var(--accent2);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -251,9 +277,9 @@ header {
   border: 1px solid var(--border);
   color: var(--text2);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 5px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
@@ -317,7 +343,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--text2);
   flex-shrink: 0;
@@ -336,12 +362,12 @@ main {
 .step-title {
   font-family: var(--display);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-md);
   color: var(--text);
   margin-bottom: 3px;
 }
 .step-desc {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
   line-height: 1.4;
 }
@@ -353,11 +379,11 @@ main {
 }
 
 .content {
-  padding: 32px;
+  padding: var(--sp-8);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--sp-6);
 }
 
 /* S-16 — progressive single surface: sections stack in one scrolling column;
@@ -366,7 +392,7 @@ main {
 .surface-section {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--sp-5);
 }
 .surface-section.section-locked {
   display: none;
@@ -374,13 +400,13 @@ main {
 
 .panel-header h2 {
   font-family: var(--display);
-  font-size: 22px;
+  font-size: var(--fs-2xl);
   font-weight: 700;
   color: var(--text);
   margin-bottom: 6px;
 }
 .panel-header p {
-  font-size: 13px;
+  font-size: var(--fs-md);
   color: var(--text2);
   line-height: 1.6;
 }
@@ -388,13 +414,40 @@ main {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--sp-5);
+}
+
+/* Two cards side by side in one row (import: napisy + transkrypcja).
+   Collapses to a single column on narrow widths. */
+.card-row {
+  display: grid;
+  /* WhisperX transkrypcja (lewa) szersza; plik napisów (prawa) węższy. */
+  grid-template-columns: 1.5fr 1fr;
+  gap: var(--sp-5);
+  align-items: stretch;
+}
+.card-row > .card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* dropzone wypełnia wyrównaną wysokość karty „Plik napisów”. */
+.card-row .drop-zone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+@media (max-width: 900px) {
+  .card-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card-title {
   font-family: var(--display);
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text2);
   text-transform: uppercase;
@@ -404,7 +457,7 @@ main {
 
 .drop-zone {
   border: 1.5px dashed var(--border2);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 40px 24px;
   text-align: center;
   cursor: pointer;
@@ -431,25 +484,25 @@ main {
 }
 .drop-label {
   font-family: var(--display);
-  font-size: 14px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 4px;
 }
 .drop-sub {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text3);
 }
 
 .file-loaded {
   background: rgba(61, 214, 140, 0.08);
   border: 1px solid rgba(61, 214, 140, 0.25);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 .file-loaded-icon {
   color: var(--green);
@@ -462,14 +515,14 @@ main {
 }
 .file-loaded-meta {
   color: var(--text3);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 .file-clear {
   background: none;
   border: none;
   color: var(--text3);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-lg);
   padding: 2px 6px;
   transition: color 0.2s;
 }
@@ -481,10 +534,10 @@ textarea {
   width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   padding: 14px;
   resize: vertical;
   outline: none;
@@ -501,7 +554,7 @@ textarea::placeholder {
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 .setting-item {
   display: flex;
@@ -509,7 +562,7 @@ textarea::placeholder {
   gap: 6px;
 }
 .setting-item label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: 0.8px;
@@ -520,11 +573,13 @@ textarea::placeholder {
   border: 1px solid var(--border);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-md);
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   outline: none;
   transition: border-color 0.2s;
+  /* allow flex/grid shrink so a long <option> never overflows the card frame. */
+  min-width: 0;
 }
 .setting-item input:focus,
 .setting-item select:focus {
@@ -540,9 +595,9 @@ textarea::placeholder {
   justify-content: center;
   gap: 8px;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -592,10 +647,10 @@ textarea::placeholder {
 .segments-preview {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   max-height: 280px;
   overflow-y: auto;
-  font-size: 12px;
+  font-size: var(--fs-sm);
 }
 .segment-row {
   display: grid;
@@ -610,12 +665,12 @@ textarea::placeholder {
 }
 .seg-id {
   color: var(--text3);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding-top: 1px;
 }
 .seg-tc {
   color: var(--accent2);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding-top: 1px;
 }
 .seg-text {
@@ -626,7 +681,7 @@ textarea::placeholder {
 .progress-container {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 20px;
   display: none;
 }
@@ -644,7 +699,7 @@ textarea::placeholder {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text3);
 }
 .p-step.running {
@@ -689,9 +744,9 @@ textarea::placeholder {
 .log-box {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 12px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
   max-height: 120px;
   overflow-y: auto;
@@ -719,7 +774,7 @@ textarea::placeholder {
 .reel-card {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .reel-header {
@@ -737,31 +792,26 @@ textarea::placeholder {
 .reel-header.expanded {
   border-bottom-color: var(--border);
 }
-.reel-badge {
-  background: rgba(124, 109, 250, 0.2);
-  color: var(--accent2);
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.5px;
-}
 .reel-name {
   font-family: var(--display);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--fs-lg);
+  font-weight: 700;
   flex: 1;
+  min-width: 0;
 }
 .reel-meta {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .reel-score-badge {
   background: rgba(61, 214, 140, 0.18);
   color: var(--green);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   letter-spacing: 0.3px;
 }
 .reel-score-badge.muted {
@@ -777,18 +827,11 @@ textarea::placeholder {
 .reel-axis-badge {
   background: var(--surface2);
   color: var(--text2);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   letter-spacing: 0.3px;
-}
-.reel-reason {
-  flex-basis: 100%;
-  font-size: 11px;
-  color: var(--text2);
-  line-height: 1.4;
-  font-style: italic;
 }
 .reel-clips {
   padding: 10px 16px;
@@ -799,29 +842,13 @@ textarea::placeholder {
 .reel-clips.open {
   display: flex;
 }
-.reel-clip {
-  display: flex;
-  gap: 10px;
-  align-items: start;
-  font-size: 12px;
-}
-.clip-tc {
-  color: var(--accent2);
-  flex-shrink: 0;
-  min-width: 100px;
-}
-.clip-txt {
-  color: var(--text2);
-  line-height: 1.5;
-}
-
 .json-editor {
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   width: 100%;
   min-height: 200px;
@@ -837,10 +864,10 @@ textarea::placeholder {
 .edl-output {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 16px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--green);
   max-height: 320px;
   overflow-y: auto;
@@ -854,9 +881,9 @@ textarea::placeholder {
   flex-wrap: wrap;
 }
 .badge {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 3px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 .badge-purple {
@@ -875,9 +902,9 @@ textarea::placeholder {
 .info-box {
   background: rgba(124, 109, 250, 0.08);
   border: 1px solid rgba(124, 109, 250, 0.2);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text2);
   line-height: 1.7;
 }
@@ -890,7 +917,7 @@ textarea::placeholder {
   text-align: center;
   padding: 40px;
   color: var(--text3);
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 ::-webkit-scrollbar {
@@ -902,14 +929,14 @@ textarea::placeholder {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--surface3);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border2);
 }
 
 .fps-note {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   color: var(--text3);
   margin-top: 4px;
 }
@@ -925,7 +952,7 @@ textarea::placeholder {
 .export-tab {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   padding: 14px 16px;
   cursor: pointer;
   transition: all 0.2s;
@@ -949,7 +976,7 @@ textarea::placeholder {
 }
 .tab-label {
   font-family: var(--display);
-  font-size: 14px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: var(--text);
 }
@@ -957,7 +984,7 @@ textarea::placeholder {
   color: var(--accent2);
 }
 .tab-sub {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
 }
 
@@ -972,21 +999,21 @@ textarea::placeholder {
 
 #toastContainer {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: var(--sp-6);
+  right: var(--sp-6);
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
   pointer-events: none;
 }
 .toast {
   min-width: 220px;
   max-width: 360px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   background: var(--surface2);
   border: 1px solid var(--border2);
@@ -1020,7 +1047,7 @@ textarea::placeholder {
   align-items: center;
   gap: 5px;
   padding: 7px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   transition:
     border-color 0.12s,
@@ -1051,7 +1078,7 @@ textarea::placeholder {
 .clip-grip {
   color: var(--text3);
   cursor: grab;
-  font-size: 13px;
+  font-size: var(--fs-md);
   padding: 0 1px;
   flex-shrink: 0;
   line-height: 1;
@@ -1060,62 +1087,17 @@ textarea::placeholder {
   cursor: grabbing;
 }
 
-.trim-handle {
-  flex-shrink: 0;
-  font-size: 9px;
-  color: var(--text3);
-  cursor: ew-resize;
-  padding: 5px 4px;
-  border-radius: 3px;
-  transition:
-    color 0.1s,
-    background 0.1s;
-  touch-action: none;
-}
-.trim-handle:hover {
-  color: var(--accent2);
-  background: rgba(124, 109, 250, 0.18);
-}
-
 .clip-body {
   flex: 1;
   min-width: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.clip-waveform {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  opacity: 0.55;
-  pointer-events: none;
-  border-radius: 3px;
-}
-.clip-tc {
-  position: relative;
-  z-index: 1;
-  font-size: 11px;
-  color: var(--accent2);
-  font-family: var(--mono);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .clip-dur {
-  position: relative;
-  z-index: 1;
-  font-size: 10px;
+  flex-shrink: 0;
+  font-size: var(--fs-2xs);
   color: var(--text3);
 }
 .clip-txt {
-  position: relative;
-  z-index: 1;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text2);
   line-height: 1.4;
 }
@@ -1126,9 +1108,9 @@ textarea::placeholder {
   border: none;
   color: var(--text3);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 4px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   opacity: 0;
   transition:
     opacity 0.12s,
@@ -1143,7 +1125,7 @@ textarea::placeholder {
 }
 
 .clip-empty {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text3);
   text-align: center;
   padding: 16px 0;
@@ -1157,11 +1139,11 @@ textarea::placeholder {
   align-items: center;
   gap: 6px;
   padding: 2px 8px 2px 28px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-family: var(--mono);
   letter-spacing: 0.2px;
   margin: 1px 0;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   user-select: none;
 }
 .clip-gap.will-merge {
@@ -1185,9 +1167,9 @@ textarea::placeholder {
   border: 1px solid currentColor;
   color: inherit;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   padding: 0px 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   line-height: 1.6;
   opacity: 0.55;
@@ -1196,30 +1178,6 @@ textarea::placeholder {
 }
 .clip-merge-btn:hover {
   opacity: 1;
-}
-
-/* ── FN2 — Floating preview player ───────────────────────────── */
-/* (S-16 3b removed the per-reel scrub timeline + play button + threshold
-   slider; the floating preview below stays, seeked by clicking a clip body.) */
-
-/* Preview panel — fixed overlay, top-right */
-#previewPanel {
-  position: fixed;
-  right: 20px;
-  top: 80px;
-  z-index: 200;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-
-#previewVideo {
-  display: block;
-  width: 320px;
-  height: 180px;
-  background: #000;
 }
 
 /* ── F14 — focused clip ───────────────────────────────────────────── */
@@ -1242,7 +1200,7 @@ textarea::placeholder {
 .modal-box {
   background: var(--surface);
   border: 1px solid var(--border2);
-  border-radius: 12px;
+  border-radius: var(--radius-2xl);
   width: 860px;
   max-width: 95vw;
   max-height: 88vh;
@@ -1262,7 +1220,7 @@ textarea::placeholder {
 
 .modal-body {
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--sp-5);
   flex: 1;
 }
 
@@ -1277,16 +1235,7 @@ textarea::placeholder {
   background: rgba(245, 166, 35, 0.08);
 }
 
-/* ── S-16 Phase 3b — read-only export source card + quick-export popover ── */
-.ro-field {
-  font-size: 13px;
-  color: var(--text2);
-  background: var(--surface2);
-  border-radius: 6px;
-  padding: 8px 10px;
-  word-break: break-all;
-  min-height: 19px;
-}
+/* ── S-16 Phase 3b — quick-export popover ── */
 .export-format-row {
   display: flex;
   justify-content: space-between;
@@ -1304,7 +1253,7 @@ textarea::placeholder {
 .export-more > summary,
 .paste-json-details > summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text2);
   padding: 6px 0;
   user-select: none;

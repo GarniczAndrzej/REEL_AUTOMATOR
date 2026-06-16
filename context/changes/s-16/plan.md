@@ -282,6 +282,39 @@ Visual regularization (spacing/type-scale/radii) and the full manual acceptance 
 
 **Contract**: CLAUDE.md "Project file" section updated to schema v5 and the `goStep` 3-step description replaced with the progressive-surface description. Acceptance results recorded.
 
+#### 3. Acceptance-driven deviations (recorded during Phase 4)
+
+Manual acceptance expanded Phase 4 beyond the spacing/scale pass. The following
+deviate from earlier written contracts and are intentional (confirmed with the
+human during the acceptance gate):
+
+- **Source-file card removed, not made read-only.** Phase 3b item 3 specified the
+  "Plik wideo źródłowy" card become a read-only display; acceptance removed it
+  entirely and folded the export summary (segments/reels/clips badges) into the
+  quick-export popover (`#exportModal`). Export moved to a header button
+  (`#openExportBtn`), reachable at every stage (per-format gates remain).
+- **Floating video preview removed.** Earlier phases preserved the floating player
+  (`#previewPanel`) and the `space/i/o/j/k/l` playback shortcuts; acceptance removed
+  preview and those shortcuts. Arrows/`x`, drag-reorder, and merge remain.
+- **Clip waveform + trim handles removed.** Phase 3b item 2 said "preserve
+  `.clip-waveform` + `data-sentence-id` hooks (waveform trim path)". Acceptance
+  dropped the per-clip waveform `<canvas>`, the `◀ ▶` trim handles, and the per-clip
+  timecode line — each clip row now shows only transcript text + duration. The trim
+  pointer handlers, `applyTrim`, and the reel-list waveform loader were removed.
+  `selection/waveform.js` + the `extract_waveform` backend command are **retained but
+  no longer surfaced** in clip review (`invalidateWaveform` still clears stale peaks
+  on merge).
+- **Reel header restructured.** Removed the generic `REEL N` badge and the
+  `reel.reason` line from the header; the reel name now leads (left), with
+  `N klipów • Xs` + virality/axis scores aligned right.
+- **"Edytuj JSON ręcznie" removed.** The in-list JSON editor (`editJsonBtn` /
+  `#jsonEditorCard` / `applyManualJSON`) was dropped; the "Wklej JSON od AI" paste
+  path (alternative without an API key) remains the manual-JSON affordance.
+- **Project/source fields re-homed to Settings.** fps / video filename / merge-gap /
+  resolution / project name moved into the settings modal ("Projekt i eksport"); the
+  import "Ustawienia projektu" card was removed. Import now shows two equal-height
+  cards — WhisperX transcription (left, wider) and the SRT file (right).
+
 ### Success Criteria:
 
 #### Automated Verification:
@@ -326,6 +359,8 @@ The progressive single surface renders all sections in one DOM; gating is visibi
 ## Migration Notes
 
 `.reelproj` schema bumps v4 → v5; old files load via the existing tolerant `if (data.x != null)` guards, with legacy `videoFilename2` mapped to `videoFilename` only when the primary is absent. Legacy per-reel `reelsData[ri].mergeThreshold` values are **ignored on load** (the override is removed end-to-end, item Phase 3.2): such projects now merge spans with the single global settings gap instead — a deliberate, one-way behavior change, not a regression. No data migration tool needed — read-tolerance is the migration. CLAUDE.md's schema-version note (currently says v3) is corrected in Phase 4.
+
+The Phase 4 acceptance pass also removed the in-app clip waveform/trim UI and the floating preview player (see *Phase 4 → Acceptance-driven deviations*). `selection/waveform.js` and the `extract_waveform` Tauri command stay in the tree (still wired via `invalidateWaveform`) but are no longer reachable from the UI; a later slice can remove the backend command if it stays unused. `.reelproj` payloads are unaffected — none of these were persisted fields.
 
 ## References
 
@@ -391,26 +426,26 @@ The progressive single surface renders all sections in one DOM; gating is visibi
 
 #### Automated
 
-- [x] 3b.1 Rust type-check passes
-- [x] 3b.2 Regression suite passes
-- [x] 3b.3 No pruned-control references remain (UI surfaces; `--exclude-dir=parser`)
-- [x] 3b.4 Prettier clean
+- [x] 3b.1 Rust type-check passes — 1646fef
+- [x] 3b.2 Regression suite passes — 1646fef
+- [x] 3b.3 No pruned-control references remain (UI surfaces; `--exclude-dir=parser`) — 1646fef
+- [x] 3b.4 Prettier clean — 1646fef
 
 #### Manual
 
-- [x] 3b.5 Import auto-populates fps/filename/resolution
-- [x] 3b.6 Reel list shows score badges, no timeline/play; preview works
-- [x] 3b.7 "Analizuj z OpenRouter" runs; copy-prompt `.md`; paste-JSON secondary
-- [x] 3b.8 Quick-export popover produces all formats correctly
-- [x] 3b.9 Diarization controls work from the advanced modal
+- [x] 3b.5 Import auto-populates fps/filename/resolution — 1646fef
+- [x] 3b.6 Reel list shows score badges, no timeline/play; preview works — 1646fef
+- [x] 3b.7 "Analizuj z OpenRouter" runs; copy-prompt `.md`; paste-JSON secondary — 1646fef
+- [x] 3b.8 Quick-export popover produces all formats correctly — 1646fef
+- [x] 3b.9 Diarization controls work from the advanced modal — 1646fef
 
 ### Phase 4: Restyle + acceptance
 
 #### Automated
 
-- [ ] 4.1 Rust type-check passes
-- [ ] 4.2 Regression suite passes
-- [ ] 4.3 Prettier clean
+- [x] 4.1 Rust type-check passes
+- [x] 4.2 Regression suite passes
+- [x] 4.3 Prettier clean
 
 #### Manual
 

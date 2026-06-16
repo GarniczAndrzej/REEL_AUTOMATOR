@@ -15,13 +15,16 @@ import {
 } from '../exporters/transcript.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
-import { populateVideoMeta } from '../util/video-meta.js';
 import { toast } from './toast.js';
 
 export function init() {
+  // Export trigger now lives in the header (next to Settings) and the sidebar
+  // step cue — openable at any stage, not just a final page section. Each
+  // format guards its own prerequisites, so an early open is harmless.
   document
     .getElementById('openExportBtn')
     ?.addEventListener('click', openPopover);
+  document.getElementById('nav3')?.addEventListener('click', openPopover);
   document
     .getElementById('exportClose')
     ?.addEventListener('click', closePopover);
@@ -29,9 +32,6 @@ export function init() {
   modal?.addEventListener('click', (e) => {
     if (e.target === modal) closePopover();
   });
-  document
-    .getElementById('exBrowseVideoBtn')
-    ?.addEventListener('click', browseVideo);
 
   // Primary formats — generate + save, or copy.
   document
@@ -62,11 +62,9 @@ export function init() {
 
 // ── Popover open/close ─────────────────────────────────────────────
 
-function openPopover() {
-  if (!state.reelsData.length) {
-    toast('Brak danych reelsów! Najpierw przeanalizuj segmenty.', 'info');
-    return;
-  }
+export function openPopover() {
+  // Open at any stage — transcript/.md/prompt export is useful before reels
+  // exist; the EDL/XML/Lua buttons each guard on `reelsData` themselves.
   updateSummary();
   const modal = document.getElementById('exportModal');
   if (modal) modal.style.display = 'flex';
@@ -77,17 +75,13 @@ function closePopover() {
   if (modal) modal.style.display = 'none';
 }
 
-// Refreshes the read-only source-file card + the export summary. Folded into the
-// popover open; also called after a re-probe via the fallback browse button.
+// Refreshes the export summary badges. Folded into the popover open. Source-file
+// fields (fps/filename/path/resolution) now live in the Settings modal.
 export function updateSummary() {
   const totalClips = state.reelsData.reduce((a, r) => a + r.clip_ids.length, 0);
   setText('sumSegs', state.sentences.length + ' segmentów');
   setText('sumReels', state.reelsData.length + ' reelsów');
   setText('sumClips', totalClips + ' klipów');
-  setText('exVideoFilename', state.videoFilename || '—');
-  setText('exVideoPath', state.videoPath || '—');
-  setText('exVideoResolution', state.videoResolution || '—');
-  setText('exProjectName', state.projectName || '—');
 }
 
 function setText(id, value) {
@@ -241,28 +235,6 @@ async function copyPrompt() {
     state.videoFilename || '',
   );
   await copyText(content, 'Prompt skopiowany ✓');
-}
-
-// ── File picker (fallback when no video was imported) ──────────────
-
-async function browseVideo() {
-  try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({
-      filters: [
-        {
-          name: 'Wideo',
-          extensions: ['mp4', 'mov', 'mkv', 'avi', 'mxf', 'r3d'],
-        },
-      ],
-    });
-    if (!path) return;
-    await populateVideoMeta(path);
-    updateSummary();
-    emit();
-  } catch (e) {
-    toast('Nie udało się wybrać pliku: ' + e, 'error');
-  }
 }
 
 // ── utilities ──────────────────────────────────────────────────────
