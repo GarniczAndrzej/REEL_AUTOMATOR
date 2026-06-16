@@ -235,6 +235,34 @@ def cmd_selftest():
     return EXIT_OK
 
 
+def cmd_capability():
+    """Lightweight readiness probe — same JSON shape as cmd_selftest, but cheap.
+
+    Reports {ok, version, gpu, device, alignment_model_ready} from a device
+    detection (torch only) plus an align-dir *existence* check. It deliberately
+    does NOT `import whisperx`, `load_align_model`, or run a real `align()`, so it
+    cannot block on a model deserialize or an HF network call. Because it never
+    imports whisperx, its `__version__` is unavailable — we report ENGINE_VERSION.
+
+    Trade-off: a dir check can report `alignment_model_ready: true` for a binary
+    whose frozen import chain is broken (the false-positive cmd_selftest guards
+    against). The Rust/frontend layer renders this verdict as a non-authoritative
+    tier; the authoritative green is earned only by --selftest.
+    """
+    device, gpu, _ = _detect_device()
+    model_dir = _alignment_model_dir("pl")
+    align_ready = os.path.isdir(model_dir) and bool(os.listdir(model_dir))
+    out = {
+        "ok": True,  # device detection always completes (cpu fallback on failure)
+        "version": str(ENGINE_VERSION),
+        "gpu": gpu,
+        "device": device,
+        "alignment_model_ready": align_ready,
+    }
+    _write_result(json.dumps(out))
+    return EXIT_OK
+
+
 def _load_audio(whisperx, audio_path):
     if not os.path.isfile(audio_path):
         _log("audio not found: %s" % audio_path)
@@ -486,6 +514,11 @@ def build_parser():
         help="directory holding per-language alignment models (ships beside the sidecar)",
     )
     p.add_argument("--selftest", action="store_true", help="print readiness JSON and exit")
+    p.add_argument(
+        "--capability",
+        action="store_true",
+        help="print lightweight readiness JSON (no model load) and exit",
+    )
     p.add_argument("--version", action="store_true", help="alias for --selftest")
     return p
 
@@ -505,6 +538,8 @@ def main(argv=None):
     if getattr(args, "align_model_dir", None):
         os.environ["ENGINE_ALIGN_DIR"] = args.align_model_dir
     try:
+        if args.capability:
+            return cmd_capability()
         if args.selftest or args.version:
             return cmd_selftest()
         if args.align_only:

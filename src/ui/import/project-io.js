@@ -3,6 +3,7 @@
 // 3a — structural split, no behavior change.)
 
 import { state, emit } from '../../state.js';
+import { toast } from '../toast.js';
 import { escHtml } from './segments.js';
 import { renderModelManager } from './transcribe.js';
 
@@ -35,7 +36,7 @@ async function openProject() {
     currentProjectPath = path;
     addRecentProject(path);
   } catch (e) {
-    alert('Nie udało się otworzyć projektu: ' + e);
+    toast('Nie udało się otworzyć projektu: ' + e, 'error');
   }
 }
 
@@ -58,7 +59,7 @@ async function saveProjectAs() {
     currentProjectPath = path;
     addRecentProject(path);
   } catch (e) {
-    alert('Nie udało się zapisać projektu: ' + e);
+    toast('Nie udało się zapisać projektu: ' + e, 'error');
   }
 }
 
@@ -90,11 +91,24 @@ async function writeProject(path) {
     };
     await invoke('save_project', { path, payload });
   } catch (e) {
-    alert('Nie udało się zapisać: ' + e);
+    toast('Nie udało się zapisać: ' + e, 'error');
   }
 }
 
 function applyProjectData(data) {
+  // Reset per-project content first so loading a partial/older file over an
+  // active session can't carry over the previous project's data for any key the
+  // new file omits. App-level config (mergeThreshold, whisperLanguage, modelId,
+  // diarize) is intentionally NOT reset — it has global/settings semantics.
+  state.srtName = null;
+  state.srtContent = null;
+  state.videoFilename = '';
+  state.videoPath = '';
+  state.videoResolution = '1920x1080';
+  state.projectName = 'Reels';
+  state.sentences = [];
+  state.reelsData = [];
+
   if (data.srtName) state.srtName = data.srtName;
   if (data.srtContent) state.srtContent = data.srtContent;
   if (data.fps) state.fps = data.fps;

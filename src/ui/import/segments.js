@@ -52,26 +52,8 @@ export function initSegments() {
       loadSRTFile(file);
   });
 
-  document.getElementById('fpsSelect').addEventListener('change', (e) => {
-    state.fps = +e.target.value;
-    if (state.sentences.length) {
-      const noteEl = document.getElementById('fpsNote');
-      if (noteEl) {
-        noteEl.textContent =
-          '⚠ FPS zmieniony — kliknij „Analizuj SRT →" aby odświeżyć timekody.';
-        noteEl.style.color = 'var(--amber)';
-      }
-    }
-    emit();
-  });
-  document.getElementById('videoFilename').addEventListener('input', (e) => {
-    state.videoFilename = e.target.value;
-    emit();
-  });
-  document.getElementById('gapFrames').addEventListener('input', (e) => {
-    state.gapFrames = +e.target.value;
-    emit();
-  });
+  // fps / videoFilename / gapFrames inputs live in the settings modal and are
+  // owned by settings-modal.js (one component owns its DOM). Not bound here.
 }
 
 function loadSRTFile(file) {

@@ -4,6 +4,7 @@
 // structural split, no behavior change.)
 
 import { state, emit } from '../../state.js';
+import { toast } from '../toast.js';
 import { segmentFromWords } from '../../parser/word-segments.js';
 import {
   generateTranscriptSRT,
@@ -209,7 +210,7 @@ async function deleteModel(id) {
     await refreshModelStatus();
     await renderModelManager();
   } catch (e) {
-    alert('Nie udało się usunąć modelu: ' + e);
+    toast('Nie udało się usunąć modelu: ' + e, 'error');
   }
 }
 
@@ -225,8 +226,9 @@ async function downloadModel(id) {
   const model = getModel(id);
   if (!model) return;
   if (!model.repo || !model.files?.length) {
-    alert(
+    toast(
       'Ten model nie ma jeszcze skonfigurowanego repozytorium/plików do pobrania (uzupełnij rejestr).',
+      'info',
     );
     return;
   }
@@ -263,7 +265,7 @@ async function downloadModel(id) {
     selectModel(id);
   } catch (e) {
     if (progEl) progEl.textContent = 'Błąd: ' + e;
-    alert('Pobieranie modelu nieudane: ' + e);
+    toast('Pobieranie modelu nieudane: ' + e, 'error');
   } finally {
     if (unlisten) unlisten();
     _downloadingId = null;
@@ -424,11 +426,14 @@ export function syncAlignBtn() {
 async function alignImportedTranscript() {
   const videoPath = state._whisperVideoPath || state.videoPath;
   if (!videoPath) {
-    alert('Najpierw wybierz plik wideo, aby dopasować transkrypcję do audio.');
+    toast(
+      'Najpierw wybierz plik wideo, aby dopasować transkrypcję do audio.',
+      'info',
+    );
     return;
   }
   if (!state.srtContent) {
-    alert('Brak transkrypcji do dopasowania.');
+    toast('Brak transkrypcji do dopasowania.', 'info');
     return;
   }
   document.getElementById('whisperProgressBox').style.display = 'block';
@@ -465,7 +470,7 @@ async function alignImportedTranscript() {
       setWhisperProgress('Anulowano.', 0);
     } else {
       setWhisperProgress('Błąd: ' + e, 0);
-      alert('Dopasowanie nieudane: ' + e);
+      toast('Dopasowanie nieudane: ' + e, 'error');
     }
   } finally {
     if (unlisten) unlisten();
@@ -484,7 +489,7 @@ function saveTranscriptToPath(ext, content) {
 
 async function exportTranscriptSRT() {
   if (!state.sentences || !state.sentences.length) {
-    alert('Brak transkrypcji do eksportu.');
+    toast('Brak transkrypcji do eksportu.', 'info');
     return;
   }
   await saveTranscriptToPath(
@@ -495,7 +500,7 @@ async function exportTranscriptSRT() {
 
 async function exportTranscriptVTT() {
   if (!state.sentences || !state.sentences.length) {
-    alert('Brak transkrypcji do eksportu.');
+    toast('Brak transkrypcji do eksportu.', 'info');
     return;
   }
   await saveTranscriptToPath(
@@ -529,7 +534,7 @@ async function browseWhisperVideo() {
     syncAlignBtn();
     emit();
   } catch (e) {
-    alert('Nie udało się wybrać pliku: ' + e);
+    toast('Nie udało się wybrać pliku: ' + e, 'error');
   }
 }
 
@@ -609,7 +614,7 @@ async function transcribeWithWhisper() {
       setWhisperProgress('Anulowano transkrypcję.', 0);
     } else {
       setWhisperProgress('Błąd: ' + e, 0);
-      alert('Transkrypcja nieudana: ' + e);
+      toast('Transkrypcja nieudana: ' + e, 'error');
     }
   } finally {
     if (unlisten) unlisten();

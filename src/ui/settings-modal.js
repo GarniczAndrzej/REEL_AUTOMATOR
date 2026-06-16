@@ -30,15 +30,41 @@ export function initSettingsModal() {
   const mergeEl = document.getElementById('mergeThreshold');
   if (mergeEl) {
     mergeEl.addEventListener('input', (e) => {
-      state.mergeThreshold = +e.target.value;
-      saveSettings({ mergeThreshold: state.mergeThreshold });
+      const n = +e.target.value;
+      if (!Number.isFinite(n) || n < 0) return;
+      state.mergeThreshold = n;
+      saveSettings({ mergeThreshold: n });
       emit();
     });
   }
 
-  // Project/source fields re-homed here (acceptance feedback): fps, video
-  // filename and gap are wired in import/segments.js (same IDs); path,
-  // resolution and project name are project state, wired here.
+  // Project/source fields re-homed here (acceptance feedback). These inputs
+  // live in this modal, so this module owns their bindings (one component owns
+  // its DOM): fps (with the re-parse note), video filename, gap, path,
+  // resolution and project name.
+  const fpsEl = document.getElementById('fpsSelect');
+  if (fpsEl) {
+    fpsEl.addEventListener('change', (e) => {
+      state.fps = +e.target.value;
+      if (state.sentences.length) {
+        const noteEl = document.getElementById('fpsNote');
+        if (noteEl) {
+          noteEl.textContent =
+            '⚠ FPS zmieniony — kliknij „Analizuj SRT →" aby odświeżyć timekody.';
+          noteEl.style.color = 'var(--amber)';
+        }
+      }
+      emit();
+    });
+  }
+  bindProjectInput('videoFilename', 'videoFilename');
+  const gapEl = document.getElementById('gapFrames');
+  if (gapEl) {
+    gapEl.addEventListener('input', (e) => {
+      state.gapFrames = +e.target.value;
+      emit();
+    });
+  }
   bindProjectInput('videoPath', 'videoPath');
   bindProjectInput('videoResolution', 'videoResolution');
   bindProjectInput('projectName', 'projectName');
