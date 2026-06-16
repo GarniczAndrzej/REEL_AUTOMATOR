@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-15
+updated: 2026-06-16
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -44,7 +44,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | ready    |
 | S-12  | empty-error-states          | see explicit empty/error states instead of silent failures   | S-01, S-05         | FR-036                                        | proposed |
 | S-13  | keyboard-navigation         | drive review and tuning entirely from the keyboard           | S-02, S-04, S-16   | FR-037                                        | proposed |
-| S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | proposed |
+| S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | proposed |
 
@@ -309,7 +309,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - How much of the "simpler flow" is already delivered by S-07's one-click auto mode vs. owned here (manual-flow ergonomics)? — Owner: team. Block: no (coordinate the shared "fewer steps" goal; does not gate the rewrite).
   - Does the quick-export popover (#8) duplicate or replace the S-08 export surface, and does merge-gap-in-settings (#6) move ownership of the threshold UI out of S-04? — Owner: team. Block: no (reconcile when those slices build into the new shell).
 - **Risk:** Cross-cutting rewrite of the `goStep(n)` orchestration in `main.js` and every `src/ui/stepN-*.js` surface; the regression suite only fences parser/exporters, so UI behavior must be manually re-verified. Landing it **early** (prereq-free) is the cheaper sequencing: later slices build into the new shell, avoiding a second reshape — but anything already shipped against the old steps (none yet beyond S-01's step-2 split) would need rework if reordered. It must land **before** S-13 (keyboard) so shortcuts aren't wired against UI about to change. Several proposals overlap live slices (S-02/S-04/S-08) and one (#13 queue) is net-new functionality, not presentation — scope-gate those out so S-16 stays a pure shell/declutter rewrite. Keep all user-facing strings Polish. No exporter or frame-math changes — pure presentation/orchestration.
-- **Status:** proposed
+- **Status:** done
 
 ### S-17: Feature pruning & cleanup pass
 
@@ -398,3 +398,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-05: transcribe locally with word-level alignment + manage models** — Archived 2026-06-14 → `context/archive/2026-06-12-builtin-whisperx-transcription/`. Built-in WhisperX engine (frozen Python sidecar via PyInstaller) replacing PATH `whisper-cli`; model manager (download/list/delete), word-level forced alignment, opt-in diarization. Lesson: both bundled sidecars (`ffmpeg-*` and `whisperx-engine-*`) plus `binaries/align_models/` are git-ignored and absent from any fresh checkout/worktree — restore via `sidecar/fetch-ffmpeg.sh` + `sidecar/build.sh` or `cargo`/`tauri dev` hard-fails on the missing `externalBin`. Never bake the multi-GB alignment model into the onefile — ship it beside the binary.
 - **R1: (refactor) split `step2-analyze.js` into per-surface modules** — Shipped inside S-01 (no separate archive). `step2-analyze.js` reduced to a thin orchestrator over `step2-reel-list.js` / `step2-prompt-panel.js` / `step2-segment-ops.js`; unblocks parallel work on S-02/S-03/S-04. Lesson: —.
 - **S-17: run a recurring pass to identify, decide on, and remove backlog/feature bloat** — Archived 2026-06-15 → `context/archive/2026-06-15-s-17/`. Lesson: —.
+- **S-16: move through a simpler, decluttered flow with fewer visible steps** — Archived 2026-06-16 → `context/archive/2026-06-15-s-16/`. Lesson: —.
