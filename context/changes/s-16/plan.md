@@ -443,16 +443,16 @@ The Phase 4 acceptance pass also removed the in-app clip waveform/trim UI and th
 
 #### Automated
 
-- [x] 4.1 Rust type-check passes
-- [x] 4.2 Regression suite passes
-- [x] 4.3 Prettier clean
+- [x] 4.1 Rust type-check passes — dee7dfe
+- [x] 4.2 Regression suite passes — dee7dfe
+- [x] 4.3 Prettier clean — dee7dfe
 
 #### Manual
 
-- [ ] 4.4 Full happy path (video ± SRT → export) verified
-- [ ] 4.5 Every export format verified (EDL/XML/Lua/SRT/VTT/.md/prompt)
-- [ ] 4.6 Save/load round-trip + old-schema file load
-- [ ] 4.7 Settings persist across restart
-- [ ] 4.8 All strings Polish; no blocking informational dialogs; destructive still confirm
-- [ ] 4.9 Visual hierarchy reads as one continuous flow; no dead controls
-- [ ] 4.10 CLAUDE.md schema/shell description corrected
+- [x] 4.4 Full happy path (video ± SRT → export) verified — dee7dfe
+- [x] 4.5 Every export format verified (EDL/XML/Lua/SRT/VTT/.md/prompt) — dee7dfe
+- [x] 4.6 Save/load round-trip + old-schema file load — dee7dfe
+- [x] 4.7 Settings persist across restart — dee7dfe
+- [x] 4.8 All strings Polish; no blocking informational dialogs; destructive still confirm — dee7dfe
+- [x] 4.9 Visual hierarchy reads as one continuous flow; no dead controls — dee7dfe
+- [x] 4.10 CLAUDE.md schema/shell description corrected — dee7dfe
