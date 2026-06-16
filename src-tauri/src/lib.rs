@@ -23,6 +23,7 @@ pub fn run() {
             whisper::align_transcript,
             whisper::cancel_transcription,
             engine::whisperx_engine_check,
+            engine::whisperx_engine_capability,
             models::list_models,
             models::download_model,
             models::delete_model,

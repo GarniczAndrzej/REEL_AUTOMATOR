@@ -391,30 +391,30 @@ here for manual confirmation from the human that the manual testing was successf
 
 #### Automated
 
-- [x] 1.1 Sidecar rebuilds cleanly (`sidecar/build.sh` produces `whisperx-engine-<arch>`)
-- [x] 1.2 `--capability` returns valid JSON fast and exits 0 (sub-second, warm)
-- [x] 1.3 `--selftest` still runs the full exercise unchanged
+- [x] 1.1 Sidecar rebuilds cleanly (`sidecar/build.sh` produces `whisperx-engine-<arch>`) — fcbb324
+- [x] 1.2 `--capability` returns valid JSON fast and exits 0 (sub-second, warm) — fcbb324
+- [x] 1.3 `--selftest` still runs the full exercise unchanged — fcbb324
 
 #### Manual
 
-- [x] 1.4 Capability `device`/`gpu` matches the machine
-- [x] 1.5 `alignment_model_ready` is `false` when `align_models/` is absent/empty
-- [x] 1.6 No network sockets during `--capability` (`lsof -nP -i`)
+- [x] 1.4 Capability `device`/`gpu` matches the machine — fcbb324
+- [x] 1.5 `alignment_model_ready` is `false` when `align_models/` is absent/empty — fcbb324
+- [x] 1.6 No network sockets during `--capability` (`lsof -nP -i`) — fcbb324
 
 ### Phase 2: Rust — capability command, verdict cache, bounded timeout
 
 #### Automated
 
-- [ ] 2.1 `cargo check` passes
-- [ ] 2.2 `cargo build` passes
-- [ ] 2.3 Regression suite passes (`node --experimental-vm-modules test/regression.js`)
+- [x] 2.1 `cargo check` passes
+- [x] 2.2 `cargo build` passes
+- [x] 2.3 Regression suite passes (`node --experimental-vm-modules test/regression.js`)
 
 #### Manual
 
-- [ ] 2.4 Cold cache: badge resolves via cheap probe; `engine-readiness/<hash>.json` appears
-- [ ] 2.5 Warm cache: badge paints with no sidecar spawn
-- [ ] 2.6 Deleting cache / changing align dir forces a fresh probe
-- [ ] 2.7 A simulated hang trips the timeout → amber error, no hang
+- [x] 2.4 Cold cache: badge resolves via cheap probe; `engine-readiness/<hash>.json` appears
+- [x] 2.5 Warm cache: badge paints with no sidecar spawn
+- [x] 2.6 Deleting cache / changing align dir forces a fresh probe
+- [x] 2.7 A simulated hang trips the timeout → amber error, no hang
 
 ### Phase 3: Frontend — instant cached badge + manual re-verify
 
