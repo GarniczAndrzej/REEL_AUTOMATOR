@@ -1,7 +1,7 @@
 ---
 change_id: s-18
 title: WhisperX engine readiness probe — 15-min idle hang on every launch
-status: implementing
+status: implemented
 created: 2026-06-16
 updated: 2026-06-16
 archived_at: null

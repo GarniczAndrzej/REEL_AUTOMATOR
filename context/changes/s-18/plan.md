@@ -420,12 +420,12 @@ here for manual confirmation from the human that the manual testing was successf
 
 #### Automated
 
-- [x] 3.1 Prettier clean (`npx prettier --check "src/**/*.{js,css,html}"`)
-- [x] 3.2 Regression suite passes
+- [x] 3.1 Prettier clean (`npx prettier --check "src/**/*.{js,css,html}"`) — caf1f5e
+- [x] 3.2 Regression suite passes — caf1f5e
 
 #### Manual
 
-- [x] 3.3 Launch is cache-read-only (no sidecar spawn): with no cached verdict the badge shows "Silnik niezweryfikowany — kliknij „Pełna weryfikacja silnika”"; after a verify, relaunch paints the cached verdict instantly (deviation — see change.md)
-- [x] 3.4 "Pełna weryfikacja silnika" runs the real align, paints the authoritative green "✓ Silnik gotowy" (only path that earns green), re-enables button
-- [x] 3.5 Transcribe enablement unchanged (no new gating)
-- [x] 3.6 All readiness strings Polish
+- [x] 3.3 Launch is cache-read-only (no sidecar spawn): with no cached verdict the badge shows "Silnik niezweryfikowany — kliknij „Pełna weryfikacja silnika”"; after a verify, relaunch paints the cached verdict instantly (deviation — see change.md) — caf1f5e
+- [x] 3.4 "Pełna weryfikacja silnika" runs the real align, paints the authoritative green "✓ Silnik gotowy" (only path that earns green), re-enables button — caf1f5e
+- [x] 3.5 Transcribe enablement unchanged (no new gating) — caf1f5e
+- [x] 3.6 All readiness strings Polish — caf1f5e
