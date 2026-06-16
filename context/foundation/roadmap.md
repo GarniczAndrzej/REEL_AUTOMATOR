@@ -46,7 +46,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-13  | keyboard-navigation         | drive review and tuning entirely from the keyboard           | S-02, S-04, S-16   | FR-037                                        | proposed |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
-| S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | proposed |
+| S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | done |
 
 ## Streams
 
@@ -335,7 +335,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Unknowns:**
   - What dominates the check latency — sidecar cold-start (PyInstaller onefile unpack), the align-model probe, or a redundant per-call health invocation? — Owner: team. Block: no (profile first, then choose cache vs. async vs. warm-on-launch).
 - **Risk:** Low surface — touches the engine bring-up/health path (`src-tauri/src/whisper.rs` + its frontend caller), not the transcription correctness path or the cache contract. Must not mask a genuinely-missing/broken engine: a cached "ready" has to invalidate when the sidecar/model is absent, so keep the S-12 unavailable state honest. No parser/exporter/frame-math impact.
-- **Status:** proposed
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -399,3 +399,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **R1: (refactor) split `step2-analyze.js` into per-surface modules** — Shipped inside S-01 (no separate archive). `step2-analyze.js` reduced to a thin orchestrator over `step2-reel-list.js` / `step2-prompt-panel.js` / `step2-segment-ops.js`; unblocks parallel work on S-02/S-03/S-04. Lesson: —.
 - **S-17: run a recurring pass to identify, decide on, and remove backlog/feature bloat** — Archived 2026-06-15 → `context/archive/2026-06-15-s-17/`. Lesson: —.
 - **S-16: move through a simpler, decluttered flow with fewer visible steps** — Archived 2026-06-16 → `context/archive/2026-06-15-s-16/`. Lesson: —.
+- **S-18: start transcribing without a long wait — the WhisperX engine check is fast (cached/async)** — Archived 2026-06-16 → `context/archive/2026-06-16-s-18/`. Cheap `--capability` sidecar probe + content-addressed verdict cache + bounded timeout; launch badge is cache-read-only (never spawns), green earned only by the manual full self-test. Lesson: every `whisperx-engine` sidecar spawn pays a 37–67s cold cost (onefile extraction + torch import) regardless of the probe's own work — never put a sidecar spawn on the launch/critical path.
