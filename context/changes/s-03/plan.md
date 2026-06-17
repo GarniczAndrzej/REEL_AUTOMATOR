@@ -461,7 +461,7 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Automated
 
-- [x] 3.1 Regression suite still passes
+- [x] 3.1 Regression suite still passes — 62faf9b
 
 #### Manual
 
@@ -474,9 +474,9 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Automated
 
-- [ ] 4.1 Rust type-check passes
-- [ ] 4.2 `load_text_file` registered in `lib.rs`
-- [ ] 4.3 Regression suite still passes
+- [x] 4.1 Rust type-check passes
+- [x] 4.2 `load_text_file` registered in `lib.rs`
+- [x] 4.3 Regression suite still passes
 
 #### Manual
 

@@ -21,6 +21,13 @@ pub fn save_text_file(path: String, content: String) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+/// Read arbitrary text from a user-chosen path (preset .json import).
+/// Symmetric with save_text_file; the path comes from the dialog plugin's open() picker.
+#[tauri::command]
+pub fn load_text_file(path: String) -> Result<String, String> {
+    fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
 // ── F7 LLM cache ─────────────────────────────────────────────────────
 
 #[tauri::command]
