@@ -27,6 +27,14 @@
 import { DEFAULT_SCORING_GUIDANCE } from './ai/prompt.js';
 
 /**
+ * A reusable userPrompt preset stored in the local library.
+ * @typedef {Object} PromptPreset
+ * @property {string} id - unique identifier (crypto.randomUUID or builtin-* slug)
+ * @property {string} name - display name shown in the picker
+ * @property {string} userPrompt - the prompt text applied to the textarea on selection
+ */
+
+/**
  * A scored reel produced by AI selection (S-01). All scored fields are
  * optional for backward-compat — older projects / providers may omit them.
  * @typedef {Object} Reel
@@ -59,6 +67,10 @@ Zasady:
   // FR-015: editable global scoring guidance. Defaults to the machine guidance;
   // boot override comes from loadSettings(); round-trips in .reelproj v6.
   systemPrompt: DEFAULT_SCORING_GUIDANCE,
+  // FR-016: in-memory preset library. Populated at boot from localStorage
+  // (edl_prompt_presets) by seedPresetsIfEmpty + loadPresets in main.js.
+  /** @type {PromptPreset[]} */
+  promptPresets: [],
   reelsData: [],
 
   // step 3

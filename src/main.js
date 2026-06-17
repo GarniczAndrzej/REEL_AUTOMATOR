@@ -4,6 +4,7 @@ import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/export-popover.js';
 import { init as initOrPicker } from './ai/openrouter-picker.js';
 import { loadSettings } from './settings.js';
+import { seedPresetsIfEmpty, loadPresets } from './ai/prompt-presets.js';
 import { initSurface } from './ui/surface.js';
 import { initSettingsModal } from './ui/settings-modal.js';
 
@@ -14,6 +15,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settings = loadSettings();
   if (settings.mergeThreshold != null)
     state.mergeThreshold = settings.mergeThreshold;
+
+  // FR-016: seed built-in presets on first run then load the library (S-03 Phase 2).
+  seedPresetsIfEmpty();
+  state.promptPresets = loadPresets();
 
   try {
     step1.init();

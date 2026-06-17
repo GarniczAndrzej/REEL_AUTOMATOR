@@ -434,9 +434,9 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Automated
 
-- [x] 1.1 Regression suite passes
-- [x] 1.2 New prompt-assembly case asserts format + segments always present
-- [x] 1.3 Rust type-check passes
+- [x] 1.1 Regression suite passes — 86c7fb7
+- [x] 1.2 New prompt-assembly case asserts format + segments always present — 86c7fb7
+- [x] 1.3 Rust type-check passes — 86c7fb7
 
 #### Manual
 
@@ -449,8 +449,8 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Automated
 
-- [ ] 2.1 Regression suite still passes
-- [ ] 2.2 `src/ai/prompt-presets.js` exists and exports the documented helpers
+- [x] 2.1 Regression suite still passes
+- [x] 2.2 `src/ai/prompt-presets.js` exists and exports the documented helpers
 
 #### Manual
 
