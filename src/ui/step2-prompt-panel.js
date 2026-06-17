@@ -41,16 +41,17 @@ async function runAIAnalysis() {
     document.getElementById('apiKeyInput').value.trim() ||
     getApiKey('openrouter');
   if (!apiKey) {
-    alert('Otwórz „⚙ Ustawienia" i wklej API key OpenRouter!');
+    toast('Otwórz „⚙ Ustawienia" i wklej API key OpenRouter!', 'error');
     return;
   }
   if (!state.sentences.length) {
-    alert('Najpierw przeanalizuj plik SRT (Krok 1)!');
+    toast('Najpierw przeanalizuj plik SRT (Krok 1)!', 'error');
     return;
   }
   if (!state.orSelectedModel) {
-    alert(
+    toast(
       'Wybierz model OpenRouter! Kliknij "Załaduj modele" obok pola API key.',
+      'error',
     );
     return;
   }
@@ -191,7 +192,7 @@ function clearPastedJSON() {
 
 async function downloadPromptTXT() {
   if (!state.sentences.length) {
-    alert('Najpierw przeanalizuj plik napisów (sekcja Import)!');
+    toast('Najpierw przeanalizuj plik napisów (sekcja Import)!', 'error');
     return;
   }
   const content = buildPrompt(
@@ -208,7 +209,7 @@ async function downloadPromptTXT() {
 // Gemini / Claude web when not using the API key).
 async function copyPromptMD() {
   if (!state.sentences.length) {
-    alert('Najpierw przeanalizuj plik napisów (sekcja Import)!');
+    toast('Najpierw przeanalizuj plik napisów (sekcja Import)!', 'error');
     return;
   }
   const content = buildPrompt(

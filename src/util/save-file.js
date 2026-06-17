@@ -4,6 +4,8 @@
 // through the Rust `save_text_file` command (avoids fs-plugin scope friction on
 // a freshly chosen path).
 
+import { toast } from '../ui/toast.js';
+
 /**
  * @param {object} opts
  * @param {string} opts.defaultName Suggested file name (extension drives the
@@ -27,7 +29,7 @@ export async function saveTextToPath({ defaultName, content, filters }) {
     await invoke('save_text_file', { path, content });
     return true;
   } catch (e) {
-    alert('Nie udało się zapisać pliku: ' + e);
+    toast('Nie udało się zapisać pliku: ' + e, 'error');
     return false;
   }
 }
