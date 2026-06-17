@@ -449,8 +449,8 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Automated
 
-- [x] 2.1 Regression suite still passes
-- [x] 2.2 `src/ai/prompt-presets.js` exists and exports the documented helpers
+- [x] 2.1 Regression suite still passes — f46efa7
+- [x] 2.2 `src/ai/prompt-presets.js` exists and exports the documented helpers — f46efa7
 
 #### Manual
 
@@ -461,7 +461,7 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Automated
 
-- [ ] 3.1 Regression suite still passes
+- [x] 3.1 Regression suite still passes
 
 #### Manual
 

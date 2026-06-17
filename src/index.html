@@ -314,6 +314,22 @@
               Możesz podać branżę, cel marketingowy, długość reelsów. Segmenty
               zostaną automatycznie dołączone do prompta.
             </div>
+
+            <!-- FR-016: preset bar (S-03 Phase 3). Managed by step2-preset-bar.js -->
+            <div id="presetBar" style="margin-bottom: 10px;">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <select id="presetPicker" style="flex:1;min-width:0;font-size:13px;">
+                  <option value="" disabled selected>— wybierz preset —</option>
+                </select>
+                <button class="btn btn-secondary" id="presetSaveBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Zapisz jako</button>
+                <button class="btn btn-secondary" id="presetDuplicateBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Duplikuj</button>
+                <button class="btn btn-secondary" id="presetRenameBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Zmień nazwę</button>
+                <button class="btn btn-secondary" id="presetDeleteBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Usuń</button>
+                <button class="btn btn-secondary" id="presetImportBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Importuj</button>
+                <button class="btn btn-secondary" id="presetExportBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Eksportuj</button>
+              </div>
+            </div>
+
             <textarea
               id="userPrompt"
               rows="6"

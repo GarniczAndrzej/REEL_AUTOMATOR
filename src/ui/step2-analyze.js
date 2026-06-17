@@ -7,6 +7,7 @@ import { initReelList } from './step2-reel-list.js';
 import { initPromptPanel } from './step2-prompt-panel.js';
 import { initSegmentOps, undo, redo } from './step2-segment-ops.js';
 import { openPopover } from './export-popover.js';
+import { initPresetBar } from './step2-preset-bar.js';
 
 // Re-export the global undo/redo surface for main.js (`import * as step2`).
 export { undo, redo };
@@ -25,6 +26,7 @@ export function init() {
 
   const list = document.getElementById('reelsList');
 
+  initPresetBar();
   initReelList(list);
   initPromptPanel();
   initSegmentOps(list);
