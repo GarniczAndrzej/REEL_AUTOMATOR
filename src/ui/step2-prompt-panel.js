@@ -69,6 +69,7 @@ async function runAIAnalysis() {
 
   const prompt = buildPrompt(
     state.userPrompt,
+    state.systemPrompt,
     state.sentences,
     null,
     state.videoFilename || '',
@@ -195,6 +196,7 @@ async function downloadPromptTXT() {
   }
   const content = buildPrompt(
     state.userPrompt,
+    state.systemPrompt,
     state.sentences,
     null,
     state.videoFilename || '',
@@ -211,6 +213,7 @@ async function copyPromptMD() {
   }
   const content = buildPrompt(
     state.userPrompt,
+    state.systemPrompt,
     state.sentences,
     null,
     state.videoFilename || '',

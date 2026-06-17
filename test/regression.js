@@ -20,6 +20,7 @@ import {
 import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
 import { generateLua } from '../src/exporters/lua.js';
+import { buildPrompt, DEFAULT_SCORING_GUIDANCE } from '../src/ai/prompt.js';
 
 const SRT_PATH = new URL('./sample.srt', import.meta.url).pathname;
 const srtText = readFileSync(SRT_PATH, 'utf-8');
@@ -1036,6 +1037,65 @@ const noMarkerEDL = generateEDL({
   mergeThreshold: MERGE_0,
 });
 assert(!noMarkerEDL.includes('* LOC:'), 'marker-free run emits zero LOC lines');
+
+// ─────────────────────────────────────────────────────────────────
+// Test 14: buildPrompt assembly — export-safety invariant (S-03 FR-015)
+// The machine-owned response format + DOSTĘPNE SEGMENTY must ALWAYS be
+// injected regardless of userPrompt / systemPrompt content (including empty
+// systemPrompt), and the passed systemPrompt must appear in the output.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 14: buildPrompt assembly (S-03) ─────────────────');
+
+const customGuidance = 'ZASADY OCENY (test): preferuj krótkie hooki.';
+const fullPrompt = buildPrompt(
+  'Zrób reelsy z tego webinaru.',
+  customGuidance,
+  newSentences,
+  null,
+  VIDEO_FILE,
+);
+
+assert(
+  fullPrompt.includes('DOSTĘPNE SEGMENTY'),
+  'buildPrompt always injects the segments header',
+);
+assert(
+  fullPrompt.includes('"clip_ids"'),
+  'buildPrompt always injects the JSON response-format example (clip_ids)',
+);
+assert(
+  fullPrompt.includes('OCZEKIWANY FORMAT ODPOWIEDZI'),
+  'buildPrompt always injects the response-format header',
+);
+assert(
+  fullPrompt.includes(customGuidance),
+  'buildPrompt includes the passed systemPrompt (scoring guidance)',
+);
+assert(
+  fullPrompt.includes('"start_tc"') &&
+    fullPrompt.includes(newSentences[0].text),
+  'buildPrompt includes the segment data (timecodes + sentence text)',
+);
+
+// Empty systemPrompt must still yield the format + segments (cannot break export).
+const emptySysPrompt = buildPrompt('Zrób reelsy.', '', newSentences, null, '');
+assert(
+  emptySysPrompt.includes('DOSTĘPNE SEGMENTY') &&
+    emptySysPrompt.includes('"clip_ids"'),
+  'empty systemPrompt still injects format + segments',
+);
+assert(
+  !emptySysPrompt.includes('ZASADY OCENY'),
+  'empty systemPrompt omits scoring guidance (no stray default leaks in)',
+);
+
+// The exported default is non-empty and is what state seeds from.
+assert(
+  typeof DEFAULT_SCORING_GUIDANCE === 'string' &&
+    DEFAULT_SCORING_GUIDANCE.includes('ZASADY OCENY'),
+  'DEFAULT_SCORING_GUIDANCE is the exported scoring-guidance default',
+);
 
 // ─────────────────────────────────────────────────────────────────
 // Summary

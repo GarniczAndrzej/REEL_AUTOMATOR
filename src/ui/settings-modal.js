@@ -5,7 +5,8 @@
 
 import { state, emit } from '../state.js';
 import { getApiKey, setApiKey } from '../ai/api-key.js';
-import { saveSettings } from '../settings.js';
+import { loadSettings, saveSettings } from '../settings.js';
+import { DEFAULT_SCORING_GUIDANCE } from '../ai/prompt.js';
 import { populateVideoMeta } from '../util/video-meta.js';
 import { toast } from './toast.js';
 
@@ -34,6 +35,20 @@ export function initSettingsModal() {
       if (!Number.isFinite(n) || n < 0) return;
       state.mergeThreshold = n;
       saveSettings({ mergeThreshold: n });
+      emit();
+    });
+  }
+
+  // Boot seeding (S-03): restore a previously saved global system prompt,
+  // falling back to the default scoring guidance when unset.
+  state.systemPrompt = loadSettings().systemPrompt ?? DEFAULT_SCORING_GUIDANCE;
+
+  // System prompt (FR-015) → state + settings bag (persists across sessions).
+  const sysPromptEl = document.getElementById('systemPrompt');
+  if (sysPromptEl) {
+    sysPromptEl.addEventListener('input', (e) => {
+      state.systemPrompt = e.target.value;
+      saveSettings({ systemPrompt: e.target.value });
       emit();
     });
   }
@@ -101,6 +116,7 @@ function fillSettingsForm() {
   setVal('videoPath', state.videoPath || '');
   setVal('videoResolution', state.videoResolution || '');
   setVal('projectName', state.projectName || '');
+  setVal('systemPrompt', state.systemPrompt ?? DEFAULT_SCORING_GUIDANCE);
 }
 
 function setVal(id, value) {

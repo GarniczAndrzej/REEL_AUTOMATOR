@@ -24,6 +24,8 @@
  * @property {Word[]} [words] - word-level timings (engine/align path only)
  */
 
+import { DEFAULT_SCORING_GUIDANCE } from './ai/prompt.js';
+
 /**
  * A scored reel produced by AI selection (S-01). All scored fields are
  * optional for backward-compat — older projects / providers may omit them.
@@ -54,6 +56,9 @@ Zasady:
 - Możesz zmieniać kolejność segmentów zachowując logiczny sens
 - Szukaj emocjonalnych momentów, konkretnych liczb, historii i CTA
 - Stwórz tyle Reelsów ile możesz z wartościowego materiału`,
+  // FR-015: editable global scoring guidance. Defaults to the machine guidance;
+  // boot override comes from loadSettings(); round-trips in .reelproj v6.
+  systemPrompt: DEFAULT_SCORING_GUIDANCE,
   reelsData: [],
 
   // step 3

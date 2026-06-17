@@ -72,7 +72,8 @@ async function writeProject(path) {
       // a module constant), the multi-source `sources` repeater, and the
       // per-reel merge-threshold override (folded into the single global gap).
       // v3/v4 files still load — applyProjectData tolerates the legacy keys.
-      version: 5,
+      // v6 (S-03) adds the editable systemPrompt (scoring guidance).
+      version: 6,
       srtName: state.srtName,
       srtContent: state.srtContent,
       fps: state.fps,
@@ -83,6 +84,7 @@ async function writeProject(path) {
       gapFrames: state.gapFrames,
       mergeThreshold: state.mergeThreshold,
       userPrompt: state.userPrompt,
+      systemPrompt: state.systemPrompt,
       whisperLanguage: state.whisperLanguage,
       modelId: state.modelId,
       diarize: state.diarize,
@@ -122,6 +124,9 @@ function applyProjectData(data) {
   // the filename restores from that; the removed knobs never error on load.
   if (data.mergeThreshold != null) state.mergeThreshold = data.mergeThreshold;
   if (data.userPrompt) state.userPrompt = data.userPrompt;
+  // v6 systemPrompt: assign-if-present (like userPrompt). Older files omit it,
+  // so the global default / settings-bag value is kept.
+  if (data.systemPrompt) state.systemPrompt = data.systemPrompt;
   if (data.whisperLanguage) state.whisperLanguage = data.whisperLanguage;
   if (data.modelId) state.modelId = data.modelId;
   if (data.diarize != null) state.diarize = data.diarize;
@@ -134,6 +139,8 @@ function applyProjectData(data) {
   document.getElementById('videoFilename').value = state.videoFilename || '';
   document.getElementById('gapFrames').value = state.gapFrames;
   document.getElementById('userPrompt').value = state.userPrompt || '';
+  const sysPromptEl = document.getElementById('systemPrompt');
+  if (sysPromptEl) sysPromptEl.value = state.systemPrompt || '';
   const wlEl = document.getElementById('whisperLanguage');
   if (wlEl) wlEl.value = state.whisperLanguage || 'pl';
   const dtEl = document.getElementById('diarizeToggle');

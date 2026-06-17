@@ -809,6 +809,37 @@
               </div>
             </div>
           </div>
+
+          <div
+            style="
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
+              color: var(--text3);
+              margin: 18px 0 10px;
+            "
+          >
+            Prompt systemowy
+          </div>
+          <div class="fps-note" style="margin: -4px 0 12px">
+            Zasady oceny wstrzykiwane do każdego promptu AI. Format odpowiedzi
+            (JSON) i lista segmentów są dołączane automatycznie — ich edycja nie
+            jest możliwa, więc zmiana tych zasad nie zepsuje eksportu.
+          </div>
+          <div class="settings-grid">
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Prompt systemowy (zasady oceny)</label>
+              <textarea
+                id="systemPrompt"
+                rows="8"
+                style="
+                  width: 100%;
+                  font-family: var(--mono, monospace);
+                  font-size: 12px;
+                "
+              ></textarea>
+            </div>
+          </div>
         </div>
       </div>
     </div>

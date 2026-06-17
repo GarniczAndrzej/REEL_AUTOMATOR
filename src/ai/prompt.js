@@ -6,8 +6,10 @@ const formatSentence = (s) => ({
   duration_frames: s.duration_frame,
 });
 
-// Static response-format spec + scoring guidance. Independent of userPrompt.
-const FORMAT_SPEC = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
+// Machine-owned response-format example. ALWAYS injected by buildStaticBlock,
+// independent of userPrompt / systemPrompt — editing prompts can never break the
+// export pipeline because the JSON shape + validateReels stay machine-controlled.
+const RESPONSE_FORMAT = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
 [
   {
     "reel_name": "Reel 1 - Tytuł tematu",
@@ -25,9 +27,13 @@ const FORMAT_SPEC = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON,
     "reason": "Solidna historia, słabszy potencjał trendu.",
     "markers": { "hook": 10, "body": 11, "punchline": 3 }
   }
-]
+]`;
 
-ZASADY OCENY:
+// Default editable scoring guidance (FR-015). Seeds `state.systemPrompt`; the
+// user can override it in the settings modal. Unlike RESPONSE_FORMAT this is NOT
+// machine-owned — emptying it cannot break export (the JSON example + segments +
+// validateReels remain the safety guarantee).
+export const DEFAULT_SCORING_GUIDANCE = `ZASADY OCENY:
 - Oceń każdy Reel 0–100 w czterech osiach: hook (siła wstępu), flow (płynność i logika montażu), value (wartość merytoryczna), trend (potencjał viralowy / dopasowanie do trendów).
 - "virality_score" to ogólna ocena 0–100 całego Reela (spójna z osiami).
 - Selekcja MUSI zawierać segment z puentą (punchline) — nigdy nie ucinaj materiału przed kluczowym przekazem.
@@ -69,7 +75,9 @@ function buildSegmentsSection(sentences, sources, primaryFilename) {
   return { segmentsBlock, multiSourceNote };
 }
 
-// The static instruction block: multi-source note + segments + format spec.
+// The machine-owned static block: multi-source note + segments + response
+// format. ALWAYS injected, independent of any editable prompt text — this is the
+// export-safety invariant (S-03 FR-015).
 function buildStaticBlock(sentences, sources, primaryFilename) {
   const { segmentsBlock, multiSourceNote } = buildSegmentsSection(
     sentences,
@@ -80,12 +88,16 @@ function buildStaticBlock(sentences, sources, primaryFilename) {
 DOSTĘPNE SEGMENTY (plik SRT zamieniony na zdania z timecodes):
 ${segmentsBlock}
 
-${FORMAT_SPEC}`;
+${RESPONSE_FORMAT}`;
 }
 
 /**
- * String prompt for OpenRouter / compare / download / disk-cache key.
+ * String prompt for OpenRouter / download / disk-cache key. Order: editable
+ * userPrompt → machine-owned segments + response format → editable scoring
+ * guidance (systemPrompt). The response format + segments are always present
+ * regardless of prompt text, so export safety never depends on prompt content.
  * @param {string} userPrompt
+ * @param {string} systemPrompt scoring guidance (defaults to DEFAULT_SCORING_GUIDANCE)
  * @param {import('../state.js').Sentence[]} sentences
  * @param {Array|null} sources
  * @param {string} primaryFilename
@@ -93,10 +105,12 @@ ${FORMAT_SPEC}`;
  */
 export function buildPrompt(
   userPrompt,
+  systemPrompt,
   sentences,
   sources = null,
   primaryFilename = '',
 ) {
+  const guidance = systemPrompt ? `\n\n${systemPrompt}` : '';
   return `${userPrompt}
-${buildStaticBlock(sentences, sources, primaryFilename)}`;
+${buildStaticBlock(sentences, sources, primaryFilename)}${guidance}`;
 }

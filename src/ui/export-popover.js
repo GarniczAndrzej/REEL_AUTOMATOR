@@ -230,6 +230,7 @@ async function copyPrompt() {
   }
   const content = buildPrompt(
     state.userPrompt,
+    state.systemPrompt,
     state.sentences,
     null,
     state.videoFilename || '',
