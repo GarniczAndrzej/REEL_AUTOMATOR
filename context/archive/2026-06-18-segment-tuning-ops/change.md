@@ -1,10 +1,10 @@
 ---
 change_id: segment-tuning-ops
 title: Segment tuning ops
-status: implemented
+status: archived
 created: 2026-06-18
 updated: 2026-06-18
-archived_at: null
+archived_at: 2026-06-18T16:41:18Z
 ---
 
 ## Notes

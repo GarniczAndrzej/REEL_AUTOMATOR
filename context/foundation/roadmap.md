@@ -36,7 +36,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | done     |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | done     |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | done     |
-| S-04  | segment-tuning-ops          | reorder, merge, delete segments (reorder/merge/delete ops need rework) | S-01      | FR-022                                        | proposed |
+| S-04  | segment-tuning-ops          | reorder, merge, delete segments (reorder/merge/delete ops need rework) | S-01      | FR-022                                        | done     |
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
@@ -181,8 +181,9 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:** —
 - **Rescope (2026-06-15):** FR-023 filler removal **dropped** — the filler feature (`src/selection/fillers.js` + strike-through preview) was removed in S-17, and FR-023's word-level removal logic was never implemented. The FR-022 reorder/merge/delete ops (`step2-segment-ops.js`) need **rework** and the owner will re-plan this slice fresh; the existing `context/changes/s-04/` plan was superseded and deleted.
+- **Resolution (2026-06-18):** Re-planned and shipped. Diagnosis: delete/merge already worked; only drag-reorder was broken because Tauri's webview swallowed HTML5 drag events. Fix was a single config flip (`dragDropEnabled: false` in `tauri.conf.json`) — `moveClip()` was already correct. Follow-up fix: keyboard Arrow ↑/↓ reorder now re-applies the focus glow after the re-render.
 - **Risk:** `mergeAdjacentClips` remains the export-span source; changing merge behavior must keep integer-frame math intact and not regress the exporters (regression fence).
-- **Status:** proposed
+- **Status:** done
 
 ### S-05: Built-in WhisperX transcription + word-level alignment + model manager
 
@@ -321,7 +322,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-01       | scored-selection-edl           | Scored AI selection → clean EDL export (north star)     | no                    | Needs F-01                                       |
 | S-02       | scoring-first-reel-list        | Scoring-first reel list UI                              | no                    | Needs S-01                                       |
 | S-03       | prompt-presets                 | Editable system prompt + preset management              | done                  | Archived 2026-06-18 → `context/archive/2026-06-16-s-03/` |
-| S-04       | segment-tuning-ops             | Reorder / merge / delete segments (ops need rework)     | no                    | Needs S-01; FR-023 filler dropped (S-17); owner re-plans |
+| S-04       | segment-tuning-ops             | Reorder / merge / delete segments (ops need rework)     | done                  | Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`; drag-reorder fixed via `dragDropEnabled: false` |
 | S-05       | builtin-whisperx-transcription | Built-in WhisperX transcription + word-level alignment  | no                    | Needs F-01; heavy; cache migration               |
 | S-07       | auto-mode-pipeline             | One-click auto mode + staged progress                   | no                    | Needs S-01, S-05                                 |
 | S-08       | timeline-export-set            | Premiere XML / FCPXML / Resolve Lua export set          | no                    | Needs S-01                                       |
@@ -373,4 +374,5 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-18: start transcribing without a long wait — the WhisperX engine check is fast (cached/async)** — Archived 2026-06-16 → `context/archive/2026-06-16-s-18/`. Cheap `--capability` sidecar probe + content-addressed verdict cache + bounded timeout; launch badge is cache-read-only (never spawns), green earned only by the manual full self-test. Lesson: every `whisperx-engine` sidecar spawn pays a 37–67s cold cost (onefile extraction + torch import) regardless of the probe's own work — never put a sidecar spawn on the launch/critical path.
 - **S-03: edit the system prompt and manage reusable prompt presets** — Archived 2026-06-18 → `context/archive/2026-06-16-s-03/`. Editable (no-longer-hardcoded) system prompt split from the user prompt + reusable preset library (save-as/duplicate/rename/delete, JSON import/export, built-in Polish starters); empty system prompt is meaningful (omits scoring guidance). Lesson: synchronous JS dialogs (`window.prompt/confirm/alert`) hard-crash Tauri's macOS WKWebView — use an in-app modal + async `@tauri-apps/plugin-dialog` `ask()` + `toast()` instead.
 - **S-02: Scoring-first reel list UI** — Archived 2026-06-18 → `context/archive/2026-06-18-scoring-first-reel-list/`. Lesson: —.
+- **S-04: reorder, merge, delete segments (reorder/merge/delete ops need rework)** — Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`. Diagnosis showed delete/merge already worked; only drag-reorder was broken because Tauri's webview intercepted HTML5 drag events — fixed with one config flip (`dragDropEnabled: false`), `moveClip()` untouched. Lesson: Tauri's webview swallows HTML5 drag-and-drop by default; set `dragDropEnabled: false` on the window to hand DnD to the frontend (and it governs the HTML5 file-drop import too — no native `onDragDropEvent` listener to lose).
 - **S-11: store API keys in the OS keychain, never plaintext** — Archived 2026-06-18 → `context/archive/2026-06-18-keychain-credentials/`. `keyring`-crate `keychain.rs` get/set/delete commands + hydrated `src/ai/api-key.js` cache (sync `getApiKey`, async write-through `setApiKey`, boot `hydrateKeys()` with one-time localStorage→Keychain migration); R2 accessor folded in. Lesson: the `keyring` 3.x crate ships NO credential store by default (silent in-memory mock) — enable `apple-native` in Cargo.toml or Keychain writes don't persist.
