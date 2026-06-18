@@ -45,6 +45,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | done |
+| S-19  | word-level-srt-export       | export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions | S-05 | FR-005 (extends)                          | proposed |
 
 ## Streams
 
@@ -53,7 +54,7 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 | Stream | Theme                       | Chain                                                        | Note                                                                 |
 | ------ | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
 | A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08`          | The north-star spine; quality goal fronts the scored-selection loop. |
-| B      | Local transcription         | `S-05` → `S-07`                                            | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion. |
+| B      | Local transcription         | `S-05` → `S-07` / `S-19`                                   | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion and (S-19) reels-ready word-by-word captions. |
 | C      | Resolve integration         | `F-02` → `S-09`                                             | Spike-first (top blocker = decisions); `S-09` joins Stream A at `S-08`. |
 | D      | Security                    | `S-11`                                                      | `S-11` is standalone-ready. |
 | E      | UX overhaul                 | `S-16` (prereq-free)                                        | Step-shell rewrite; prereq-free so it can land early — later surfaces (`S-02`/`S-04`/`S-08`) build into the new shell. Informs `S-07`'s one-click flow. |
@@ -311,6 +312,21 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Risk:** Low surface — touches the engine bring-up/health path (`src-tauri/src/whisper.rs` + its frontend caller), not the transcription correctness path or the cache contract. Must not mask a genuinely-missing/broken engine: a cached "ready" has to invalidate when the sidecar/model is absent, so keep the unavailable state honest. No parser/exporter/frame-math impact.
 - **Status:** done
 
+### S-19: Word-by-word SRT export — reels-ready captions
+
+- **Outcome:** Editor exports a **word-by-word** `.srt` (one word per cue) built from the word-level forced-alignment timestamps S-05 already produces, suitable for dropping straight into TikTok / Instagram Reels as caption text. Each cue's **start is pinned to the word's real audio onset** (integer-frame, never moved); every word is held on screen for at least a **minimum duration of 4 frames** (≈160 ms at 25 fps, computed at the project fps), and any word shorter than the floor is **lengthened only on its right side** (the end pushed later, the onset left untouched) so captions stay legible without drifting off the audio. The export goes through the **save-location prompt** (native dialog), like every other save.
+- **Change ID:** word-level-srt-export
+- **PRD refs:** FR-005 (extends — `.srt incl. word-level`; this is the per-word/caption variant with onset-pin + min-length + right-pad rules); supports the "~0% mid-word" cut-accuracy intent (PRD §53/§76) at word-caption granularity
+- **Prerequisites:** S-05 (word-level forced alignment supplies the per-word onset/offset timestamps; without it there is no word-level source data)
+- **Parallel with:** S-07, S-08 (independent export surface; no shared frame-math beyond the integer-frame invariant)
+- **Blockers:** —
+- **Unknowns:**
+  - **Right-pad collision policy** — when a word's 4-frame floor would push its end past the *next* word's onset, does the extension clamp to the next onset (no overlap, cue may stay below the floor) or are brief overlaps allowed? — Owner: user. Block: no (default: clamp to next onset — onsets are sacred, overlap-free SRT is the safer reels import; revisit if too many sub-floor cues result).
+  - **fps basis for the floor** — "4 frames at 25 fps" is ~160 ms; honor the integer-frame invariant by computing 4 frames at the *project* fps, or fix the floor at a constant ~160 ms regardless of fps? — Owner: user. Block: no (default: 4 frames at project fps, per the frame-math invariant).
+  - **New export vs. replace** — does this become a new entry in the export popover (alongside the existing sentence-level SRT/VTT) or replace the current SRT export? — Owner: user. Block: no (default: additive new option labelled in Polish; keep the existing transcript SRT/VTT).
+- **Risk:** Low–moderate. Pure read of existing alignment data → string output, but it is **not** routed through `mergeAdjacentClips` (that is the *reel-span* source, not a per-word caption source) — keep the two paths separate so caption generation never perturbs the exporter span pipeline. All cue timing must stay integer-frame (`Math.round(s * fps)`, no mid-pipeline seconds rounding). Add a regression case in `test/regression.js` covering the onset-pin, the 4-frame floor, and right-side-only padding (incl. the collision clamp). All new user-facing strings stay Polish.
+- **Status:** proposed
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID                      | Suggested issue title                                   | Ready for `/10x-plan` | Notes                                            |
@@ -331,6 +347,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-16       | ui-ux-redesign                 | UI/UX redesign — step-shell rewrite, simpler flow       | yes                   | Prereq-free; land early                          |
 | S-17       | feature-pruning-cleanup        | Feature pruning & cleanup pass                          | yes                   | Prereq-free; recurring de-bloat of backlog + code |
 | S-18       | whisperx-engine-check-speedup  | Speed up the WhisperX engine availability check         | yes                   | Needs S-05 (shipped); perf fix, profile first    |
+| S-19       | word-level-srt-export          | Word-by-word SRT export — reels-ready captions          | yes                   | Needs S-05 (shipped); onset-pin + 4-frame floor + right-pad; `/10x-plan word-level-srt-export` |
 
 ## Open Roadmap Questions
 

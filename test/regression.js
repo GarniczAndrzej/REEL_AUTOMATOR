@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { parseSRT, framesToTC, parseTime } from '../src/parser/srt.js';
 import { mergeAdjacentClips } from '../src/parser/segments.js';
 import { segmentFromWords } from '../src/parser/word-segments.js';
+import { mergeWordsIntoSentences } from '../src/ui/import/segments.js';
 import {
   generateTranscriptSRT,
   generateTranscriptVTT,
@@ -856,6 +857,58 @@ const v3EDL = generateEDL({
 assert(
   v3EDL.includes('TITLE: REELS_EDL_AUTOMATOR'),
   'v3 sentences (no words) still export a valid EDL',
+);
+
+// ─────────────────────────────────────────────────────────────────
+// Test 10b: align-path word units — mergeWordsIntoSentences emits frames
+// The transcribe path stores words in frames; the align path historically
+// stored raw seconds, breaking any start_frame reader. This locks the align
+// path to the SAME frame-based Word shape (S-19 Phase 1).
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 10b: align-path word frame units ────────────────');
+
+// One sentence spanning ~0..2s at FPS; seconds-based WhisperX words inside it.
+const alignSentence = {
+  id: 1,
+  source_idx: 0,
+  text: 'Witaj świecie.',
+  start_frame: 0,
+  end_frame: Math.round(2 * FPS),
+};
+const alignWords = [
+  { text: 'Witaj', start: 0.2, end: 0.6, speaker: 'SPEAKER_00' },
+  { text: 'świecie.', start: 0.7, end: 1.4 },
+];
+const alignSentences = [alignSentence];
+mergeWordsIntoSentences(alignSentences, alignWords, FPS);
+
+assert(
+  alignSentences[0].words.length === 2,
+  `align path attaches both words by overlap (got ${alignSentences[0].words.length})`,
+);
+assert(
+  alignSentences[0].words.every(
+    (w) =>
+      Number.isInteger(w.start_frame) && Number.isInteger(w.end_frame),
+  ),
+  'align-path words carry integer start_frame/end_frame',
+);
+assert(
+  alignSentences[0].words[0].start_frame === Math.round(0.2 * FPS) &&
+    alignSentences[0].words[0].end_frame === Math.round(0.6 * FPS),
+  'align-path word frames use Math.round(seconds * fps)',
+);
+assert(
+  alignSentences[0].words.every(
+    (w) => w.start === undefined && w.end === undefined,
+  ),
+  'align-path words drop the raw seconds keys (start/end)',
+);
+assert(
+  alignSentences[0].words[0].speaker === 'SPEAKER_00' &&
+    alignSentences[0].words[1].speaker === undefined,
+  'align-path words carry speaker only when present',
 );
 
 // ─────────────────────────────────────────────────────────────────

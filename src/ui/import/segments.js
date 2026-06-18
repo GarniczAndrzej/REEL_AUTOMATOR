@@ -143,7 +143,12 @@ function doParseBtn() {
 }
 
 // Assign each Whisper word to its sentence by time overlap (F4)
-// Words are only produced for the primary source (source_idx 0)
+// Words are only produced for the primary source (source_idx 0).
+// The raw WhisperX words arrive in seconds (`{text, start, end, speaker?}`);
+// convert them to the frame-based `Word` shape (`{text, start_frame,
+// end_frame, speaker?}`) so this align path converges on the SAME shape that
+// `segmentFromWords` (the transcribe path) produces — one `Word` shape
+// everywhere downstream (exporters, .reelproj round-trip).
 export function mergeWordsIntoSentences(sentences, words, fps) {
   for (const s of sentences) {
     if ((s.source_idx ?? 0) !== 0) {
@@ -152,11 +157,23 @@ export function mergeWordsIntoSentences(sentences, words, fps) {
     }
     const startS = s.start_frame / fps;
     const endS = s.end_frame / fps;
-    s.words = words.filter(
-      (w) =>
-        (w.start + w.end) / 2 >= startS - 0.15 &&
-        (w.start + w.end) / 2 <= endS + 0.15,
-    );
+    // Overlap test uses the raw seconds midpoint (±0.15s window), then the
+    // matched words are frame-converted before being attached.
+    s.words = words
+      .filter(
+        (w) =>
+          (w.start + w.end) / 2 >= startS - 0.15 &&
+          (w.start + w.end) / 2 <= endS + 0.15,
+      )
+      .map((w) => {
+        const word = {
+          text: w.text,
+          start_frame: Math.round(w.start * fps),
+          end_frame: Math.round(w.end * fps),
+        };
+        if (w.speaker != null) word.speaker = w.speaker;
+        return word;
+      });
   }
 }
 
