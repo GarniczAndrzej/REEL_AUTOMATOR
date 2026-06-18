@@ -116,8 +116,8 @@ None — single config flag, no data or schema change. Reversible by removing th
 
 #### Manual
 
-- [x] 1.3 Drag-reorder within a reel works in `tauri dev`
-- [x] 1.4 Drag clip across reels works
-- [x] 1.5 Exported EDL reflects new clip order
-- [x] 1.6 Step-1 file-drop import still works
-- [x] 1.7 Keyboard Arrow ↑/↓ reorder still works
+- [x] 1.3 Drag-reorder within a reel works in `tauri dev` — 1b94df0
+- [x] 1.4 Drag clip across reels works — 1b94df0
+- [x] 1.5 Exported EDL reflects new clip order — 1b94df0
+- [x] 1.6 Step-1 file-drop import still works — 1b94df0
+- [x] 1.7 Keyboard Arrow ↑/↓ reorder still works — 1b94df0
