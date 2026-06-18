@@ -7,6 +7,7 @@ import { loadSettings } from './settings.js';
 import { seedPresetsIfEmpty, loadPresets } from './ai/prompt-presets.js';
 import { initSurface } from './ui/surface.js';
 import { initSettingsModal } from './ui/settings-modal.js';
+import { hydrateKeys } from './ai/api-key.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Seed persisted app settings (S-16) before step inits read state. The
@@ -19,6 +20,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // FR-016: seed built-in presets on first run then load the library (S-03 Phase 2).
   seedPresetsIfEmpty();
   state.promptPresets = loadPresets();
+
+  // S-11/FR-035: hydrate API keys from the macOS Keychain (and run the one-time
+  // localStorage→Keychain migration) BEFORE any step init / settings modal reads
+  // a key synchronously via getApiKey().
+  try {
+    await hydrateKeys();
+  } catch (e) {
+    console.error('[hydrateKeys]', e);
+  }
 
   try {
     step1.init();

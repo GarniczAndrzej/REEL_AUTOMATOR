@@ -252,14 +252,14 @@ Update the credential documentation, flip roadmap statuses, and confirm the regr
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes (`cargo check`)
-- [x] 1.2 Rust build passes (`cargo build`)
+- [x] 1.1 Rust type-check passes (`cargo check`) — 9853f18
+- [x] 1.2 Rust build passes (`cargo build`) — 9853f18
 
 ### Phase 2: Frontend accessor + startup hydration + migration
 
 #### Automated
 
-- [ ] 2.1 Regression suite passes (`node --experimental-vm-modules test/regression.js`)
+- [x] 2.1 Regression suite passes (`node --experimental-vm-modules test/regression.js`)
 - [ ] 2.2 App boots in dev without console errors (`npm run tauri dev` smoke)
 
 #### Manual
