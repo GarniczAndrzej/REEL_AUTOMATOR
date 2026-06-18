@@ -32,7 +32,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | F-01  | remove-render-path          | (foundation) FFmpeg render path deleted; regression fence green | —               | FR-038                                        | done     |
 | F-02  | resolve-plugin-spike        | (foundation) decision recorded on Resolve plugin viability   | —                  | FR-030 (gates), US-02                         | done     |
 | R1    | split-step2-analyze         | (refactor) split `step2-analyze.js` into per-surface modules so S-02/S-03/S-04 own separate files | F-01 | — (enabler; streams.md R1)                | done     |
-| R2    | api-key-accessor            | (refactor) replace direct `localStorage.edl_apikey_*` reads with a `getApiKey()/setApiKey()` helper | —          | — (enabler; streams.md R2)                    | proposed |
+| R2    | api-key-accessor            | (refactor) replace direct `localStorage.edl_apikey_*` reads with a `getApiKey()/setApiKey()` helper | —          | — (enabler; streams.md R2)                    | done     |
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | done     |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | done     |
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | done     |
@@ -41,9 +41,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
 | S-09  | resolve-plugin-handoff      | push reels into Resolve from inside Resolve in one click     | S-01, S-08, F-02   | FR-030, FR-031, US-02                         | go-with-rework |
-| S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | ready    |
-| S-12  | empty-error-states          | see explicit empty/error states instead of silent failures   | S-01, S-05         | FR-036                                        | proposed |
-| S-13  | keyboard-navigation         | drive review and tuning entirely from the keyboard           | S-02, S-04, S-16   | FR-037                                        | proposed |
+| S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | done     |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | done |
@@ -55,10 +53,10 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 | Stream | Theme                       | Chain                                                        | Note                                                                 |
 | ------ | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
 | A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08`          | The north-star spine; quality goal fronts the scored-selection loop. |
-| B      | Local transcription         | `S-05` → `S-07` / `S-12`                                    | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion. |
+| B      | Local transcription         | `S-05` → `S-07`                                            | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion. |
 | C      | Resolve integration         | `F-02` → `S-09`                                             | Spike-first (top blocker = decisions); `S-09` joins Stream A at `S-08`. |
-| D      | Security & keyboard         | `S-11` / `S-13`                                             | `S-11` is standalone-ready; `S-13` joins Stream A at `S-04`, then gates on `S-16` so shortcuts aren't wired to UI about to be rewritten. |
-| E      | UX overhaul                 | `S-16` (prereq-free) → `S-13`                               | Step-shell rewrite; prereq-free so it can land early — later surfaces (`S-02`/`S-04`/`S-08`) build into the new shell. Must precede `S-13` and informs `S-07`'s one-click flow. |
+| D      | Security                    | `S-11`                                                      | `S-11` is standalone-ready. |
+| E      | UX overhaul                 | `S-16` (prereq-free)                                        | Step-shell rewrite; prereq-free so it can land early — later surfaces (`S-02`/`S-04`/`S-08`) build into the new shell. Informs `S-07`'s one-click flow. |
 
 ## Baseline
 
@@ -70,7 +68,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Data / persistence:** present — `.reelproj` JSON (schema v2) via `src-tauri/src/project.rs`, serde defaults for back-compat.
 - **Transcription:** partial — `src-tauri/src/whisper.rs` shells out to `whisper-cli` on PATH (not bundled, no built-in word-level alignment, no diarization). Rebuilt by S-05.
 - **AI selection:** partial — `src/ai/providers.js` + `prompt.js` exist, but the schema is the OLD title/hook/description shape: no `virality_score`, no `hook/body/punchline` markers, no `cache_control` prompt-caching. Rebuilt by S-01.
-- **Credentials:** plaintext — API keys live in `localStorage` (`edl_apikey_*`); no OS keychain. Migrated by S-11.
+- **Credentials:** keychain (macOS), migrated from `localStorage` — API keys live in the macOS Keychain behind `src/ai/api-key.js`; legacy plaintext auto-migrated by S-11.
 - **i18n:** absent — all user-facing strings are hardcoded Polish; no translation-key layer. Intentionally kept Polish-only (the i18n slice was dropped — see Parked).
 - **Render path:** present — full FFmpeg filter-graph render + queue + face-tracking. Deleted by F-01 (FR-038).
 - **Deploy / infra:** present — Tauri desktop bundle, macOS-only, architecture-suffixed FFmpeg sidecar; no CI.
@@ -132,7 +130,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Low — a find-all-call-sites refactor with no behavior change. The win is purely shrinking the merge surface so S-01 and S-11 don't collide on key reads.
-- **Status:** proposed
+- **Status:** done — shipped behind `src/ai/api-key.js`; all 5 key read/write sites route through `getApiKey()/setApiKey()`.
 
 ## Slices
 
@@ -205,7 +203,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** auto-mode-pipeline
 - **PRD refs:** FR-008, FR-009
 - **Prerequisites:** S-01, S-05
-- **Parallel with:** S-08, S-12
+- **Parallel with:** S-08
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Orchestration over slices that must already exist; the sharp edges are cancelability mid-stage and not blocking the window. Sequenced after both the selection (S-01) and transcription (S-05) engines are real.
@@ -230,7 +228,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Change ID:** resolve-plugin-handoff
 - **PRD refs:** FR-030, FR-031, US-02
 - **Prerequisites:** S-01, S-08, F-02
-- **Parallel with:** S-13
+- **Parallel with:** —
 - **Blockers:** —
 - **Unknowns:**
   - Is the Workflow Integration runtime viable and can the Tauri frontend be reused inside it? — **Resolved by F-02 (verdict `Go-with-rework`, 2026-06-11).** Runtime is viable (Electron Workflow Integration; panel hosting confirmed live in Studio); frontend reuses via Strategy 2 (keep HTML/CSS/JS, rebuild the Tauri `invoke` bridge as an Electron `contextBridge`/`ipcRenderer` bridge + reimplement the 6 post-F-01 commands in Node). Integration contract: `context/changes/f-02/decision.md`.
@@ -247,32 +245,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Touches every key read/write site (`edl_apikey_*` in the OpenRouter picker, step-2 selection, compare panel). Low conceptual risk; the work is finding all call sites. Independent of the selection pipeline, so it can run any time as a parallel hardening task.
-- **Status:** ready
-
-### S-12: Explicit empty/error states
-
-- **Outcome:** Editor sees explicit empty/error states instead of silent failures: no API key (AI gated, transcription still works), whisper/model not installed, invalid LLM JSON, empty project / no reels.
-- **Change ID:** empty-error-states
-- **PRD refs:** FR-036
-- **Prerequisites:** S-01, S-05
-- **Parallel with:** S-07
-- **Blockers:** —
-- **Unknowns:** —
-- **Risk:** Each state belongs to a feature that must already exist (invalid-JSON ↔ S-01, model-not-installed ↔ S-05). A thin consolidation pass; the risk is missing a state, not implementing one.
-- **Status:** proposed
-
-### S-13: Keyboard-driven actions
-
-- **Outcome:** Editor drives core actions from the keyboard: previous/next reel, accept/reject, and move between steps 1–2–3.
-- **Change ID:** keyboard-navigation
-- **PRD refs:** FR-037
-- **Prerequisites:** S-02, S-04, S-16
-- **Parallel with:** S-09
-- **Blockers:** —
-- **Unknowns:** —
-- **Simplify (2026-06-15):** Scope is **core hotkeys only** — prev/next reel, accept/reject, step navigation. Word-level boundary nudges are **deferred**: they depended on the now-dropped S-06 (word-level boundary trim), so there is no word-precision surface to bind to.
-- **Risk:** Depends on the reel-list (S-02) and tuning (S-04) surfaces being keyboard-targetable — and on the S-16 redesign having settled their final layout, so shortcuts aren't wired to UI about to change. The persona explicitly values keyboard speed, so this is product-relevant, not polish.
-- **Status:** proposed
+- **Status:** done — `keyring`-crate `keychain.rs` commands + hydrated `src/ai/api-key.js` cache; one-time `localStorage`→Keychain migration at boot (macOS).
 
 ### S-16: UI/UX redesign — simpler, decluttered flow
 
@@ -308,7 +281,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Unknowns:**
   - How much of the "simpler flow" is already delivered by S-07's one-click auto mode vs. owned here (manual-flow ergonomics)? — Owner: team. Block: no (coordinate the shared "fewer steps" goal; does not gate the rewrite).
   - Does the quick-export popover (#8) duplicate or replace the S-08 export surface, and does merge-gap-in-settings (#6) move ownership of the threshold UI out of S-04? — Owner: team. Block: no (reconcile when those slices build into the new shell).
-- **Risk:** Cross-cutting rewrite of the `goStep(n)` orchestration in `main.js` and every `src/ui/stepN-*.js` surface; the regression suite only fences parser/exporters, so UI behavior must be manually re-verified. Landing it **early** (prereq-free) is the cheaper sequencing: later slices build into the new shell, avoiding a second reshape — but anything already shipped against the old steps (none yet beyond S-01's step-2 split) would need rework if reordered. It must land **before** S-13 (keyboard) so shortcuts aren't wired against UI about to change. Several proposals overlap live slices (S-02/S-04/S-08) and one (#13 queue) is net-new functionality, not presentation — scope-gate those out so S-16 stays a pure shell/declutter rewrite. Keep all user-facing strings Polish. No exporter or frame-math changes — pure presentation/orchestration.
+- **Risk:** Cross-cutting rewrite of the `goStep(n)` orchestration in `main.js` and every `src/ui/stepN-*.js` surface; the regression suite only fences parser/exporters, so UI behavior must be manually re-verified. Landing it **early** (prereq-free) is the cheaper sequencing: later slices build into the new shell, avoiding a second reshape — but anything already shipped against the old steps (none yet beyond S-01's step-2 split) would need rework if reordered. Several proposals overlap live slices (S-02/S-04/S-08) and one (#13 queue) is net-new functionality, not presentation — scope-gate those out so S-16 stays a pure shell/declutter rewrite. Keep all user-facing strings Polish. No exporter or frame-math changes — pure presentation/orchestration.
 - **Status:** done
 
 ### S-17: Feature pruning & cleanup pass
@@ -334,7 +307,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:**
   - What dominates the check latency — sidecar cold-start (PyInstaller onefile unpack), the align-model probe, or a redundant per-call health invocation? — Owner: team. Block: no (profile first, then choose cache vs. async vs. warm-on-launch).
-- **Risk:** Low surface — touches the engine bring-up/health path (`src-tauri/src/whisper.rs` + its frontend caller), not the transcription correctness path or the cache contract. Must not mask a genuinely-missing/broken engine: a cached "ready" has to invalidate when the sidecar/model is absent, so keep the S-12 unavailable state honest. No parser/exporter/frame-math impact.
+- **Risk:** Low surface — touches the engine bring-up/health path (`src-tauri/src/whisper.rs` + its frontend caller), not the transcription correctness path or the cache contract. Must not mask a genuinely-missing/broken engine: a cached "ready" has to invalidate when the sidecar/model is absent, so keep the unavailable state honest. No parser/exporter/frame-math impact.
 - **Status:** done
 
 ## Backlog Handoff
@@ -354,9 +327,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-08       | timeline-export-set            | Premiere XML / FCPXML / Resolve Lua export set          | no                    | Needs S-01                                       |
 | S-09       | resolve-plugin-handoff         | DaVinci Resolve embedded plugin (one-click hand-off)    | yes                   | F-02 verdict `Go-with-rework`; plan against decision.md |
 | S-11       | keychain-credentials           | Move API keys to OS keychain                            | yes                   | No prerequisite; parallel hardening              |
-| S-12       | empty-error-states             | Explicit empty/error states                             | no                    | Needs S-01, S-05                                 |
-| S-13       | keyboard-navigation            | Keyboard-driven review (core hotkeys only)              | no                    | Needs S-02, S-04, S-16; word-nudges deferred (S-06 dropped) |
-| S-16       | ui-ux-redesign                 | UI/UX redesign — step-shell rewrite, simpler flow       | yes                   | Prereq-free; land early, before S-13             |
+| S-16       | ui-ux-redesign                 | UI/UX redesign — step-shell rewrite, simpler flow       | yes                   | Prereq-free; land early                          |
 | S-17       | feature-pruning-cleanup        | Feature pruning & cleanup pass                          | yes                   | Prereq-free; recurring de-bloat of backlog + code |
 | S-18       | whisperx-engine-check-speedup  | Speed up the WhisperX engine availability check         | yes                   | Needs S-05 (shipped); perf fix, profile first    |
 

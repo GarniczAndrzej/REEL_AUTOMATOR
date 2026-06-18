@@ -44,9 +44,7 @@ Reels Automator przechodzi od „transkrypcja + selekcja + render” do **narzę
 | S-08  | timeline-export-set         | eksportować Premiere XML, FCPXML i Resolve Lua (ze znacznikami)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
 | S-09  | resolve-plugin-handoff      | przekazać reele do Resolve z wnętrza Resolve jednym kliknięciem  | S-01, S-08, F-02   | FR-030, FR-031, US-02                         | blocked  |
 | S-10  | en-pl-i18n                  | przełączać cały interfejs między angielskim a polskim           | S-02, S-04         | FR-034                                        | proposed |
-| S-11  | keychain-credentials        | przechowywać klucze API w keychainie systemu, nigdy w plaintext           | —                  | FR-035                                        | ready    |
-| S-12  | empty-error-states          | widzieć jawne stany puste/błędu zamiast cichych awarii   | S-01, S-05         | FR-036                                        | proposed |
-| S-13  | keyboard-navigation         | obsługiwać przegląd i strojenie w całości z klawiatury           | S-02, S-04         | FR-037                                        | proposed |
+| S-11  | keychain-credentials        | przechowywać klucze API w keychainie systemu, nigdy w plaintext           | —                  | FR-035                                        | done     |
 | S-14  | selection-quality-flags     | otrzymać flagi grupowania źródeł i wiszących odniesień            | S-01               | FR-013, FR-025                                | proposed |
 | S-15  | reel-preview-playback       | podejrzeć odtwarzanie reela zsynchronizowane z jego listą segmentów    | S-04               | FR-024                                        | proposed |
 
@@ -57,9 +55,9 @@ Pomoc nawigacyjna — grupuje elementy współdzielące łańcuch warunków wst�
 | Strumień | Temat                       | Łańcuch                                                        | Notatka                                                                 |
 | ------ | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
 | A      | Pokład selekcji i eksportu     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08` → `S-14` / `S-15` | Kręgosłup gwiazdy północnej; cel jakości stoi na czele pętli punktowanej selekcji. |
-| B      | Transkrypcja lokalna         | `S-05` → `S-06` / `S-07` / `S-12`                           | Odgałęzia od `F-01`; wyrównanie na poziomie słów odblokowuje kryterium dokładności cięć. |
+| B      | Transkrypcja lokalna         | `S-05` → `S-06` / `S-07`                                    | Odgałęzia od `F-01`; wyrównanie na poziomie słów odblokowuje kryterium dokładności cięć. |
 | C      | Integracja z Resolve         | `F-02` → `S-09`                                             | Najpierw spike (główny bloker = decyzje); `S-09` dołącza do Strumienia A przy `S-08`. |
-| D      | i18n, bezpieczeństwo i klawiatura   | `S-11` / `S-10` / `S-13`                                    | `S-11` gotowy samodzielnie; `S-10` i `S-13` dołączają do Strumienia A przy `S-04`. |
+| D      | i18n i bezpieczeństwo   | `S-11` / `S-10`                                    | `S-11` gotowy samodzielnie; `S-10` dołącza do Strumienia A przy `S-04`. |
 
 ## Baza (Baseline)
 
@@ -71,7 +69,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Dane / trwałość:** obecne — `.reelproj` JSON (schema v2) przez `src-tauri/src/project.rs`, domyślne serde dla wstecznej zgodności.
 - **Transkrypcja:** częściowa — `src-tauri/src/whisper.rs` woła `whisper-cli` z PATH (nie zbundlowany, bez wbudowanego wyrównania na poziomie słów, bez diaryzacji). Przebudowane przez S-05.
 - **Selekcja AI:** częściowa — `src/ai/providers.js` + `prompt.js` istnieją, ale schemat to STARY kształt title/hook/description: bez `virality_score`, bez znaczników `hook/body/punchline`, bez cache'owania promptów `cache_control`. Przebudowane przez S-01.
-- **Poświadczenia:** plaintext — klucze API żyją w `localStorage` (`edl_apikey_*`); brak keychaina systemu. Migrowane przez S-11.
+- **Poświadczenia:** keychain (macOS), zmigrowane z `localStorage` — klucze API żyją w macOS Keychain za `src/ai/api-key.js`; starszy plaintext auto-migrowany przez S-11.
 - **i18n:** brak — wszystkie napisy interfejsu zakodowane na sztywno po polsku; brak warstwy kluczy tłumaczeń. Dodane przez S-10.
 - **Ścieżka renderowania:** obecna — pełny render filter-graph FFmpeg + kolejka + śledzenie twarzy. Usunięte przez F-01 (FR-038).
 - **Deploy / infra:** obecne — bundle desktopowy Tauri, tylko macOS, sidecar FFmpeg z sufiksem architektury; brak CI.
@@ -175,7 +173,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Change ID:** word-level-boundary-trim
 - **Odniesienia PRD:** FR-021
 - **Warunki wstępne:** S-04, S-05
-- **Równolegle z:** S-07, S-12, S-15
+- **Równolegle z:** S-07, S-15
 - **Blokery:** —
 - **Niewiadome:**
   - Jaki sygnał definiuje „pauzę/oddech” do przyciągania — luki ciszy w czasie słów, czy sonda energii audio? — Właściciel: zespół. Blokuje: nie.
@@ -188,7 +186,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Change ID:** auto-mode-pipeline
 - **Odniesienia PRD:** FR-008, FR-009
 - **Warunki wstępne:** S-01, S-05
-- **Równolegle z:** S-06, S-08, S-12
+- **Równolegle z:** S-06, S-08
 - **Blokery:** —
 - **Niewiadome:** —
 - **Ryzyko:** Orkiestracja nad wycinkami, które muszą już istnieć; ostre krawędzie to anulowalność w trakcie etapu i nieblokowanie okna. Sekwencjonowane po tym, jak oba silniki — selekcja (S-01) i transkrypcja (S-05) — są realne.
@@ -213,7 +211,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Change ID:** resolve-plugin-handoff
 - **Odniesienia PRD:** FR-030, FR-031, US-02
 - **Warunki wstępne:** S-01, S-08, F-02
-- **Równolegle z:** S-10, S-13
+- **Równolegle z:** S-10
 - **Blokery:** —
 - **Niewiadome:**
   - Czy runtime Workflow Integration jest wykonalny i czy frontend Tauri może być w nim ponownie użyty? — Właściciel: użytkownik. Blokuje: tak (rozwiązane przez F-02; do tego czasu tego wycinka nie da się zaplanować).
@@ -226,7 +224,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Change ID:** en-pl-i18n
 - **Odniesienia PRD:** FR-034
 - **Warunki wstępne:** S-02, S-04
-- **Równolegle z:** S-11, S-13, S-09
+- **Równolegle z:** S-11, S-09
 - **Blokery:** —
 - **Niewiadome:** —
 - **Ryzyko:** Przekrojowy refaktor ekstrakcji napisów dotykający każdego pliku UI. Sekwencjonowane po tym, jak istnieją nowe powierzchnie listy selekcji (S-02) i strojenia (S-04), by napisy wyekstrahować raz, a nie ponownie z UI, które dopiero ma być przepisane.
@@ -242,31 +240,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Blokery:** —
 - **Niewiadome:** —
 - **Ryzyko:** Dotyka każdego miejsca odczytu/zapisu klucza (`edl_apikey_*` w pickerze OpenRouter, selekcja step-2, panel porównania). Niskie ryzyko koncepcyjne; praca to znalezienie wszystkich miejsc wywołań. Niezależne od potoku selekcji, więc może działać kiedykolwiek jako równoległe zadanie hartowania.
-- **Status:** ready
-
-### S-12: Jawne stany puste/błędu
-
-- **Efekt:** Montażysta widzi jawne stany puste/błędu zamiast cichych awarii: brak klucza API (AI zablokowane, transkrypcja wciąż działa), whisper/model niezainstalowany, niepoprawny JSON LLM, pusty projekt / brak reeli.
-- **Change ID:** empty-error-states
-- **Odniesienia PRD:** FR-036
-- **Warunki wstępne:** S-01, S-05
-- **Równolegle z:** S-06, S-07
-- **Blokery:** —
-- **Niewiadome:** —
-- **Ryzyko:** Każdy stan należy do funkcji, która musi już istnieć (niepoprawny-JSON ↔ S-01, model-niezainstalowany ↔ S-05). Cienki przebieg konsolidacji; ryzykiem jest przeoczenie stanu, nie implementacja jednego.
-- **Status:** proposed
-
-### S-13: Akcje sterowane klawiaturą
-
-- **Efekt:** Montażysta steruje kluczowymi akcjami z klawiatury: poprzedni/następny reel, akceptuj/odrzuć, koryguj granice segmentów (poziom słów) i przechodzi między krokami 1–2–3.
-- **Change ID:** keyboard-navigation
-- **Odniesienia PRD:** FR-037
-- **Warunki wstępne:** S-02, S-04
-- **Równolegle z:** S-09, S-10
-- **Blokery:** —
-- **Niewiadome:** —
-- **Ryzyko:** Zależy od tego, czy powierzchnie listy reeli (S-02) i strojenia (S-04) są celowalne klawiaturą. Korekty na poziomie słów degradują się do poziomu zdań dopóki nie pojawi się S-06. Persona jawnie ceni szybkość klawiatury, więc to istotne produktowo, nie polish.
-- **Status:** proposed
+- **Status:** done — komendy `keychain.rs` (crate `keyring`) + hydratowany cache `src/ai/api-key.js`; jednorazowa migracja `localStorage`→Keychain przy starcie (macOS).
 
 ### S-14: Flagi jakości selekcji — grupowanie źródeł + wiszące odniesienia
 
@@ -287,7 +261,7 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 - **Change ID:** reel-preview-playback
 - **Odniesienia PRD:** FR-024
 - **Warunki wstępne:** S-04
-- **Równolegle z:** S-06, S-12
+- **Równolegle z:** S-06
 - **Blokery:** —
 - **Niewiadome:**
   - Czy podgląd odtwarza wideo źródłowe przewijane po spanach reela, czy zszyte audio-only scrub? — Właściciel: zespół. Blokuje: nie.
@@ -311,8 +285,6 @@ Fundamenty poniżej zakładają, że to istnieje, i NIE odbudowują tego od zera
 | S-09       | resolve-plugin-handoff         | Wbudowana wtyczka DaVinci Resolve (przekazanie jednym kliknięciem)    | nie                    | Zablokowane werdyktem F-02                          |
 | S-10       | en-pl-i18n                     | Internacjonalizacja EN/PL                              | nie                    | Wymaga S-02, S-04                                 |
 | S-11       | keychain-credentials           | Przenieś klucze API do keychaina systemu                            | tak                   | Brak warunku wstępnego; równoległe hartowanie              |
-| S-12       | empty-error-states             | Jawne stany puste/błędu                              | nie                    | Wymaga S-01, S-05                                 |
-| S-13       | keyboard-navigation            | Przegląd i strojenie sterowane klawiaturą                       | nie                    | Wymaga S-02, S-04                                 |
 | S-14       | selection-quality-flags        | Grupowanie źródeł + flagi wiszących odniesień              | nie                    | Wymaga S-01                                       |
 | S-15       | reel-preview-playback          | Podgląd odtwarzania reela                                   | nie                    | Wymaga S-04                                       |
 

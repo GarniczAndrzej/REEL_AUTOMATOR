@@ -259,7 +259,7 @@ Update the credential documentation, flip roadmap statuses, and confirm the regr
 
 #### Automated
 
-- [x] 2.1 Regression suite passes (`node --experimental-vm-modules test/regression.js`)
+- [x] 2.1 Regression suite passes (`node --experimental-vm-modules test/regression.js`) — b263b44
 - [ ] 2.2 App boots in dev without console errors (`npm run tauri dev` smoke)
 
 #### Manual
@@ -275,8 +275,8 @@ Update the credential documentation, flip roadmap statuses, and confirm the regr
 
 #### Automated
 
-- [ ] 3.1 Regression suite passes
-- [ ] 3.2 Rust check passes
+- [x] 3.1 Regression suite passes
+- [x] 3.2 Rust check passes
 
 #### Manual
 
