@@ -21,7 +21,8 @@
       {
         "title": "Reels EDL Automator",
         "width": 1280,
-        "height": 840
+        "height": 840,
+        "dragDropEnabled": false
       }
     ]
   },
