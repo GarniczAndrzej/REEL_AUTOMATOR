@@ -341,11 +341,11 @@ readable by the tolerant loader (it ignores unknown keys), so no destructive mig
 
 #### Automated
 
-- [x] 3.1 Lint/format clean (`npx prettier --check "src/**/*.js"`)
-- [x] 3.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
+- [x] 3.1 Lint/format clean (`npx prettier --check "src/**/*.js"`) — aaa36a1
+- [x] 3.2 Regression suite green (`node --experimental-vm-modules test/regression.js`) — aaa36a1
 
 #### Manual
 
-- [x] 3.3 Save after sorting → reopen → saved order + dropdown mode restored
-- [x] 3.4 Open a pre-v7 `.reelproj` → loads without error; AI-order sort works
-- [x] 3.5 Switching to AI order after a v7 load restores the original LLM sequence
+- [x] 3.3 Save after sorting → reopen → saved order + dropdown mode restored — aaa36a1
+- [x] 3.4 Open a pre-v7 `.reelproj` → loads without error; AI-order sort works — aaa36a1
+- [x] 3.5 Switching to AI order after a v7 load restores the original LLM sequence — aaa36a1
