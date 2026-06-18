@@ -6,7 +6,8 @@
 // delete + merge-gap remain). The reel header leads with the reel name; scores
 // sit on the right.
 
-import { state } from '../state.js';
+import { state, emit } from '../state.js';
+import { snap, pushUndo } from './step2-segment-ops.js';
 
 // ── Init ───────────────────────────────────────────────────────────
 
@@ -19,6 +20,67 @@ export function initReelList(list) {
     h.classList.toggle('expanded');
     h.nextElementSibling.classList.toggle('open');
   });
+
+  // ── Sort dropdown (S-02) ─────────────────────────────────────────
+  const sortSel = document.getElementById('reelSortSelect');
+  if (sortSel) {
+    sortSel.value = state.reelSort;
+    sortSel.addEventListener('change', () => sortReels(sortSel.value));
+  }
+}
+
+// ── Sort (S-02) ────────────────────────────────────────────────────
+
+/**
+ * Idempotently stamp a stable `ai_order` on every reel lacking one, in current
+ * array order. Used by all ingest sites so 'ai' sort can restore the original
+ * LLM (or saved) sequence even after physical sorts. Never overwrites.
+ * @returns {void}
+ */
+export function stampAiOrder() {
+  state.reelsData.forEach((r, i) => {
+    if (typeof r.ai_order !== 'number') r.ai_order = i;
+  });
+}
+
+/**
+ * Comparator factory: scored reels sort by virality_score (asc|desc); unscored
+ * reels always sink to the bottom, ordered among themselves by ai_order. Ties
+ * break on ai_order for a deterministic, stable result.
+ * @param {'score_desc'|'score_asc'} mode
+ * @returns {(a: import('../state.js').Reel, b: import('../state.js').Reel) => number}
+ */
+function scoreComparator(mode) {
+  const dir = mode === 'score_asc' ? 1 : -1;
+  return (a, b) => {
+    const aHas = typeof a.virality_score === 'number';
+    const bHas = typeof b.virality_score === 'number';
+    if (aHas && bHas && a.virality_score !== b.virality_score) {
+      return dir * (a.virality_score - b.virality_score);
+    }
+    if (aHas !== bHas) return aHas ? -1 : 1; // unscored to the bottom
+    return (a.ai_order ?? 0) - (b.ai_order ?? 0);
+  };
+}
+
+/**
+ * Reorder `state.reelsData` in place per the chosen mode, as an explicit,
+ * undoable user/ingest action. Never call from `renderReels` — a clip edit must
+ * not re-sort the list mid-triage.
+ * @param {'score_desc'|'score_asc'|'ai'} mode
+ * @returns {void}
+ */
+export function sortReels(mode) {
+  state.reelSort = mode;
+  stampAiOrder();
+  pushUndo(snap());
+  if (mode === 'ai') {
+    state.reelsData.sort((a, b) => (a.ai_order ?? 0) - (b.ai_order ?? 0));
+  } else {
+    state.reelsData.sort(scoreComparator(mode));
+  }
+  renderReels();
+  emit();
 }
 
 // ── Render ─────────────────────────────────────────────────────────
@@ -124,6 +186,10 @@ export function renderReels() {
 
   document.getElementById('reelsCount').textContent =
     state.reelsData.length + ' reelsów';
+
+  // Keep the sort dropdown reflecting the active mode (S-02).
+  const sortSel = document.getElementById('reelSortSelect');
+  if (sortSel) sortSel.value = state.reelSort;
 }
 
 export function esc(str) {

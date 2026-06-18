@@ -316,17 +316,87 @@
             </div>
 
             <!-- FR-016: preset bar (S-03 Phase 3). Managed by step2-preset-bar.js -->
-            <div id="presetBar" style="margin-bottom: 10px;">
-              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <select id="presetPicker" style="flex:1;min-width:0;font-size:13px;">
+            <div id="presetBar" style="margin-bottom: 10px">
+              <div
+                style="
+                  display: flex;
+                  gap: 6px;
+                  align-items: center;
+                  flex-wrap: wrap;
+                "
+              >
+                <select
+                  id="presetPicker"
+                  style="flex: 1; min-width: 0; font-size: 13px"
+                >
                   <option value="" disabled selected>— wybierz preset —</option>
                 </select>
-                <button class="btn btn-secondary" id="presetSaveBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Zapisz jako</button>
-                <button class="btn btn-secondary" id="presetDuplicateBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Duplikuj</button>
-                <button class="btn btn-secondary" id="presetRenameBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Zmień nazwę</button>
-                <button class="btn btn-secondary" id="presetDeleteBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Usuń</button>
-                <button class="btn btn-secondary" id="presetImportBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Importuj</button>
-                <button class="btn btn-secondary" id="presetExportBtn" style="padding:5px 10px;font-size:12px;white-space:nowrap;">Eksportuj</button>
+                <button
+                  class="btn btn-secondary"
+                  id="presetSaveBtn"
+                  style="
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    white-space: nowrap;
+                  "
+                >
+                  Zapisz jako
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="presetDuplicateBtn"
+                  style="
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    white-space: nowrap;
+                  "
+                >
+                  Duplikuj
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="presetRenameBtn"
+                  style="
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    white-space: nowrap;
+                  "
+                >
+                  Zmień nazwę
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="presetDeleteBtn"
+                  style="
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    white-space: nowrap;
+                  "
+                >
+                  Usuń
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="presetImportBtn"
+                  style="
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    white-space: nowrap;
+                  "
+                >
+                  Importuj
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  id="presetExportBtn"
+                  style="
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    white-space: nowrap;
+                  "
+                >
+                  Eksportuj
+                </button>
               </div>
             </div>
 
@@ -377,7 +447,14 @@
               "
             >
               <span>Zaproponowane Reelsy</span>
-              <span id="reelsCount" class="badge badge-green">0 reelsów</span>
+              <span style="display: flex; gap: 8px; align-items: center">
+                <select id="reelSortSelect" title="Sortowanie reelsów">
+                  <option value="score_desc">Ocena malejąco</option>
+                  <option value="score_asc">Ocena rosnąco</option>
+                  <option value="ai">Kolejność AI</option>
+                </select>
+                <span id="reelsCount" class="badge badge-green">0 reelsów</span>
+              </span>
             </div>
             <div class="reels-list" id="reelsList"></div>
           </div>

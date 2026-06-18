@@ -44,6 +44,7 @@ import { DEFAULT_SCORING_GUIDANCE } from './ai/prompt.js';
  * @property {{hook:number, flow:number, value:number, trend:number}} [scores] - axis sub-scores
  * @property {string} [reason] - one-sentence justification
  * @property {{hook?:number, body?:number, punchline?:number}} [markers] - each value is a member of clip_ids
+ * @property {number} [ai_order] - stable original LLM order (S-02), stamped at ingest
  */
 
 export const state = {
@@ -72,6 +73,9 @@ Zasady:
   /** @type {PromptPreset[]} */
   promptPresets: [],
   reelsData: [],
+  // S-02: active reel sort mode — 'score_desc' | 'score_asc' | 'ai'.
+  // Drives the physical order of reelsData (WYSIWYG export); round-trips in .reelproj v7.
+  reelSort: 'score_desc',
 
   // step 3
   videoPath: '',

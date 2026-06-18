@@ -10,7 +10,7 @@ import { validateReels } from '../ai/validate.js';
 import { callOpenRouter } from '../ai/providers.js';
 import { getApiKey } from '../ai/api-key.js';
 import { withLlmCache } from '../ai/cache.js';
-import { renderReels, esc } from './step2-reel-list.js';
+import { sortReels, esc } from './step2-reel-list.js';
 import { snap, pushUndo } from './step2-segment-ops.js';
 import { toast } from './toast.js';
 
@@ -112,9 +112,12 @@ async function runAIAnalysis() {
 
     const cleaned = responseText.replace(/```json|```/g, '').trim();
     const parsed = validateReels(JSON.parse(cleaned), state.sentences);
+    // Snapshot pre-analysis state, then default fresh output to score-desc.
+    // sortReels stamps ai_order, sets state.reelSort, pushes its own snapshot,
+    // and re-renders — so undo returns to pre-analysis in two steps.
     pushUndo(snap());
     state.reelsData = parsed;
-    renderReels();
+    sortReels('score_desc');
     document.getElementById('statusReels').textContent = state.reelsData.length;
     setPS(3, 'done');
     log('Sparsowano ' + state.reelsData.length + ' reelsów', 'ok');
@@ -172,7 +175,8 @@ function applyPastedJSON() {
     const before = snap();
     state.reelsData = parsed;
     pushUndo(before);
-    renderReels();
+    // Default pasted output to score-desc (sortReels stamps + re-renders).
+    sortReels('score_desc');
     document.getElementById('statusReels').textContent = state.reelsData.length;
     document.getElementById('reelsCard').style.display = 'block';
     document.getElementById('step2Next').style.display = 'flex';
