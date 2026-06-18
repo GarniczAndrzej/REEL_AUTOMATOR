@@ -40,7 +40,9 @@ export function initSettingsModal() {
   }
 
   // Boot seeding (S-03): restore a previously saved global system prompt,
-  // falling back to the default scoring guidance when unset.
+  // falling back to the default scoring guidance when unset. No emit() here by
+  // design — this is a pre-subscriber boot seed (runs before any listener is
+  // registered), so the "emit after any mutation" rule does not apply.
   state.systemPrompt = loadSettings().systemPrompt ?? DEFAULT_SCORING_GUIDANCE;
 
   // System prompt (FR-015) → state + settings bag (persists across sessions).

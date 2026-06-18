@@ -80,11 +80,15 @@ export function loadPresets() {
 /**
  * Overwrite the entire preset library in localStorage.
  * @param {PromptPreset[]} list
+ * @returns {boolean} true if the write succeeded, false if it threw (e.g. quota)
  */
 export function savePresets(list) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(list));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -111,30 +115,31 @@ export function getPreset(id) {
 /**
  * Append a new preset (assigns a fresh id via crypto.randomUUID).
  * @param {{ name: string, userPrompt: string }} preset
- * @returns {PromptPreset} the persisted preset with generated id
+ * @returns {PromptPreset | null} the persisted preset, or null if the write failed
  */
 export function addPreset({ name, userPrompt }) {
   const preset = { id: crypto.randomUUID(), name, userPrompt };
-  savePresets([...loadPresets(), preset]);
-  return preset;
+  return savePresets([...loadPresets(), preset]) ? preset : null;
 }
 
 /**
  * Overwrite an existing preset's fields by id. Unknown ids are a no-op.
  * @param {string} id
  * @param {Partial<Pick<PromptPreset, 'name' | 'userPrompt'>>} updates
+ * @returns {boolean} true if the write succeeded
  */
 export function updatePreset(id, updates) {
   const list = loadPresets().map((p) =>
     p.id === id ? { ...p, ...updates } : p,
   );
-  savePresets(list);
+  return savePresets(list);
 }
 
 /**
  * Delete a preset by id. Unknown ids are a no-op.
  * @param {string} id
+ * @returns {boolean} true if the write succeeded
  */
 export function removePreset(id) {
-  savePresets(loadPresets().filter((p) => p.id !== id));
+  return savePresets(loadPresets().filter((p) => p.id !== id));
 }

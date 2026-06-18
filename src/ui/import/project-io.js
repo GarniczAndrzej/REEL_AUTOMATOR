@@ -124,9 +124,10 @@ function applyProjectData(data) {
   // the filename restores from that; the removed knobs never error on load.
   if (data.mergeThreshold != null) state.mergeThreshold = data.mergeThreshold;
   if (data.userPrompt) state.userPrompt = data.userPrompt;
-  // v6 systemPrompt: assign-if-present (like userPrompt). Older files omit it,
-  // so the global default / settings-bag value is kept.
-  if (data.systemPrompt) state.systemPrompt = data.systemPrompt;
+  // v6 systemPrompt: nullish guard, not truthy — an empty string is a
+  // deliberate "no scoring guidance" choice and must survive reload. Older
+  // files omit the key entirely, so the default / settings-bag value is kept.
+  if (data.systemPrompt != null) state.systemPrompt = data.systemPrompt;
   if (data.whisperLanguage) state.whisperLanguage = data.whisperLanguage;
   if (data.modelId) state.modelId = data.modelId;
   if (data.diarize != null) state.diarize = data.diarize;

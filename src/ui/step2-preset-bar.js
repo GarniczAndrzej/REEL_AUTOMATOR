@@ -71,6 +71,10 @@ export function initPresetBar() {
     const name = await promptNative('Nazwa presetu:', 'Nowy preset');
     if (name === null || name.trim() === '') return;
     const preset = addPreset({ name: name.trim(), userPrompt: state.userPrompt });
+    if (!preset) {
+      toast('Nie udało się zapisać presetu.', 'error');
+      return;
+    }
     state.promptPresets = loadPresets();
     renderPresetBar();
     const pickerEl = /** @type {HTMLSelectElement|null} */ (
@@ -91,7 +95,10 @@ export function initPresetBar() {
     if (!source) return;
     const name = await promptNative('Nazwa kopii:', `${source.name} (kopia)`);
     if (name === null || name.trim() === '') return;
-    addPreset({ name: name.trim(), userPrompt: source.userPrompt });
+    if (!addPreset({ name: name.trim(), userPrompt: source.userPrompt })) {
+      toast('Nie udało się zduplikować presetu.', 'error');
+      return;
+    }
     state.promptPresets = loadPresets();
     renderPresetBar();
     emit();
@@ -108,7 +115,10 @@ export function initPresetBar() {
     if (!source) return;
     const name = await promptNative('Nowa nazwa:', source.name);
     if (name === null || name.trim() === '') return;
-    updatePreset(id, { name: name.trim() });
+    if (!updatePreset(id, { name: name.trim() })) {
+      toast('Nie udało się zmienić nazwy presetu.', 'error');
+      return;
+    }
     state.promptPresets = loadPresets();
     renderPresetBar();
     const pickerEl = /** @type {HTMLSelectElement|null} */ (
@@ -132,7 +142,10 @@ export function initPresetBar() {
       'Usuń preset',
     );
     if (!confirmed) return;
-    removePreset(id);
+    if (!removePreset(id)) {
+      toast('Nie udało się usunąć presetu.', 'error');
+      return;
+    }
     state.promptPresets = loadPresets();
     renderPresetBar();
     emit();
