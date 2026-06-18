@@ -833,6 +833,27 @@ textarea::placeholder {
   border-radius: var(--radius-sm);
   letter-spacing: 0.3px;
 }
+/* S-02 — one-line AI justification under the reel header */
+.reel-reason {
+  padding: 0 16px 10px;
+  font-size: var(--fs-xs);
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* S-02 — weak reels (<50) de-emphasized but fully interactive */
+.reel-card.weak {
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transition:
+    opacity 0.15s,
+    filter 0.15s;
+}
+.reel-card.weak:hover {
+  opacity: 1;
+  filter: none;
+}
 .reel-clips {
   padding: 10px 16px;
   display: none;

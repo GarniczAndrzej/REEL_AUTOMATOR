@@ -314,28 +314,28 @@ readable by the tolerant loader (it ignores unknown keys), so no destructive mig
 
 #### Automated
 
-- [x] 1.1 Lint/format clean (`npx prettier --check "src/**/*.js"`)
-- [x] 1.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
+- [x] 1.1 Lint/format clean (`npx prettier --check "src/**/*.js"`) — fd8738c
+- [x] 1.2 Regression suite green (`node --experimental-vm-modules test/regression.js`) — fd8738c
 
 #### Manual
 
-- [x] 1.3 After an AI run, reels appear highest-score-first
-- [x] 1.4 Dropdown switches score ↓ / score ↑ / AI order; AI order restores LLM sequence
-- [x] 1.5 A sort can be undone with the existing undo control
-- [x] 1.6 Clip delete/merge/drag does NOT re-sort the list
+- [x] 1.3 After an AI run, reels appear highest-score-first — fd8738c
+- [x] 1.4 Dropdown switches score ↓ / score ↑ / AI order; AI order restores LLM sequence — fd8738c
+- [x] 1.5 A sort can be undone with the existing undo control — fd8738c
+- [x] 1.6 Clip delete/merge/drag does NOT re-sort the list — fd8738c
 
 ### Phase 2: Reel-card presentation
 
 #### Automated
 
-- [ ] 2.1 Lint/format clean (`npx prettier --check "src/**/*.{js,css}"`)
-- [ ] 2.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
+- [x] 2.1 Lint/format clean (`npx prettier --check "src/**/*.{js,css}"`)
+- [x] 2.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
 
 #### Manual
 
-- [ ] 2.3 Each reel shows its Polish reason on one line (ellipsis when long); no empty row when absent
-- [ ] 2.4 Reels scoring < 50 render greyed; unscored reels at full opacity
-- [ ] 2.5 Greyed reels still expand, edit, drag, and export normally
+- [x] 2.3 Each reel shows its Polish reason on one line (ellipsis when long); no empty row when absent
+- [x] 2.4 Reels scoring < 50 render greyed; unscored reels at full opacity
+- [x] 2.5 Greyed reels still expand, edit, drag, and export normally
 
 ### Phase 3: Persistence
 

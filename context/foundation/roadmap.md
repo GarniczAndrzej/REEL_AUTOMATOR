@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-16
+updated: 2026-06-18
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -35,7 +35,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | R2    | api-key-accessor            | (refactor) replace direct `localStorage.edl_apikey_*` reads with a `getApiKey()/setApiKey()` helper | —          | — (enabler; streams.md R2)                    | proposed |
 | S-01  | scored-selection-edl        | get AI reels scored on Hook/Flow/Value/Trend and export a clean EDL | F-01        | FR-010, FR-011, FR-012, FR-014, FR-017, FR-018, FR-026, FR-033 | done     |
 | S-02  | scoring-first-reel-list     | triage reels in a score-sorted list with reasons             | S-01               | FR-020                                        | proposed |
-| S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | proposed |
+| S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | done     |
 | S-04  | segment-tuning-ops          | reorder, merge, delete segments (reorder/merge/delete ops need rework) | S-01      | FR-022                                        | proposed |
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
@@ -171,7 +171,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Preset persistence + import/export is straightforward; the only sharp edge is keeping the editable prompt in sync with the fixed JSON schema S-01 established — a free-form prompt must still elicit the validated shape.
-- **Status:** proposed
+- **Status:** done
 
 ### S-04: Segment tuning — reorder / merge / delete
 
@@ -347,7 +347,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | R2         | api-key-accessor               | getApiKey()/setApiKey() accessor abstraction            | yes                   | Enabler; prereq-free, land inside/ahead of S-11  |
 | S-01       | scored-selection-edl           | Scored AI selection → clean EDL export (north star)     | no                    | Needs F-01                                       |
 | S-02       | scoring-first-reel-list        | Scoring-first reel list UI                              | no                    | Needs S-01                                       |
-| S-03       | prompt-presets                 | Editable system prompt + preset management              | no                    | Needs S-01                                       |
+| S-03       | prompt-presets                 | Editable system prompt + preset management              | done                  | Archived 2026-06-18 → `context/archive/2026-06-16-s-03/` |
 | S-04       | segment-tuning-ops             | Reorder / merge / delete segments (ops need rework)     | no                    | Needs S-01; FR-023 filler dropped (S-17); owner re-plans |
 | S-05       | builtin-whisperx-transcription | Built-in WhisperX transcription + word-level alignment  | no                    | Needs F-01; heavy; cache migration               |
 | S-07       | auto-mode-pipeline             | One-click auto mode + staged progress                   | no                    | Needs S-01, S-05                                 |
@@ -400,3 +400,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-17: run a recurring pass to identify, decide on, and remove backlog/feature bloat** — Archived 2026-06-15 → `context/archive/2026-06-15-s-17/`. Lesson: —.
 - **S-16: move through a simpler, decluttered flow with fewer visible steps** — Archived 2026-06-16 → `context/archive/2026-06-15-s-16/`. Lesson: —.
 - **S-18: start transcribing without a long wait — the WhisperX engine check is fast (cached/async)** — Archived 2026-06-16 → `context/archive/2026-06-16-s-18/`. Cheap `--capability` sidecar probe + content-addressed verdict cache + bounded timeout; launch badge is cache-read-only (never spawns), green earned only by the manual full self-test. Lesson: every `whisperx-engine` sidecar spawn pays a 37–67s cold cost (onefile extraction + torch import) regardless of the probe's own work — never put a sidecar spawn on the launch/critical path.
+- **S-03: edit the system prompt and manage reusable prompt presets** — Archived 2026-06-18 → `context/archive/2026-06-16-s-03/`. Editable (no-longer-hardcoded) system prompt split from the user prompt + reusable preset library (save-as/duplicate/rename/delete, JSON import/export, built-in Polish starters); empty system prompt is meaningful (omits scoring guidance). Lesson: synchronous JS dialogs (`window.prompt/confirm/alert`) hard-crash Tauri's macOS WKWebView — use an in-app modal + async `@tauri-apps/plugin-dialog` `ask()` + `toast()` instead.

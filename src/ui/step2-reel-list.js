@@ -127,6 +127,13 @@ export function renderReels() {
         : `<span class="reel-score-badge muted" title="Brak oceny">brak oceny</span>`;
       const axesHtml = renderAxisBadges(r.scores);
 
+      // S-02 — one-line AI justification + weak (<50) de-emphasis.
+      const reasonHtml =
+        typeof r.reason === 'string' && r.reason.trim()
+          ? `<div class="reel-reason" title="${esc(r.reason)}">${esc(r.reason)}</div>`
+          : '';
+      const weakClass = hasScore && r.virality_score < 50 ? ' weak' : '';
+
       const clipsHtml = r.clip_ids.length
         ? r.clip_ids
             .map((id, ci) => {
@@ -172,13 +179,14 @@ export function renderReels() {
             .join('')
         : '<div class="clip-empty">Upuść klipy tutaj</div>';
 
-      return `<div class="reel-card" data-reel-idx="${ri}">
+      return `<div class="reel-card${weakClass}" data-reel-idx="${ri}">
   <div class="reel-header expanded" data-toggle-reel>
     <span class="reel-name">${esc(r.reel_name)}</span>
     <span class="reel-meta">${r.clip_ids.length} klipów • ${totalDur}s</span>
     ${scoreBadge}
     ${axesHtml}
   </div>
+  ${reasonHtml}
   <div class="reel-clips open" data-reel-idx="${ri}">${clipsHtml}</div>
 </div>`;
     })
