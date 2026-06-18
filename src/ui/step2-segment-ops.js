@@ -236,19 +236,22 @@ export function initSegmentOps(list) {
       case 'ArrowUp':
         e.preventDefault();
         if (focusedClip && focusedClip.clipIdx > 0) {
-          const { reelIdx, clipIdx } = focusedClip;
+          const { reelIdx, clipIdx, sentenceId } = focusedClip;
           moveClip(reelIdx, clipIdx, reelIdx, clipIdx - 1);
-          focusedClip.clipIdx = clipIdx - 1;
+          // renderReels() (inside moveClip) rebuilt the DOM, dropping the
+          // .focused class — re-apply it to the row at the new position.
+          setFocusedClip(reelIdx, clipIdx - 1, sentenceId);
         }
         break;
       case 'ArrowDown':
         e.preventDefault();
         if (focusedClip) {
-          const { reelIdx, clipIdx } = focusedClip;
+          const { reelIdx, clipIdx, sentenceId } = focusedClip;
           const reel = state.reelsData[reelIdx];
           if (reel && clipIdx < reel.clip_ids.length - 1) {
             moveClip(reelIdx, clipIdx, reelIdx, clipIdx + 2);
-            focusedClip.clipIdx = clipIdx + 1;
+            // Re-apply focus after the re-render so the glow follows the clip.
+            setFocusedClip(reelIdx, clipIdx + 1, sentenceId);
           }
         }
         break;

@@ -111,13 +111,13 @@ None — single config flag, no data or schema change. Reversible by removing th
 
 #### Automated
 
-- [x] 1.1 `cargo check` passes with the new config
-- [x] 1.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
+- [x] 1.1 `cargo check` passes with the new config — bf1e935
+- [x] 1.2 Regression suite green (`node --experimental-vm-modules test/regression.js`) — bf1e935
 
 #### Manual
 
-- [ ] 1.3 Drag-reorder within a reel works in `tauri dev`
-- [ ] 1.4 Drag clip across reels works
-- [ ] 1.5 Exported EDL reflects new clip order
-- [ ] 1.6 Step-1 file-drop import still works
-- [ ] 1.7 Keyboard Arrow ↑/↓ reorder still works
+- [x] 1.3 Drag-reorder within a reel works in `tauri dev`
+- [x] 1.4 Drag clip across reels works
+- [x] 1.5 Exported EDL reflects new clip order
+- [x] 1.6 Step-1 file-drop import still works
+- [x] 1.7 Keyboard Arrow ↑/↓ reorder still works
