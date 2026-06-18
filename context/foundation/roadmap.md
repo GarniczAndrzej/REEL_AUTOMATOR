@@ -45,7 +45,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | done |
-| S-19  | word-level-srt-export       | export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions | S-05 | FR-005 (extends)                          | proposed |
+| S-19  | word-level-srt-export       | export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions | S-05 | FR-005 (extends)                          | done     |
 
 ## Streams
 
@@ -325,7 +325,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - **fps basis for the floor** — "4 frames at 25 fps" is ~160 ms; honor the integer-frame invariant by computing 4 frames at the *project* fps, or fix the floor at a constant ~160 ms regardless of fps? — Owner: user. Block: no (default: 4 frames at project fps, per the frame-math invariant).
   - **New export vs. replace** — does this become a new entry in the export popover (alongside the existing sentence-level SRT/VTT) or replace the current SRT export? — Owner: user. Block: no (default: additive new option labelled in Polish; keep the existing transcript SRT/VTT).
 - **Risk:** Low–moderate. Pure read of existing alignment data → string output, but it is **not** routed through `mergeAdjacentClips` (that is the *reel-span* source, not a per-word caption source) — keep the two paths separate so caption generation never perturbs the exporter span pipeline. All cue timing must stay integer-frame (`Math.round(s * fps)`, no mid-pipeline seconds rounding). Add a regression case in `test/regression.js` covering the onset-pin, the 4-frame floor, and right-side-only padding (incl. the collision clamp). All new user-facing strings stay Polish.
-- **Status:** proposed
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -393,3 +393,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-02: Scoring-first reel list UI** — Archived 2026-06-18 → `context/archive/2026-06-18-scoring-first-reel-list/`. Lesson: —.
 - **S-04: reorder, merge, delete segments (reorder/merge/delete ops need rework)** — Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`. Diagnosis showed delete/merge already worked; only drag-reorder was broken because Tauri's webview intercepted HTML5 drag events — fixed with one config flip (`dragDropEnabled: false`), `moveClip()` untouched. Lesson: Tauri's webview swallows HTML5 drag-and-drop by default; set `dragDropEnabled: false` on the window to hand DnD to the frontend (and it governs the HTML5 file-drop import too — no native `onDragDropEvent` listener to lose).
 - **S-11: store API keys in the OS keychain, never plaintext** — Archived 2026-06-18 → `context/archive/2026-06-18-keychain-credentials/`. `keyring`-crate `keychain.rs` get/set/delete commands + hydrated `src/ai/api-key.js` cache (sync `getApiKey`, async write-through `setApiKey`, boot `hydrateKeys()` with one-time localStorage→Keychain migration); R2 accessor folded in. Lesson: the `keyring` 3.x crate ships NO credential store by default (silent in-memory mock) — enable `apple-native` in Cargo.toml or Keychain writes don't persist.
+- **S-19: export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions** — Archived 2026-06-18 → `context/archive/2026-06-18-word-level-srt-export/`. Lesson: —.
