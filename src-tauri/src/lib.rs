@@ -1,5 +1,6 @@
 mod engine;
 mod ffmpeg;
+mod keychain;
 mod metadata;
 mod models;
 mod project;
@@ -31,6 +32,9 @@ pub fn run() {
             models::delete_model,
             waveform::extract_waveform,
             metadata::probe_video_metadata,
+            keychain::get_credential,
+            keychain::set_credential,
+            keychain::delete_credential,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
