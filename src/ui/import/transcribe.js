@@ -367,6 +367,7 @@ function defaultWhisperAdvanced() {
     vadOffset: null,
     minSpeakers: null,
     maxSpeakers: null,
+    wordLevelSrtExport: false,
   };
 }
 
@@ -377,17 +378,20 @@ function loadWhisperAdvancedFromLS() {
       state.whisperAdvanced.device = saved.device;
     if (typeof saved.computeType === 'string')
       state.whisperAdvanced.computeType = saved.computeType;
+    if (typeof saved.wordLevelSrtExport === 'boolean')
+      state.whisperAdvanced.wordLevelSrtExport = saved.wordLevelSrtExport;
   } catch (e) {}
 }
 
 function saveWhisperAdvancedToLS() {
   try {
-    // Per-machine perf knobs only — never the .reelproj-bound run settings.
+    // Per-machine prefs only — never the .reelproj-bound run settings.
     localStorage.setItem(
       WHISPER_ADV_LS_KEY,
       JSON.stringify({
         device: state.whisperAdvanced.device,
         computeType: state.whisperAdvanced.computeType,
+        wordLevelSrtExport: state.whisperAdvanced.wordLevelSrtExport,
       }),
     );
   } catch (e) {}
@@ -434,6 +438,7 @@ function fillWhisperAdvancedForm() {
   document.getElementById('advVadOffset').value = a.vadOffset ?? '';
   document.getElementById('advMinSpeakers').value = a.minSpeakers ?? '';
   document.getElementById('advMaxSpeakers').value = a.maxSpeakers ?? '';
+  document.getElementById('advWordLevelSrt').checked = !!a.wordLevelSrtExport;
 }
 
 function applyWhisperAdvancedForm() {
@@ -452,6 +457,7 @@ function applyWhisperAdvancedForm() {
   a.vadOffset = numOrNull('advVadOffset');
   a.minSpeakers = numOrNull('advMinSpeakers');
   a.maxSpeakers = numOrNull('advMaxSpeakers');
+  a.wordLevelSrtExport = document.getElementById('advWordLevelSrt').checked;
 }
 
 // Map the advanced settings to the engine invoke params (Tauri snake_cases the
@@ -484,19 +490,25 @@ export function syncAlignBtn() {
   if (note) note.style.display = show ? '' : 'none';
 }
 
-// Force-align an imported transcript to the audio to obtain word timestamps.
-async function alignImportedTranscript() {
+// Force-align the imported transcript to the audio to obtain word timestamps.
+// Shared by the manual "Dopasuj do audio" button and the word-SRT export
+// auto-align fallback. Shows the whisperProgressBox progress UI and merges the
+// resulting (frame-normalized) words onto state.sentences. Returns true on
+// success, false on missing prerequisites / cancel / failure (surfaced via
+// toast + progress label; never throws to the caller).
+// @returns {Promise<boolean>}
+export async function alignToWords() {
   const videoPath = state._whisperVideoPath || state.videoPath;
   if (!videoPath) {
     toast(
       'Najpierw wybierz plik wideo, aby dopasować transkrypcję do audio.',
       'info',
     );
-    return;
+    return false;
   }
   if (!state.srtContent) {
     toast('Brak transkrypcji do dopasowania.', 'info');
-    return;
+    return false;
   }
   document.getElementById('whisperProgressBox').style.display = 'block';
   setWhisperProgress('Dopasowanie do audio…', 0);
@@ -526,6 +538,7 @@ async function alignImportedTranscript() {
       document.getElementById('whisperProgressBox').style.display = 'none';
     }, 2000);
     emit();
+    return true;
   } catch (e) {
     const msg = String(e);
     if (msg.includes('ANULOWANO')) {
@@ -534,9 +547,15 @@ async function alignImportedTranscript() {
       setWhisperProgress('Błąd: ' + e, 0);
       toast('Dopasowanie nieudane: ' + e, 'error');
     }
+    return false;
   } finally {
     if (unlisten) unlisten();
   }
+}
+
+// Manual "Dopasuj do audio" button handler — thin wrapper over alignToWords().
+async function alignImportedTranscript() {
+  await alignToWords();
 }
 
 /**

@@ -109,6 +109,9 @@ Zasady:
     vadOffset: null, // null = domyślny (0.363)
     minSpeakers: null, // diaryzacja: null = auto
     maxSpeakers: null, // diaryzacja: null = auto
+    // S-19 word-by-word .srt export mode. Per-machine preference persisted in
+    // localStorage alongside device/computeType — never written to .reelproj.
+    wordLevelSrtExport: false,
   },
 };
 
