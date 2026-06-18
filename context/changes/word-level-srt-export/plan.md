@@ -252,16 +252,16 @@ No schema bump. Older `.reelproj` files saved via the align path before Phase 1 
 
 #### Automated
 
-- [x] 3.1 Regression suite passes: `node --experimental-vm-modules test/regression.js`
-- [x] 3.2 Rust type-check passes: `~/.cargo/bin/cargo check --manifest-path src-tauri/Cargo.toml`
+- [x] 3.1 Regression suite passes: `node --experimental-vm-modules test/regression.js` — 2d1e092
+- [x] 3.2 Rust type-check passes: `~/.cargo/bin/cargo check --manifest-path src-tauri/Cargo.toml` — 2d1e092
 
 #### Manual
 
-- [x] 3.3 Checkbox toggles mode and persists across restarts
-- [x] 3.4 Mode ON + transcribed project: per-word `.srt` saved via native prompt, opens cleanly
-- [x] 3.5 Mode OFF: sentence-level `.srt` still produced
-- [x] 3.6 Mode ON + imported `.srt` + video loaded: auto-align then word `.srt` saved
-- [x] 3.7 Mode ON + imported `.srt` + no video: Polish toast prompts to load a video; no file written
-- [x] 3.8 After loading a video via the WhisperX chooser, the same export auto-aligns and saves the word `.srt`
-- [x] 3.9 WhisperX-card ⬇ Eksport .srt still produces sentence-level `.srt` (mode does not affect it)
-- [x] 3.10 All new strings are Polish
+- [x] 3.3 Checkbox toggles mode and persists across restarts — 2d1e092
+- [x] 3.4 Mode ON + transcribed project: per-word `.srt` saved via native prompt, opens cleanly — 2d1e092
+- [x] 3.5 Mode OFF: sentence-level `.srt` still produced — 2d1e092
+- [x] 3.6 Mode ON + imported `.srt` + video loaded: auto-align then word `.srt` saved — 2d1e092
+- [x] 3.7 Mode ON + imported `.srt` + no video: Polish toast prompts to load a video; no file written — 2d1e092
+- [x] 3.8 After loading a video via the WhisperX chooser, the same export auto-aligns and saves the word `.srt` — 2d1e092
+- [x] 3.9 WhisperX-card ⬇ Eksport .srt still produces sentence-level `.srt` (mode does not affect it) — 2d1e092
+- [x] 3.10 All new strings are Polish — 2d1e092
