@@ -17,6 +17,7 @@ import { mergeWordsIntoSentences } from '../src/ui/import/segments.js';
 import {
   generateTranscriptSRT,
   generateTranscriptVTT,
+  generateWordSRT,
 } from '../src/exporters/transcript.js';
 import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
@@ -1148,6 +1149,117 @@ assert(
   typeof DEFAULT_SCORING_GUIDANCE === 'string' &&
     DEFAULT_SCORING_GUIDANCE.includes('ZASADY OCENY'),
   'DEFAULT_SCORING_GUIDANCE is the exported scoring-guidance default',
+);
+
+// ─────────────────────────────────────────────────────────────────
+// Test 15: word-by-word SRT export (S-19 Phase 2)
+// One cue per word; onset-pin (starts never move), 4-frame floor,
+// right-side-only padding, clamp-to-next-onset (no overlap, cue may stay
+// sub-floor). FPS=25 → 1 frame = 40ms.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 15: word-by-word SRT export ─────────────────────');
+
+// Two sentences so flattening crosses a sentence boundary. Words exercise:
+//  (a) longer than floor → end unchanged
+//  (b) shorter than floor, room to pad → end pushed to start+4
+//  (c) shorter than floor, pad would cross next onset → end clamped (cue < 4f)
+//  (d) final word → free pad to floor (no successor)
+const wordSrtSentences = [
+  {
+    id: 1,
+    text: 'Słowo drugie',
+    start_frame: 0,
+    end_frame: 24,
+    words: [
+      { text: 'Słowo', start_frame: 0, end_frame: 10 }, // (a) dur 10 > floor
+      { text: 'drugie', start_frame: 20, end_frame: 22 }, // (b) dur 2 < floor
+    ],
+  },
+  {
+    id: 2,
+    text: 'trzecie czwarte',
+    start_frame: 50,
+    end_frame: 53,
+    words: [
+      { text: 'trzecie', start_frame: 50, end_frame: 51 }, // (c) floor would hit 54 > next onset 52
+      { text: 'czwarte', start_frame: 52, end_frame: 53 }, // (d) final → pad to 56
+    ],
+  },
+];
+
+const wordSRT = generateWordSRT(wordSrtSentences, FPS);
+const wsLines = wordSRT.split('\n');
+
+// Exact block layout (number / timestamp / text / blank), 4 cues.
+const expectedWordSRT = [
+  '1',
+  '00:00:00,000 --> 00:00:00,400', // (a) start 0 (pinned), end 10 unchanged
+  'Słowo',
+  '',
+  '2',
+  '00:00:00,800 --> 00:00:00,960', // (b) start 20 (pinned), end 20+4=24
+  'drugie',
+  '',
+  '3',
+  '00:00:02,000 --> 00:00:02,080', // (c) start 50 (pinned), end clamped to next onset 52
+  'trzecie',
+  '',
+  '4',
+  '00:00:02,080 --> 00:00:02,240', // (d) start 52 (pinned), end 52+4=56 (free pad)
+  'czwarte',
+  '',
+].join('\n');
+
+assertEq(wordSRT, expectedWordSRT, 'word .srt exact onset/floor/clamp output');
+
+// Onset-pin: every cue start stamp equals frameToStamp of the word's onset.
+assert(wsLines[1].startsWith('00:00:00,000 -->'), '(a) start pinned to 0');
+assert(wsLines[5].startsWith('00:00:00,800 -->'), '(b) start pinned to 20');
+assert(wsLines[9].startsWith('00:00:02,000 -->'), '(c) start pinned to 50');
+assert(wsLines[13].startsWith('00:00:02,080 -->'), '(d) start pinned to 52');
+
+// Floor + clamp specifics.
+assert(
+  wsLines[1].endsWith('--> 00:00:00,400'),
+  '(a) word longer than floor keeps its end',
+);
+assert(
+  wsLines[5].endsWith('--> 00:00:00,960'),
+  '(b) short word right-padded to start+4 frames',
+);
+assert(
+  wsLines[9].endsWith('--> 00:00:02,080'),
+  '(c) floor crossing next onset is clamped to next start (no overlap)',
+);
+assert(
+  wsLines[13].endsWith('--> 00:00:02,240'),
+  '(d) final word freely padded to the 4-frame floor',
+);
+
+// No overlap: cue 3 end == cue 4 start onset.
+assert(
+  wsLines[9].split(' --> ')[1] === wsLines[13].split(' --> ')[0],
+  'clamped cue ends exactly at next onset (zero overlap)',
+);
+
+// Skips words lacking numeric frame keys (e.g. stale seconds-only data).
+const staleWordSRT = generateWordSRT(
+  [
+    {
+      id: 1,
+      text: 'stare',
+      words: [
+        { text: 'ok', start_frame: 0, end_frame: 10 },
+        { text: 'stale', start: 0.5, end: 0.9 }, // seconds-only → skipped
+      ],
+    },
+  ],
+  FPS,
+);
+assert(
+  staleWordSRT.includes('ok') && !staleWordSRT.includes('stale'),
+  'words lacking numeric start_frame/end_frame are skipped',
 );
 
 // ─────────────────────────────────────────────────────────────────

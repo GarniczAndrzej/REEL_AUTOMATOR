@@ -230,23 +230,23 @@ No schema bump. Older `.reelproj` files saved via the align path before Phase 1 
 
 #### Automated
 
-- [x] 1.1 Regression suite passes: `node --experimental-vm-modules test/regression.js`
-- [x] 1.2 New align-shape assertion passes (frame keys present, seconds keys absent)
+- [x] 1.1 Regression suite passes: `node --experimental-vm-modules test/regression.js` — bfe3a34
+- [x] 1.2 New align-shape assertion passes (frame keys present, seconds keys absent) — bfe3a34
 
 #### Manual
 
-- [ ] 1.3 Import → align → save → reload: words survive as frames, segments render
+- [x] 1.3 Import → align → save → reload: words survive as frames, segments render — bfe3a34
 
 ### Phase 2: Word-by-word SRT exporter (pure function + regression)
 
 #### Automated
 
-- [ ] 2.1 Regression suite passes: `node --experimental-vm-modules test/regression.js`
-- [ ] 2.2 Test 15 passes (onset-pin, floor, right-pad, clamp)
+- [x] 2.1 Regression suite passes: `node --experimental-vm-modules test/regression.js`
+- [x] 2.2 Test 15 passes (onset-pin, floor, right-pad, clamp)
 
 #### Manual
 
-- [ ] 2.3 `generateWordSRT` output opens cleanly in a viewer / Reels import — no overlaps, legible holds
+- [x] 2.3 `generateWordSRT` output opens cleanly in a viewer / Reels import — no overlaps, legible holds
 
 ### Phase 3: Mode checkbox + export wiring + auto-align fallback
 

@@ -53,6 +53,51 @@ export function generateTranscriptSRT(sentences, fps, opts = {}) {
 }
 
 /**
+ * Generate a word-by-word `.srt` — one cue per spoken word, for karaoke-style
+ * Reels/TikTok captions. Timing rules (S-19): the cue start is pinned to the
+ * word's real audio onset (`start_frame`) and never moved; every word is held
+ * for at least 4 frames at project fps; shorter words are padded only on the
+ * right; any right-pad that would cross the next word's onset is clamped to
+ * that onset (overlap-free, even if the resulting cue is < 4 frames). Words are
+ * flattened in global order across sentence boundaries, so clamping respects
+ * real audio adjacency. Speaker labels are never emitted. Pure function.
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {number} fps
+ * @returns {string}
+ */
+export function generateWordSRT(sentences, fps) {
+  const FLOOR_FRAMES = 4;
+  const words = [];
+  sentences.forEach((s) => {
+    if (!Array.isArray(s.words)) return;
+    s.words.forEach((w) => {
+      if (
+        typeof w.start_frame === 'number' &&
+        typeof w.end_frame === 'number' &&
+        Number.isFinite(w.start_frame) &&
+        Number.isFinite(w.end_frame)
+      ) {
+        words.push(w);
+      }
+    });
+  });
+  const out = [];
+  words.forEach((w, i) => {
+    const start = w.start_frame;
+    let end = Math.max(w.end_frame, start + FLOOR_FRAMES);
+    const next = words[i + 1];
+    if (next && end > next.start_frame) end = next.start_frame;
+    out.push(String(i + 1));
+    out.push(
+      `${frameToStamp(start, fps, ',')} --> ${frameToStamp(end, fps, ',')}`,
+    );
+    out.push(w.text);
+    out.push('');
+  });
+  return out.join('\n');
+}
+
+/**
  * Generate a `.vtt` transcript from sentences.
  * @param {import('../state.js').Sentence[]} sentences
  * @param {number} fps
