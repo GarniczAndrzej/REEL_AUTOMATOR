@@ -1,9 +1,9 @@
 ---
 change_id: s-03
 title: Editable system prompt + reusable prompt presets
-status: implementing
+status: impl_reviewed
 created: 2026-06-16
-updated: 2026-06-17
+updated: 2026-06-18
 archived_at: null
 ---
 
