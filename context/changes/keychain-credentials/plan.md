@@ -275,8 +275,8 @@ Update the credential documentation, flip roadmap statuses, and confirm the regr
 
 #### Automated
 
-- [x] 3.1 Regression suite passes
-- [x] 3.2 Rust check passes
+- [x] 3.1 Regression suite passes — 7020c04
+- [x] 3.2 Rust check passes — 7020c04
 
 #### Manual
 
