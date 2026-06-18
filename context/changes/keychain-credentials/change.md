@@ -1,7 +1,7 @@
 ---
 change_id: keychain-credentials
 title: Keychain credentials
-status: implementing
+status: implemented
 created: 2026-06-18
 updated: 2026-06-18
 archived_at: null

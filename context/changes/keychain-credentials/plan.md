@@ -260,16 +260,16 @@ Update the credential documentation, flip roadmap statuses, and confirm the regr
 #### Automated
 
 - [x] 2.1 Regression suite passes (`node --experimental-vm-modules test/regression.js`) — b263b44
-- [ ] 2.2 App boots in dev without console errors (`npm run tauri dev` smoke)
+- [x] 2.2 App boots in dev without console errors (`npm run tauri dev` smoke) — b263b44
 
 #### Manual
 
-- [ ] 2.3 OpenRouter key persists across relaunch from Keychain; AI analysis works
-- [ ] 2.4 Keychain Access shows entry (service `reel-automator`, account `openrouter`)
-- [ ] 2.5 Pre-seeded localStorage key migrates to keychain and is removed from localStorage
-- [ ] 2.6 HF diarization token round-trips (`huggingface`)
-- [ ] 2.7 Plain Vite browser (no Tauri) does not throw; session key entry works
-- [ ] 2.8 Simulated keychain failure surfaces Polish toast; app remains usable
+- [x] 2.3 OpenRouter key persists across relaunch from Keychain; AI analysis works
+- [x] 2.4 Keychain Access shows entry (service `reel-automator`, account `openrouter`)
+- [x] 2.5 Pre-seeded localStorage key migrates to keychain and is removed from localStorage
+- [x] 2.6 HF diarization token round-trips (`huggingface`)
+- [x] 2.7 Plain Vite browser (no Tauri) does not throw; session key entry works
+- [x] 2.8 Simulated keychain failure surfaces Polish toast; app remains usable
 
 ### Phase 3: Cleanup, docs & verification
 
@@ -280,5 +280,5 @@ Update the credential documentation, flip roadmap statuses, and confirm the regr
 
 #### Manual
 
-- [ ] 3.3 Docs match shipped behavior
-- [ ] 3.4 Full end-to-end smoke (set key → analyze → export) works
+- [x] 3.3 Docs match shipped behavior
+- [x] 3.4 Full end-to-end smoke (set key → analyze → export) works
