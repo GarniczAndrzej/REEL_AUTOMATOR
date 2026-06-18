@@ -159,7 +159,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Pure UI over the S-01 schema; low risk. Sequenced right after the north star because the scored list is the editor's primary triage surface — the score is only useful if it's the lens for the list.
-- **Status:** proposed
+- **Status:** done
 
 ### S-03: Editable system prompt + presets
 

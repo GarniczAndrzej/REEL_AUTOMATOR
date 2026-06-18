@@ -6,6 +6,7 @@ import { state, emit } from '../../state.js';
 import { toast } from '../toast.js';
 import { escHtml } from './segments.js';
 import { renderModelManager } from './transcribe.js';
+import { stampAiOrder } from '../step2-reel-list.js';
 
 export function initProjectIO() {
   document
@@ -73,7 +74,8 @@ async function writeProject(path) {
       // per-reel merge-threshold override (folded into the single global gap).
       // v3/v4 files still load — applyProjectData tolerates the legacy keys.
       // v6 (S-03) adds the editable systemPrompt (scoring guidance).
-      version: 6,
+      // v7 (S-02) adds reelSort; ai_order rides along inside each reel.
+      version: 7,
       srtName: state.srtName,
       srtContent: state.srtContent,
       fps: state.fps,
@@ -88,6 +90,7 @@ async function writeProject(path) {
       whisperLanguage: state.whisperLanguage,
       modelId: state.modelId,
       diarize: state.diarize,
+      reelSort: state.reelSort,
       sentences: state.sentences,
       reelsData: state.reelsData,
     };
@@ -110,6 +113,7 @@ function applyProjectData(data) {
   state.projectName = 'Reels';
   state.sentences = [];
   state.reelsData = [];
+  state.reelSort = 'score_desc';
 
   if (data.srtName) state.srtName = data.srtName;
   if (data.srtContent) state.srtContent = data.srtContent;
@@ -133,6 +137,12 @@ function applyProjectData(data) {
   if (data.diarize != null) state.diarize = data.diarize;
   if (data.sentences) state.sentences = data.sentences;
   if (data.reelsData) state.reelsData = data.reelsData;
+  // v7 (S-02) reelSort: restore the saved triage mode when present; pre-v7 files
+  // keep the score_desc default reset above.
+  if (data.reelSort) state.reelSort = data.reelSort;
+  // Backfill ai_order for pre-v7 reels (missing the field) so AI-order sort maps
+  // to the saved order. Render the saved order as-is — do NOT auto re-sort.
+  stampAiOrder();
   // Legacy `sources` (multi-source repeater, removed in S-16 3b) is ignored.
 
   // Sync DOM — Step 1 fields
@@ -151,6 +161,10 @@ function applyProjectData(data) {
     if (row) row.style.display = state.diarize ? '' : 'none';
   }
   renderModelManager();
+  // Reflect the restored sort mode on the reels-card dropdown (cosmetic for
+  // legacy files without a saved mode; renderReels re-syncs on next render).
+  const sortSel = document.getElementById('reelSortSelect');
+  if (sortSel) sortSel.value = state.reelSort;
 
   if (state.srtName) {
     document.getElementById('dropZone').style.display = 'none';

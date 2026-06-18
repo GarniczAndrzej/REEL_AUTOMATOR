@@ -328,24 +328,24 @@ readable by the tolerant loader (it ignores unknown keys), so no destructive mig
 
 #### Automated
 
-- [x] 2.1 Lint/format clean (`npx prettier --check "src/**/*.{js,css}"`)
-- [x] 2.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
+- [x] 2.1 Lint/format clean (`npx prettier --check "src/**/*.{js,css}"`) — 20417c5
+- [x] 2.2 Regression suite green (`node --experimental-vm-modules test/regression.js`) — 20417c5
 
 #### Manual
 
-- [x] 2.3 Each reel shows its Polish reason on one line (ellipsis when long); no empty row when absent
-- [x] 2.4 Reels scoring < 50 render greyed; unscored reels at full opacity
-- [x] 2.5 Greyed reels still expand, edit, drag, and export normally
+- [x] 2.3 Each reel shows its Polish reason on one line (ellipsis when long); no empty row when absent — 20417c5
+- [x] 2.4 Reels scoring < 50 render greyed; unscored reels at full opacity — 20417c5
+- [x] 2.5 Greyed reels still expand, edit, drag, and export normally — 20417c5
 
 ### Phase 3: Persistence
 
 #### Automated
 
-- [ ] 3.1 Lint/format clean (`npx prettier --check "src/**/*.js"`)
-- [ ] 3.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
+- [x] 3.1 Lint/format clean (`npx prettier --check "src/**/*.js"`)
+- [x] 3.2 Regression suite green (`node --experimental-vm-modules test/regression.js`)
 
 #### Manual
 
-- [ ] 3.3 Save after sorting → reopen → saved order + dropdown mode restored
-- [ ] 3.4 Open a pre-v7 `.reelproj` → loads without error; AI-order sort works
-- [ ] 3.5 Switching to AI order after a v7 load restores the original LLM sequence
+- [x] 3.3 Save after sorting → reopen → saved order + dropdown mode restored
+- [x] 3.4 Open a pre-v7 `.reelproj` → loads without error; AI-order sort works
+- [x] 3.5 Switching to AI order after a v7 load restores the original LLM sequence
