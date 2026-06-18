@@ -440,10 +440,10 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Manual
 
-- [ ] 1.4 Editing the system prompt then analyzing produces sensible results
-- [ ] 1.5 Edited system prompt survives an app restart
-- [ ] 1.6 Saving + reloading a `.reelproj` restores the project's system prompt
-- [ ] 1.7 Loading an old (v5) project keeps the global system prompt (no crash)
+- [x] 1.4 Editing the system prompt then analyzing produces sensible results
+- [x] 1.5 Edited system prompt survives an app restart
+- [x] 1.6 Saving + reloading a `.reelproj` restores the project's system prompt
+- [x] 1.7 Loading an old (v5) project keeps the global system prompt (no crash)
 
 ### Phase 2: Preset data model + persistence + seeding
 
@@ -454,8 +454,8 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Manual
 
-- [ ] 2.3 First launch shows the built-in presets in the picker
-- [ ] 2.4 Built-ins persist across restart; store not re-seeded over user edits
+- [x] 2.3 First launch shows the built-in presets in the picker
+- [x] 2.4 Built-ins persist across restart; store not re-seeded over user edits
 
 ### Phase 3: Preset manager UI (CRUD)
 
@@ -465,10 +465,10 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Manual
 
-- [ ] 3.2 Picking a preset fills the textarea and analysis uses it
-- [ ] 3.3 Save-as / duplicate / rename / delete work and persist across restart
-- [ ] 3.4 Delete asks for native confirmation; cancel leaves preset intact
-- [ ] 3.5 Toasts appear for each action; all strings Polish
+- [x] 3.2 Picking a preset fills the textarea and analysis uses it
+- [x] 3.3 Save-as / duplicate / rename / delete work and persist across restart
+- [x] 3.4 Delete asks for native confirmation; cancel leaves preset intact
+- [x] 3.5 Toasts appear for each action; all strings Polish
 
 ### Phase 4: Preset import/export
 
@@ -480,7 +480,7 @@ preset library is net-new localStorage (`edl_prompt_presets`), seeded on first r
 
 #### Manual
 
-- [ ] 4.4 Exporting a preset writes `.json` to chosen location (native dialog)
-- [ ] 4.5 Importing that `.json` re-adds the preset(s)
-- [ ] 4.6 Importing a malformed file shows a Polish error toast, no crash
-- [ ] 4.7 Imported presets persist across restart
+- [x] 4.4 Exporting a preset writes `.json` to chosen location (native dialog)
+- [x] 4.5 Importing that `.json` re-adds the preset(s)
+- [x] 4.6 Importing a malformed file shows a Polish error toast, no crash
+- [x] 4.7 Imported presets persist across restart
