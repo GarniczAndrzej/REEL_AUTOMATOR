@@ -147,8 +147,6 @@ This change affects existing users (the same editors using the app today): their
 - FR-033: Editor can create / open / update / delete projects (`.reelproj`); full state is persisted and reloads (including older schema versions). Priority: must-have. Change: preserved
 - FR-034: Editor can switch the UI between English and Polish; all UI text comes from translation keys, not hardcoded strings. Priority: must-have. Change: new
 - FR-035: API keys are stored in the OS secure credential store, never plaintext. Priority: must-have. Change: modified
-- FR-036: The app shows explicit empty/error states: no API key (AI gated, transcription still works), whisper/model not installed, invalid LLM JSON, empty project / no reels. Priority: must-have. Change: new
-- FR-037: Editor can drive core actions from the keyboard: previous/next reel, accept/reject, nudge segment boundaries (word-level), and move between steps 1–2–3. Priority: must-have. Change: new
 
 ### Removal
 - FR-038: The FFmpeg MP4 render path and all in-app video-editor concerns (9:16 crop, logo overlay, subtitle burn-in, codec matrix, render queue, face-tracking keyframes) are removed from the app. Priority: must-have. Change: removed
