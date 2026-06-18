@@ -1,10 +1,10 @@
 ---
 change_id: scoring-first-reel-list
 title: Scoring first reel list
-status: implemented
+status: archived
 created: 2026-06-18
 updated: 2026-06-18
-archived_at: null
+archived_at: 2026-06-18T15:48:49Z
 ---
 
 ## Notes
