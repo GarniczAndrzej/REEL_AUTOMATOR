@@ -89,6 +89,27 @@
             </p>
           </div>
 
+          <div class="card">
+            <div class="card-title">Plik wideo</div>
+            <div style="display: flex; gap: 8px">
+              <input
+                type="text"
+                id="whisperVideoPath"
+                placeholder="Wybierz plik wideo…"
+                class="field-input"
+                style="flex: 1"
+                readonly
+              />
+              <button
+                class="btn btn-secondary"
+                style="padding: 6px 12px; font-size: 12px"
+                id="browseWhisperVideoBtn"
+              >
+                Przeglądaj
+              </button>
+            </div>
+          </div>
+
           <div class="card-row">
             <!-- S-05 — Built-in WhisperX transcription -->
             <div class="card">
@@ -125,25 +146,6 @@
                 </button>
               </div>
               <div class="settings-grid">
-                <div class="setting-item" style="grid-column: 1/-1">
-                  <label>Plik wideo</label>
-                  <div style="display: flex; gap: 8px">
-                    <input
-                      type="text"
-                      id="whisperVideoPath"
-                      placeholder="Wybierz plik wideo…"
-                      style="flex: 1"
-                      readonly
-                    />
-                    <button
-                      class="btn btn-secondary"
-                      style="padding: 6px 12px; font-size: 12px"
-                      id="browseWhisperVideoBtn"
-                    >
-                      Przeglądaj
-                    </button>
-                  </div>
-                </div>
                 <div class="setting-item" style="grid-column: 1/-1">
                   <label>Model transkrypcji</label>
                   <div
@@ -309,12 +311,6 @@
 
           <div class="card">
             <div class="card-title">Prompt dla AI</div>
-            <div class="info-box" style="margin-bottom: 14px">
-              <strong>Wskazówka:</strong> Opisz jaki typ treści chcesz wycinać.
-              Możesz podać branżę, cel marketingowy, długość reelsów. Segmenty
-              zostaną automatycznie dołączone do prompta.
-            </div>
-
             <!-- FR-016: preset bar (S-03 Phase 3). Managed by step2-preset-bar.js -->
             <div id="presetBar" style="margin-bottom: 10px">
               <div
@@ -327,6 +323,7 @@
               >
                 <select
                   id="presetPicker"
+                  class="field-input"
                   style="flex: 1; min-width: 0; font-size: 13px"
                 >
                   <option value="" disabled selected>— wybierz preset —</option>

@@ -589,6 +589,25 @@ textarea::placeholder {
   background: var(--surface2);
 }
 
+.field-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.2s;
+  min-width: 0;
+}
+.field-input:focus {
+  border-color: var(--accent);
+}
+.field-input option {
+  background: var(--surface2);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
