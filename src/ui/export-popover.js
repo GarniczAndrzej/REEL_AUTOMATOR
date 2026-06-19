@@ -226,7 +226,9 @@ function hasFrameWords() {
   return state.sentences.some(
     (s) =>
       Array.isArray(s.words) &&
-      s.words.some((w) => Number.isFinite(w.start_frame)),
+      s.words.some(
+        (w) => Number.isFinite(w.start_frame) && Number.isFinite(w.end_frame),
+      ),
   );
 }
 

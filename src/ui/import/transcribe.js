@@ -357,6 +357,10 @@ async function cancelTranscribe() {
 // they are deliberately NOT written to .reelproj (F3 decision).
 const WHISPER_ADV_LS_KEY = 'edl_whisper_advanced';
 
+/**
+ * Default WhisperX advanced-settings bag (per-machine prefs + run knobs).
+ * @returns {typeof import('../../state.js').state.whisperAdvanced}
+ */
 function defaultWhisperAdvanced() {
   return {
     device: '',
@@ -371,6 +375,11 @@ function defaultWhisperAdvanced() {
   };
 }
 
+/**
+ * Hydrate the per-machine advanced prefs (device / computeType /
+ * wordLevelSrtExport) from localStorage into state.whisperAdvanced.
+ * @returns {void}
+ */
 function loadWhisperAdvancedFromLS() {
   try {
     const saved = JSON.parse(localStorage.getItem(WHISPER_ADV_LS_KEY) || '{}');
@@ -383,6 +392,11 @@ function loadWhisperAdvancedFromLS() {
   } catch (e) {}
 }
 
+/**
+ * Persist only the per-machine advanced prefs to localStorage (never the
+ * .reelproj-bound run settings).
+ * @returns {void}
+ */
 function saveWhisperAdvancedToLS() {
   try {
     // Per-machine prefs only — never the .reelproj-bound run settings.
@@ -428,6 +442,10 @@ function initWhisperAdvanced() {
   });
 }
 
+/**
+ * Populate the advanced-settings modal inputs from state.whisperAdvanced.
+ * @returns {void}
+ */
 function fillWhisperAdvancedForm() {
   const a = state.whisperAdvanced;
   document.getElementById('advForceCpu').checked = a.device === 'cpu';
@@ -441,6 +459,10 @@ function fillWhisperAdvancedForm() {
   document.getElementById('advWordLevelSrt').checked = !!a.wordLevelSrtExport;
 }
 
+/**
+ * Read the advanced-settings modal inputs back into state.whisperAdvanced.
+ * @returns {void}
+ */
 function applyWhisperAdvancedForm() {
   const numOrNull = (id) => {
     const v = document.getElementById(id).value.trim();
@@ -490,13 +512,15 @@ export function syncAlignBtn() {
   if (note) note.style.display = show ? '' : 'none';
 }
 
-// Force-align the imported transcript to the audio to obtain word timestamps.
-// Shared by the manual "Dopasuj do audio" button and the word-SRT export
-// auto-align fallback. Shows the whisperProgressBox progress UI and merges the
-// resulting (frame-normalized) words onto state.sentences. Returns true on
-// success, false on missing prerequisites / cancel / failure (surfaced via
-// toast + progress label; never throws to the caller).
-// @returns {Promise<boolean>}
+/**
+ * Force-align the imported transcript to the audio to obtain word timestamps.
+ * Shared by the manual "Dopasuj do audio" button and the word-SRT export
+ * auto-align fallback. Shows the whisperProgressBox progress UI and merges the
+ * resulting (frame-normalized) words onto state.sentences. Returns true on
+ * success, false on missing prerequisites / cancel / failure (surfaced via
+ * toast + progress label; never throws to the caller).
+ * @returns {Promise<boolean>}
+ */
 export async function alignToWords() {
   const videoPath = state._whisperVideoPath || state.videoPath;
   if (!videoPath) {

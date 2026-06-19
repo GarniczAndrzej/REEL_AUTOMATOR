@@ -86,7 +86,7 @@ export function generateWordSRT(sentences, fps) {
     const start = w.start_frame;
     let end = Math.max(w.end_frame, start + FLOOR_FRAMES);
     const next = words[i + 1];
-    if (next && end > next.start_frame) end = next.start_frame;
+    if (next && end > next.start_frame) end = Math.max(start, next.start_frame);
     out.push(String(i + 1));
     out.push(
       `${frameToStamp(start, fps, ',')} --> ${frameToStamp(end, fps, ',')}`,

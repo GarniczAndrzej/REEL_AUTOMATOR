@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-18
+updated: 2026-06-19
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -40,12 +40,14 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
-| S-09  | resolve-plugin-handoff      | push reels into Resolve from inside Resolve in one click     | S-01, S-08, F-02   | FR-030, FR-031, US-02                         | go-with-rework |
+| S-09  | resolve-plugin-handoff      | auto-collect timeline audio, transcribe in-panel, insert subtitles onto Subtitles track, and create reel timelines — all from inside Resolve | S-01, S-05, S-08, F-02 | FR-030, FR-031, US-02 | go-with-rework |
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | done     |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | done |
 | S-19  | word-level-srt-export       | export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions | S-05 | FR-005 (extends)                          | done     |
+| S-20  | word-srt-fix                | word-by-word SRT export actually works — diagnose and fix the broken S-19 implementation (manual steps were skipped) | S-19 | FR-005 (extends)                          | new      |
+| S-21  | app-crash-fix               | app no longer randomly closes mid-session — root cause of the spontaneous window/process exit during `tauri dev` is identified and fixed | — | — (stability; blocks all interactive testing)                 | new      |
 
 ## Streams
 
@@ -224,17 +226,35 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Risk:** XML and Lua are `preserved` exporters whose structure is fragile and import-tested in real NLEs — adding markers must not break import. FCPXML is net-new. Extend the regression suite with a case per format in the same change.
 - **Status:** proposed
 
-### S-09: DaVinci Resolve embedded plugin (one-click hand-off)
+### S-09: DaVinci Resolve embedded plugin — full integration
 
-- **Outcome:** Editor launches Reels Automator from `Workspace → Workflow Integrations`, completes selection in the embedded panel, and one click creates a new dated folder in the current Resolve project with each reel as its own timeline and source media in the Media Pool — no script-paste, no file-import; when the Resolve API is unavailable the app falls back to file export automatically.
+- **Outcome:** Editor launches Reels Automator from `Workspace → Workflow Integrations` and gets a single panel covering the full pipeline end-to-end, without leaving Resolve:
+
+  **A. Auto-collect audio from the current timeline (on panel open)**
+  The plugin reads the active Resolve timeline via the API (`currentTimeline:GetName()`, `GetStartFrame()`, `GetEndFrame()`), extracts its audio automatically (no manual file picker), and makes it immediately available for transcription — no separate video file import step when inside Resolve.
+
+  **B. Transcription mode (built-in, in-panel)**
+  Editor triggers WhisperX transcription directly on the collected timeline audio from within the panel; progress is shown inline. The result (SRT + word timestamps) feeds the existing reel-selection flow — the same S-05 engine, driven via the Electron bridge rather than Tauri IPC.
+
+  **C. Subtitles track insertion**
+  After transcription (or after importing an existing SRT), editor can push the full word-level or sentence-level transcript directly onto a **Subtitles track** in the current Resolve timeline — one click, no copy-paste. Uses the Resolve API `timeline:CreateSubtitlesFromAudio()` (Resolve 18.5+) or, as a fallback, inserts subtitle clips frame-by-frame via `mediaPool:ImportMedia()` + timeline subtitle track API.
+
+  **D. Reels → timeline creation**
+  After AI scoring and reel selection in the embedded panel, one click creates a new dated folder in the current Resolve project with each reel as its own timeline and source media in the Media Pool — identical to the original S-09 handoff but now reachable without leaving the panel.
+
+  When the Resolve API is unavailable (Resolve Free / non-Studio build), the panel falls back to file export (S-08) automatically.
+
 - **Change ID:** resolve-plugin-handoff
 - **PRD refs:** FR-030, FR-031, US-02
-- **Prerequisites:** S-01, S-08, F-02
+- **Prerequisites:** S-01, S-05, S-08, F-02
 - **Parallel with:** —
 - **Blockers:** —
 - **Unknowns:**
   - Is the Workflow Integration runtime viable and can the Tauri frontend be reused inside it? — **Resolved by F-02 (verdict `Go-with-rework`, 2026-06-11).** Runtime is viable (Electron Workflow Integration; panel hosting confirmed live in Studio); frontend reuses via Strategy 2 (keep HTML/CSS/JS, rebuild the Tauri `invoke` bridge as an Electron `contextBridge`/`ipcRenderer` bridge + reimplement the 6 post-F-01 commands in Node). Integration contract: `context/changes/f-02/decision.md`.
-- **Risk:** The headline differentiator and the largest single technical risk. F-02 returned `Go-with-rework`: no hard blocker, but the Tauri→Electron bridge rebuild + packaging/signing are scoped rework. The file-export set (S-08) remains the always-available fallback (and the only path for Resolve Free / Linux).
+  - **`CreateSubtitlesFromAudio` availability** — the Resolve 18.5+ subtitles API needs verification; is it accessible via the Workflow Integration runtime (Studio-only scripting scope)? If not, the frame-by-frame fallback via subtitle track creation must be scoped. — Owner: team. Block: no (both paths lead to subtitle insertion; verify during implementation).
+  - **Timeline audio extraction in-plugin** — does the Resolve API expose a render-to-file call (e.g. `project:RenderSingleClip()`) that can extract a wav/mp4 from the current timeline without the user manually exporting first? Or must the plugin invoke an FFmpeg sidecar against the source media referenced in the Media Pool? — Owner: team. Block: no (either path works; the render-to-file route is cleaner; investigate at implementation time).
+  - **S-05 engine bridge** — the WhisperX sidecar currently lives inside a Tauri `externalBin`; in the Electron bridge rebuild it needs to be spawned as a child process from Node (`child_process.spawn`) with the same audio-extraction + word-alignment pipeline. — Owner: team. Block: no (scoped rework, analogous to the other command reimplementations).
+- **Risk:** The headline differentiator and the largest single technical risk. F-02 returned `Go-with-rework`: no hard blocker, but the Tauri→Electron bridge rebuild + packaging/signing are scoped rework. The subtitle insertion path (mode C) depends on Resolve Studio 18.5+ API availability; the frame-by-frame fallback adds surface area. The file-export set (S-08) remains the always-available fallback.
 - **Status:** go-with-rework
 
 ### S-11: API keys in the OS keychain
@@ -312,6 +332,33 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Risk:** Low surface — touches the engine bring-up/health path (`src-tauri/src/whisper.rs` + its frontend caller), not the transcription correctness path or the cache contract. Must not mask a genuinely-missing/broken engine: a cached "ready" has to invalidate when the sidecar/model is absent, so keep the unavailable state honest. No parser/exporter/frame-math impact.
 - **Status:** done
 
+### S-21: Random app crash — diagnose and fix
+
+- **Outcome:** The app no longer randomly closes mid-session during `npm run tauri dev`. Root cause is identified (Rust panic, unhandled JS exception, Tauri IPC crash, sidecar OOM, or OS-level signal) and fixed — with a reproducibility note and a regression guard where possible.
+- **Change ID:** app-crash-fix
+- **PRD refs:** — (stability; blocks all interactive testing of every other slice)
+- **Prerequisites:** —
+- **Parallel with:** — (blocks interactive QA of every other slice; fix first)
+- **Blockers:** —
+- **Unknowns:**
+  - What triggers the crash and how reproducible is it? Is it a Rust panic (logged in the Tauri dev console), a JS unhandled rejection, a sidecar OOM, or an OS signal? — Owner: team. Block: yes (investigation is the first step).
+  - Does it only happen in dev mode (`tauri dev`) or also in a production build? — Owner: team. Block: no (fix targets dev mode first; if prod-only, scope changes).
+- **Risk:** Low surface if the cause is a known Rust panic (Tauri logs it). Higher if intermittent OS-level or sidecar-related. Must not introduce log-suppression or silent crash-swallowing as a "fix" — the real cause must be eliminated.
+- **Status:** new
+
+### S-20: Word-by-word SRT export — fix broken implementation
+
+- **Outcome:** The word-by-word SRT export (S-19) actually works in the app: the "Eksport słowo-po-słowie" checkbox in the WhisperX advanced modal triggers per-word cues when clicked, the auto-align fallback runs when word data is missing, and the saved `.srt` opens cleanly in a caption viewer.
+- **Change ID:** word-srt-fix
+- **PRD refs:** FR-005 (extends — same target as S-19; this closes the implementation gap)
+- **Prerequisites:** S-19
+- **Parallel with:** —
+- **Blockers:** —
+- **Unknowns:**
+  - What exactly is broken? S-19 was archived with all manual steps ticked but the ticks were not earned — the feature was never tested in the running app. There are already two uncommitted bug-fix hunks in the tree (`transcript.js` end-clamp safeguard, `export-popover.js` `hasFrameWords` tightened to require both `start_frame` AND `end_frame`). Root cause is unknown until the app is run.
+- **Risk:** Low surface (same files as S-19: `transcript.js`, `export-popover.js`, `transcribe.js`). The regression suite already covers the timing logic (Test 15); manual verification is the missing gate. If the uncommitted fixes are sufficient, this slice is a commit + a manual run. If deeper issues surface (e.g. align path doesn't populate `words[]`, or the checkbox state doesn't persist), the plan expands.
+- **Status:** new
+
 ### S-19: Word-by-word SRT export — reels-ready captions
 
 - **Outcome:** Editor exports a **word-by-word** `.srt` (one word per cue) built from the word-level forced-alignment timestamps S-05 already produces, suitable for dropping straight into TikTok / Instagram Reels as caption text. Each cue's **start is pinned to the word's real audio onset** (integer-frame, never moved); every word is held on screen for at least a **minimum duration of 4 frames** (≈160 ms at 25 fps, computed at the project fps), and any word shorter than the floor is **lengthened only on its right side** (the end pushed later, the onset left untouched) so captions stay legible without drifting off the audio. The export goes through the **save-location prompt** (native dialog), like every other save.
@@ -342,12 +389,14 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-05       | builtin-whisperx-transcription | Built-in WhisperX transcription + word-level alignment  | no                    | Needs F-01; heavy; cache migration               |
 | S-07       | auto-mode-pipeline             | One-click auto mode + staged progress                   | no                    | Needs S-01, S-05                                 |
 | S-08       | timeline-export-set            | Premiere XML / FCPXML / Resolve Lua export set          | no                    | Needs S-01                                       |
-| S-09       | resolve-plugin-handoff         | DaVinci Resolve embedded plugin (one-click hand-off)    | yes                   | F-02 verdict `Go-with-rework`; plan against decision.md |
+| S-09       | resolve-plugin-handoff         | DaVinci Resolve embedded plugin — full integration (auto audio collect, in-panel transcription, subtitle track insertion, reel timelines) | yes | F-02 verdict `Go-with-rework`; plan against decision.md; S-05 engine bridge needed |
 | S-11       | keychain-credentials           | Move API keys to OS keychain                            | yes                   | No prerequisite; parallel hardening              |
 | S-16       | ui-ux-redesign                 | UI/UX redesign — step-shell rewrite, simpler flow       | yes                   | Prereq-free; land early                          |
 | S-17       | feature-pruning-cleanup        | Feature pruning & cleanup pass                          | yes                   | Prereq-free; recurring de-bloat of backlog + code |
 | S-18       | whisperx-engine-check-speedup  | Speed up the WhisperX engine availability check         | yes                   | Needs S-05 (shipped); perf fix, profile first    |
-| S-19       | word-level-srt-export          | Word-by-word SRT export — reels-ready captions          | yes                   | Needs S-05 (shipped); onset-pin + 4-frame floor + right-pad; `/10x-plan word-level-srt-export` |
+| S-19       | word-level-srt-export          | Word-by-word SRT export — reels-ready captions          | done                  | Archived 2026-06-18; implementation broken — tracked by S-20 |
+| S-20       | word-srt-fix                   | Fix broken word-by-word SRT export (S-19 manual steps skipped) | yes            | Needs S-19 (archived); `/10x-plan word-srt-fix` |
+| S-21       | app-crash-fix                  | Diagnose and fix random spontaneous app exit during `tauri dev` | yes            | Prereq-free; fix before other interactive QA; `/10x-plan app-crash-fix` |
 
 ## Open Roadmap Questions
 
