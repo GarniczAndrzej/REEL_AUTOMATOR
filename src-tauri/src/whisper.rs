@@ -249,6 +249,32 @@ fn write_cache(dir: &std::path::Path, v2_hash: &str, payload: &serde_json::Value
     }
 }
 
+/// Byte ceiling for the retained stderr tail in `drive_engine`. A chatty engine
+/// run (torch/ctranslate2/tqdm spew) could otherwise grow `stderr_buf` without
+/// bound — the top in-app OOM amplifier (S-21). 64 KB keeps ample diagnostic
+/// context for a non-zero-exit error message while capping total memory.
+const STDERR_TAIL_MAX_BYTES: usize = 64 * 1024;
+
+/// Append `chunk` to `buf`, then drop bytes from the front so `buf` never
+/// exceeds `max_bytes`, retaining the most-recent (tail) content. The cut lands
+/// on a UTF-8 char boundary (`buf` is only ever fed `String::from_utf8_lossy`
+/// output, i.e. valid UTF-8), so the retained tail is always valid UTF-8 and the
+/// drain never panics. Pure + unit-tested (S-21); used for stderr only — the
+/// stdout JSON payload must stay uncapped.
+fn append_bounded_tail(buf: &mut String, chunk: &str, max_bytes: usize) {
+    buf.push_str(chunk);
+    if buf.len() <= max_bytes {
+        return;
+    }
+    // Keep at most `max_bytes` from the end; advance to the next char boundary
+    // so we never split a multibyte sequence.
+    let mut cut = buf.len() - max_bytes;
+    while cut < buf.len() && !buf.is_char_boundary(cut) {
+        cut += 1;
+    }
+    buf.drain(..cut);
+}
+
 /// Register the spawned engine child, pump its stdout/stderr until it terminates
 /// or the run is cancelled, emitting a `transcribe-progress` event for every
 /// `PROGRESS` stderr line, then deregister the child. Shared by `transcribe_video`
@@ -289,7 +315,10 @@ async fn drive_engine(
             CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
             CommandEvent::Stderr(b) => {
                 let chunk = String::from_utf8_lossy(&b);
-                stderr_buf.push_str(&chunk);
+                // Bound the retained stderr to a tail so a chatty run can't grow
+                // this buffer without limit (S-21 OOM amplifier). PROGRESS parsing
+                // below consumes lines as they arrive and never accumulates.
+                append_bounded_tail(&mut stderr_buf, &chunk, STDERR_TAIL_MAX_BYTES);
                 // Line-buffer stderr to parse PROGRESS lines reliably.
                 stderr_line.push_str(&chunk);
                 while let Some(nl) = stderr_line.find('\n') {
@@ -553,6 +582,43 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn bounded_tail_stays_capped_and_keeps_latest() {
+        let max = 1024;
+        let mut buf = String::new();
+        // Feed far more than the ceiling in many chunks.
+        for i in 0..10_000 {
+            append_bounded_tail(&mut buf, &format!("line {i}\n"), max);
+            assert!(
+                buf.len() <= max,
+                "buf exceeded ceiling: {} > {}",
+                buf.len(),
+                max
+            );
+        }
+        // The retained tail must be the most-recent content.
+        assert!(buf.contains("line 9999"));
+        assert!(!buf.contains("line 0\n"));
+    }
+
+    #[test]
+    fn bounded_tail_is_multibyte_safe() {
+        let max = 64;
+        let mut buf = String::new();
+        // Multibyte input (Polish + emoji) fed past the ceiling must never panic
+        // on a char boundary and must stay valid UTF-8 under the cap.
+        for _ in 0..1000 {
+            append_bounded_tail(&mut buf, "zażółć gęślą jaźń 🎬\n", max);
+        }
+        assert!(buf.len() <= max);
+        // Not splitting a multibyte sequence: the retained tail must be a literal
+        // suffix of the repeated unit (reaching here without a panic already
+        // proves char-boundary safety).
+        let unit = "zażółć gęślą jaźń 🎬\n";
+        let full = unit.repeat(2);
+        assert!(full.ends_with(&buf), "tail not a clean suffix: {buf:?}");
     }
 
     #[test]
