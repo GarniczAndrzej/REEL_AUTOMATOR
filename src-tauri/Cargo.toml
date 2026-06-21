@@ -45,7 +45,10 @@ libc = "0.2"
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# S-21: unwind (not abort) so a panic in a packaged build is contained and caught
+# by the lib.rs panic hook, the same way dev does — abort silently killed the
+# whole process on any panic.
+panic = "unwind"
 
 [profile.dev]
 incremental = true

@@ -300,8 +300,8 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Automated
 
-- [x] 3.1 Rust type-checks (`cargo check`)
-- [x] 3.2 Rust tests pass (`cargo test`)
+- [x] 3.1 Rust type-checks (`cargo check`) — 6584eb3
+- [x] 3.2 Rust tests pass (`cargo test`) — 6584eb3
 
 #### Manual
 
@@ -314,8 +314,8 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Automated
 
-- [ ] 4.1 Release build compiles (`cargo build --release`)
-- [ ] 4.2 Rust tests pass (`cargo test`)
+- [x] 4.1 Release build compiles (`cargo build --release`)
+- [x] 4.2 Rust tests pass (`cargo test`)
 
 #### Manual
 
