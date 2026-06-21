@@ -1,10 +1,10 @@
 ---
 change_id: app-crash-fix
 title: App crash fix
-status: impl_reviewed
+status: archived
 created: 2026-06-19
 updated: 2026-06-22
-archived_at: null
+archived_at: 2026-06-22T22:14:24Z
 ---
 
 ## Notes

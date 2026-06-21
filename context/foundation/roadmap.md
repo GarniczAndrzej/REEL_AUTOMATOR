@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-19
+updated: 2026-06-22
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -47,7 +47,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-18  | whisperx-engine-check-speedup | start transcribing without a long wait — the WhisperX engine/availability check is fast (or cached/async) | S-05 | — (perf; supports FR-001 import-to-transcribe) | done |
 | S-19  | word-level-srt-export       | export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions | S-05 | FR-005 (extends)                          | done     |
 | S-20  | word-srt-fix                | word-by-word SRT export actually works — diagnose and fix the broken S-19 implementation (manual steps were skipped) | S-19 | FR-005 (extends)                          | new      |
-| S-21  | app-crash-fix               | app no longer randomly closes mid-session — root cause of the spontaneous window/process exit during `tauri dev` is identified and fixed | — | — (stability; blocks all interactive testing)                 | new      |
+| S-21  | app-crash-fix               | app no longer randomly closes mid-session — root cause of the spontaneous window/process exit during `tauri dev` is identified and fixed | — | — (stability; blocks all interactive testing)                 | done     |
 
 ## Streams
 
@@ -344,7 +344,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - What triggers the crash and how reproducible is it? Is it a Rust panic (logged in the Tauri dev console), a JS unhandled rejection, a sidecar OOM, or an OS signal? — Owner: team. Block: yes (investigation is the first step).
   - Does it only happen in dev mode (`tauri dev`) or also in a production build? — Owner: team. Block: no (fix targets dev mode first; if prod-only, scope changes).
 - **Risk:** Low surface if the cause is a known Rust panic (Tauri logs it). Higher if intermittent OS-level or sidecar-related. Must not introduce log-suppression or silent crash-swallowing as a "fix" — the real cause must be eliminated.
-- **Status:** new
+- **Status:** done
 
 ### S-20: Word-by-word SRT export — fix broken implementation
 
@@ -443,3 +443,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-04: reorder, merge, delete segments (reorder/merge/delete ops need rework)** — Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`. Diagnosis showed delete/merge already worked; only drag-reorder was broken because Tauri's webview intercepted HTML5 drag events — fixed with one config flip (`dragDropEnabled: false`), `moveClip()` untouched. Lesson: Tauri's webview swallows HTML5 drag-and-drop by default; set `dragDropEnabled: false` on the window to hand DnD to the frontend (and it governs the HTML5 file-drop import too — no native `onDragDropEvent` listener to lose).
 - **S-11: store API keys in the OS keychain, never plaintext** — Archived 2026-06-18 → `context/archive/2026-06-18-keychain-credentials/`. `keyring`-crate `keychain.rs` get/set/delete commands + hydrated `src/ai/api-key.js` cache (sync `getApiKey`, async write-through `setApiKey`, boot `hydrateKeys()` with one-time localStorage→Keychain migration); R2 accessor folded in. Lesson: the `keyring` 3.x crate ships NO credential store by default (silent in-memory mock) — enable `apple-native` in Cargo.toml or Keychain writes don't persist.
 - **S-19: export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions** — Archived 2026-06-18 → `context/archive/2026-06-18-word-level-srt-export/`. Lesson: —.
+- **S-21: The app no longer randomly closes mid-session during `npm run tauri dev`. Root cause is identified (Rust panic, unhandled JS exception, Tauri IPC crash, sidecar OOM, or OS-level signal) and fixed — with a reproducibility note and a regression guard where possible.** — Archived 2026-06-22 → `context/archive/2026-06-19-app-crash-fix/`. No single smoking gun; hardened the most plausible silent-exit mechanisms — bounded the unbounded WhisperX `stderr_buf` (top OOM amplifier), closed the cancel/completion orphan race so a cancelled run is always reaped (single atomic reaper), switched release `panic = unwind`, and added a Rust `[PANIC]` hook + JS global error/rejection handlers so the next crash is no longer silent. Lesson: `drop(CommandChild)` does NOT kill the OS process — a cancelled sidecar must be explicitly reaped (SIGTERM→SIGKILL) by a single deterministic owner, or orphaned torch workers accumulate into cumulative OOM.
