@@ -9,6 +9,26 @@ mod waveform;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // S-21 instrumentation: surface (never suppress) any panic in a command
+    // future or Tauri/tokio internal with a greppable `[PANIC]` tag, then chain
+    // to the default hook so the standard unwind/backtrace print still happens.
+    // A silent unwind out of a command future was a structural blind spot.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "<unknown>".to_string());
+        let payload = info
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| info.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "<non-string panic payload>".to_string());
+        eprintln!("[PANIC] {location} — {payload}");
+        default_hook(info);
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())

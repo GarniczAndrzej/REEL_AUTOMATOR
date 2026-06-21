@@ -8,8 +8,22 @@ import { seedPresetsIfEmpty, loadPresets } from './ai/prompt-presets.js';
 import { initSurface } from './ui/surface.js';
 import { initSettingsModal } from './ui/settings-modal.js';
 import { hydrateKeys } from './ai/api-key.js';
+import { toast } from './ui/toast.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // S-21 instrumentation: surface (never suppress) uncaught errors and rejected
+  // promises. There were no global error handlers, so any async failure was
+  // invisible. Log AND toast (Polish) — but do NOT preventDefault(), so the
+  // console error stays visible (S-21 guardrail against silent crash-swallowing).
+  window.addEventListener('error', (e) => {
+    console.error('[window.error]', e.error || e.message, e);
+    toast('Wystąpił nieoczekiwany błąd aplikacji.', 'error');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('[unhandledrejection]', e.reason);
+    toast('Nieobsłużony błąd operacji asynchronicznej.', 'error');
+  });
+
   // Seed persisted app settings (S-16) before step inits read state. The
   // merge-gap survives sessions via the `edl_app_settings` bag; fall back to
   // the in-state default (12) when unset.

@@ -8,6 +8,7 @@ import { state, emit } from '../../state.js';
 import { parseSRT, parseVTT } from '../../parser/srt.js';
 import { saveTextToPath } from '../../util/save-file.js';
 import { syncAlignBtn } from './transcribe.js';
+import { toast } from '../toast.js';
 
 // Minimum sentence length (chars) for SRT/VTT/word segmentation. Formerly a
 // rarely-touched UI knob (pruned in S-16, #7) but kept as a module-level
@@ -80,6 +81,15 @@ function loadSRTFile(file) {
       noteEl.style.color = '';
     }
     emit();
+  };
+  // S-21: a failed/aborted read previously left state.srtContent unset silently.
+  // Surface a Polish toast and leave state unchanged.
+  reader.onerror = () => {
+    console.error('[FileReader] read error', reader.error);
+    toast('Nie udało się odczytać pliku napisów.', 'error');
+  };
+  reader.onabort = () => {
+    toast('Odczyt pliku napisów został przerwany.', 'error');
   };
   reader.readAsText(file, 'utf-8');
 }

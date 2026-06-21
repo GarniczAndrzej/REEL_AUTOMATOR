@@ -1,9 +1,9 @@
 ---
 change_id: app-crash-fix
 title: App crash fix
-status: new
+status: implementing
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-21
 archived_at: null
 ---
 
