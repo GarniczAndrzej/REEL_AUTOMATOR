@@ -285,9 +285,9 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Automated
 
-- [x] 2.1 Rust type-checks (`cargo check`)
-- [x] 2.2 Rust tests pass (`cargo test`)
-- [x] 2.3 Regression suite passes (`test/regression.js`)
+- [x] 2.1 Rust type-checks (`cargo check`) — 5a1bcda
+- [x] 2.2 Rust tests pass (`cargo test`) — 5a1bcda
+- [x] 2.3 Regression suite passes (`test/regression.js`) — 5a1bcda
 
 #### Manual
 
@@ -300,8 +300,8 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Automated
 
-- [ ] 3.1 Rust type-checks (`cargo check`)
-- [ ] 3.2 Rust tests pass (`cargo test`)
+- [x] 3.1 Rust type-checks (`cargo check`)
+- [x] 3.2 Rust tests pass (`cargo test`)
 
 #### Manual
 

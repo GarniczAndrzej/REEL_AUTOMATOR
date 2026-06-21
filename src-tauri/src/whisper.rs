@@ -300,9 +300,11 @@ async fn drive_engine(
     let mut stderr_buf = String::new();
     let mut stderr_line = String::new();
     let mut exit_code: Option<i32> = None;
+    let mut cancelled = false;
 
     loop {
         if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
+            cancelled = true;
             break;
         }
         let ev =
@@ -350,7 +352,18 @@ async fn drive_engine(
         }
     }
 
-    *TRANSCRIBE_CHILD.lock().unwrap() = None;
+    // The driver is the single owner of the child. On cancel it reaps the child
+    // itself BEFORE nulling the handle — closing the race where the old code
+    // nulled the handle at completion and cancel_transcription then took `None`
+    // and never killed the orphaned torch worker (S-21). `take()` is atomic under
+    // the lock, so whoever wins (driver here, or cancel_transcription's fallback)
+    // is the sole reaper — no double-kill. Normal completion just drops the handle.
+    let child = TRANSCRIBE_CHILD.lock().unwrap().take();
+    if cancelled {
+        if let Some(c) = child {
+            reap_engine_child(c).await;
+        }
+    }
     (stdout_buf, stderr_buf, exit_code)
 }
 
@@ -798,31 +811,42 @@ pub async fn align_transcript(
     }))
 }
 
-/// Kill the in-flight engine child (if any) and mark the run cancelled so the
-/// driver returns the cancelled-state message rather than a failure.
+/// SIGTERM → 300 ms → SIGKILL escalation for the PyInstaller engine child.
+///
+/// On Unix the engine is a PyInstaller onefile: a hard SIGKILL of the bootloader
+/// can't be forwarded to its worker child, orphaning it (it keeps running the
+/// transcription and holding the stdout pipe). Send SIGTERM first — the
+/// bootloader's handler forwards it so the worker shuts down cleanly — then
+/// hard-kill the bootloader as a fallback. The single reaper used by both the
+/// `drive_engine` cancel-break path and the `cancel_transcription` fallback, so
+/// the escalation lives in exactly one place (S-21).
+async fn reap_engine_child(c: CommandChild) {
+    #[cfg(unix)]
+    {
+        let pid = c.pid() as i32;
+        unsafe {
+            libc::kill(pid, libc::SIGTERM);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let _ = c.kill();
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = c.kill();
+    }
+}
+
+/// Mark the run cancelled so the driver returns the cancelled-state message, then
+/// kill the engine child only if we still hold its handle — the fallback for the
+/// window before `drive_engine` has taken ownership (or the no-driver case). Once
+/// the driver owns the child it is the reaper; `take()` here returns `None` and we
+/// return cleanly, so the driver and this command never both kill (S-21).
 #[tauri::command]
 pub async fn cancel_transcription() -> Result<(), String> {
     TRANSCRIBE_CANCELLED.store(true, Ordering::SeqCst);
     let child = TRANSCRIBE_CHILD.lock().unwrap().take();
     if let Some(c) = child {
-        // On Unix the engine is a PyInstaller onefile: a hard SIGKILL of the
-        // bootloader can't be forwarded to its worker child, orphaning it (it
-        // keeps running the transcription and holding the stdout pipe). Send
-        // SIGTERM first — the bootloader's handler forwards it so the worker
-        // shuts down cleanly — then hard-kill the bootloader as a fallback.
-        #[cfg(unix)]
-        {
-            let pid = c.pid() as i32;
-            unsafe {
-                libc::kill(pid, libc::SIGTERM);
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-            let _ = c.kill();
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = c.kill();
-        }
+        reap_engine_child(c).await;
     }
     Ok(())
 }
