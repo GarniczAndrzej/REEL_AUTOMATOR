@@ -276,10 +276,10 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Manual
 
-- [ ] 1.4 JS error + rejection each log and toast (Polish)
-- [ ] 1.5 Temporary `panic!()` prints `[PANIC]` hook output, then reverted
-- [ ] 1.6 FileReader failure shows Polish toast, no silent proceed
-- [ ] 1.7 No regression in import/transcribe/export
+- [x] 1.4 JS error + rejection each log and toast (Polish)
+- [x] 1.5 Temporary `panic!()` prints `[PANIC]` hook output, then reverted
+- [x] 1.6 FileReader failure shows Polish toast, no silent proceed
+- [x] 1.7 No regression in import/transcribe/export
 
 ### Phase 2: Bound the Sidecar stderr Buffer
 
@@ -291,10 +291,10 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Manual
 
-- [ ] 2.4 Normal transcription completes, result JSON parses (stdout untouched)
-- [ ] 2.5 Failed transcription surfaces Polish error with recent stderr tail
-- [ ] 2.6 Progress bar still updates (PROGRESS parsing intact)
-- [ ] 2.7 App memory does not grow unbounded with stderr volume
+- [x] 2.4 Normal transcription completes, result JSON parses (stdout untouched)
+- [x] 2.5 Failed transcription surfaces Polish error with recent stderr tail
+- [x] 2.6 Progress bar still updates (PROGRESS parsing intact)
+- [x] 2.7 App memory does not grow unbounded with stderr volume
 
 ### Phase 3: Close the Cancel/Completion Orphan Race
 
@@ -305,19 +305,19 @@ None — no schema, no `.reelproj` format change, no persisted-data impact. All 
 
 #### Manual
 
-- [ ] 3.3 Cancel returns to cancelled state promptly; restart works immediately
-- [ ] 3.4 Multiple cancels leave no orphaned engine/torch processes or memory creep
-- [ ] 3.5 Normal completion still returns result
-- [ ] 3.6 Cancel at completion boundary does not double-kill or error
+- [x] 3.3 Cancel returns to cancelled state promptly; restart works immediately
+- [x] 3.4 Multiple cancels leave no orphaned engine/torch processes or memory creep
+- [x] 3.5 Normal completion still returns result
+- [x] 3.6 Cancel at completion boundary does not double-kill or error
 
 ### Phase 4: Release Panic Hardening
 
 #### Automated
 
-- [x] 4.1 Release build compiles (`cargo build --release`)
-- [x] 4.2 Rust tests pass (`cargo test`)
+- [x] 4.1 Release build compiles (`cargo build --release`) — 5055508
+- [x] 4.2 Rust tests pass (`cargo test`) — 5055508
 
 #### Manual
 
-- [ ] 4.3 Release build launches and transcribes successfully
-- [ ] 4.4 (Optional) panic in release build is logged by hook, not silent abort
+- [x] 4.3 Release build launches and transcribes successfully
+- [x] 4.4 (Optional) panic in release build is logged by hook, not silent abort
