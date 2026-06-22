@@ -48,6 +48,9 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-19  | word-level-srt-export       | export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions | S-05 | FR-005 (extends)                          | done     |
 | S-20  | word-srt-fix                | word-by-word SRT export actually works — diagnose and fix the broken S-19 implementation (manual steps were skipped) | S-19 | FR-005 (extends)                          | done     |
 | S-21  | app-crash-fix               | app no longer randomly closes mid-session — root cause of the spontaneous window/process exit during `tauri dev` is identified and fixed | — | — (stability; blocks all interactive testing)                 | done     |
+| S-22  | segment-chunk-slider        | adjust a slider that splits the transcript into finer segments — from full sentences down to word-level chunks — so cuts pin to real word boundaries | S-05 | FR-006 (extends); cut-accuracy wedge          | proposed |
+| S-23  | stop-ai-analysis            | cancel an in-flight AI analysis with a Stop button when OpenRouter is slow/laggy (varies by model) | S-01 | — (UX/robustness on the selection action) | proposed |
+| S-24  | windows-port                | run the whole app on Windows — WhisperX/FFmpeg sidecars rebuilt for Windows (CUDA + CPU configs), keys in Windows Credential Manager, MSI/NSIS installer | S-05, S-11 | — (cross-platform; PRD §Non-Goals "Windows later") | proposed |
 
 ## Streams
 
@@ -56,10 +59,11 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 | Stream | Theme                       | Chain                                                        | Note                                                                 |
 | ------ | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
 | A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08`          | The north-star spine; quality goal fronts the scored-selection loop. |
-| B      | Local transcription         | `S-05` → `S-07` / `S-19`                                   | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion and (S-19) reels-ready word-by-word captions. |
+| B      | Local transcription         | `S-05` → `S-07` / `S-19` / `S-22`                          | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion, (S-19) reels-ready word-by-word captions, and (S-22) slider-controlled word-level segment chunking. |
 | C      | Resolve integration         | `F-02` → `S-09`                                             | Spike-first (top blocker = decisions); `S-09` joins Stream A at `S-08`. |
 | D      | Security                    | `S-11`                                                      | `S-11` is standalone-ready. |
 | E      | UX overhaul                 | `S-16` (prereq-free)                                        | Step-shell rewrite; prereq-free so it can land early — later surfaces (`S-02`/`S-04`/`S-08`) build into the new shell. Informs `S-07`'s one-click flow. |
+| F      | Cross-platform (Windows)    | `S-05` / `S-11` → `S-24`                                    | Branches off the two platform-coupled slices (native sidecars + OS credential store); `S-24` is a separate-machine effort (build + verify on Windows). Continued on a Windows system. |
 
 ## Baseline
 
@@ -374,6 +378,52 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Risk:** Low–moderate. Pure read of existing alignment data → string output, but it is **not** routed through `mergeAdjacentClips` (that is the *reel-span* source, not a per-word caption source) — keep the two paths separate so caption generation never perturbs the exporter span pipeline. All cue timing must stay integer-frame (`Math.round(s * fps)`, no mid-pipeline seconds rounding). Add a regression case in `test/regression.js` covering the onset-pin, the 4-frame floor, and right-side-only padding (incl. the collision clamp). All new user-facing strings stay Polish.
 - **Status:** done
 
+### S-22: Segment chunk-size slider — word-level segmentation granularity
+
+- **Outcome:** Editor adjusts a slider that controls how the transcript is chunked into the numbered segments AI selection works over — from full punctuation-terminated **sentences** (today's default) down to fine-grained **word-level / N-word chunks** — built directly from the word-level forced-alignment timestamps S-05 already produces. Finer chunks give selection and the exporters more, smaller cut points pinned to real word onsets/offsets, so reel boundaries land on word boundaries (~0% mid-word) instead of approximate sentence ends. The slider has a sensible default, lives in the **settings window** and **persists across sessions** (alongside the merge-gap), re-segments live when moved, and the resulting numbered segments feed AI selection and the EDL/XML/Lua exporters through the existing pipeline unchanged.
+- **Change ID:** segment-chunk-slider
+- **PRD refs:** FR-006 (extends — segment granularity becomes a user-tunable knob, not a fixed sentence merge); supports the cut-accuracy wedge (~0% mid-word, PRD §53/§76). Adjacent to the parked S-06 word-level boundary trim (this is *upstream chunk size*, not per-boundary nudging).
+- **Prerequisites:** S-05 (word-level forced alignment supplies the per-word onset/offset timestamps the chunker splits on; without it there is no sub-sentence word data to chunk).
+- **Parallel with:** S-07, S-08, S-19 (independent segmentation knob; no shared frame-math beyond the integer-frame invariant).
+- **Blockers:** —
+- **Unknowns:**
+  - **Chunk unit** — does the slider count words-per-segment, target a duration window, or interpolate sentence→word granularity? — Owner: user. Block: no (default: words-per-chunk, with the sentence as the natural upper bound so a max setting reproduces today's sentence segments).
+  - **Re-chunk vs. existing selection** — moving the slider changes segment IDs, but reels reference segments as ordered `clip_ids`; do existing reels remap or invalidate on re-chunk? — Owner: team. Block: no (default: the chunk size is locked in *before* AI selection; changing it after selection warns and re-segments, requiring a re-run rather than silently remapping IDs).
+  - **Interaction with the merge-gap (S-04)** — the export-span `mergeAdjacentClips` threshold and this upstream chunk size are two different knobs; confirm they compose (finer chunks upstream + merge collapse downstream) without double-counting or fighting each other. — Owner: team. Block: no.
+- **Risk:** Touches the **regression-fenced parser** — `src/parser/srt.js` (`parseSRT` sentence-merge) and `src/parser/segments.js`. Segment IDs become slider-dependent, so the `clip_ids` → segment contract must stay consistent (re-segment before selection, or remap deterministically). Keep timeline math integer-frame only (`Math.round(s * fps)`, no mid-pipeline seconds rounding). Must **not** perturb `mergeAdjacentClips` — that is the *reel-span* source (downstream span collapse), distinct from this *segmentation chunk size* (upstream). Add a regression case per granularity setting (sentence / N-word / per-word) proving gap-free coverage and correct word-boundary onsets. Run `node --experimental-vm-modules test/regression.js` before and after. All new user-facing strings stay Polish.
+- **Status:** proposed
+
+### S-23: Stop / cancel in-flight AI analysis
+
+- **Outcome:** Editor can abort a running AI analysis at any time via a **Stop** button that takes over the "Analizuj z OpenRouter" action while a request is in flight. OpenRouter latency swings widely by model — a slow or hung model no longer locks the editor into waiting. Clicking Stop aborts the in-flight `fetch` (`AbortController`), restores the Analyze action and clears the spinner, leaves any existing reels untouched, and surfaces a Polish "anulowano" toast instead of an error. No partial or aborted response is ever parsed, validated, or fed into the selection/export pipeline.
+- **Change ID:** stop-ai-analysis
+- **PRD refs:** — (UX/robustness on the selection action; serves US-01 review-speed by never blocking the editor on a slow/hung model)
+- **Prerequisites:** S-01 (the scored-selection analysis call — `callOpenRouter` in `step2-prompt-panel.js` — that this cancels)
+- **Parallel with:** essentially all slices (isolated to the analyze action; no shared state with the pipeline)
+- **Blockers:** —
+- **Unknowns:**
+  - **Cache interaction** — `withLlmCache` wraps the call; an aborted request must **not** write a cache entry (no partial/empty result cached, no poisoned hash). — Owner: team. Block: no (abort short-circuits before the cache write; only a full successful response caches).
+  - **Button affordance** — does Stop replace the Analyze button in-place, or sit beside it as a secondary control? — Owner: user. Block: no (default: in-place toggle Analyze ⇄ Stop, mirroring the per-stage cancel pattern S-07 specifies).
+- **Risk:** Low surface. `callOpenRouter` currently calls `fetch` with **no** `signal` — thread an `AbortController` through `callOpenRouter` and wire its `abort()` to the Stop button in `src/ui/step2-prompt-panel.js`. A cancelled run must fully reset the in-flight UI state (re-enable Analyze, clear spinner) and distinguish a user abort (`AbortError`) from a real network error so the editor sees "anulowano", not a failure. Share the cancellation primitive with the per-stage cancel button S-07 introduces so auto-mode reuses it. Keep all strings Polish. No parser/exporter/frame-math impact.
+- **Status:** proposed
+
+### S-24: Windows port — sidecars, credential store, installer
+
+- **Outcome:** The full app runs natively on Windows (x86_64). The two platform-coupled native dependencies are rebuilt for Windows and bundled correctly; API keys move to the Windows Credential Manager; the app ships as an MSI/NSIS installer. A Windows editor imports a video, transcribes locally, scores reels, and exports EDL/XML/Lua/SRT exactly as on macOS — with no manual install steps beyond the installer. Continued on a Windows system (separate build + verification machine).
+- **Change ID:** windows-port
+- **PRD refs:** — (cross-platform delivery; PRD §Non-Goals lists Linux out but flags "macOS-first, **Windows later**" — this is the "later")
+- **Prerequisites:** S-05 (the WhisperX + FFmpeg sidecar architecture this re-targets), S-11 (the `keyring`-backed credential abstraction this re-points at Windows Credential Manager)
+- **Parallel with:** essentially all macOS feature work (a separate build target; touches packaging/native deps, not the JS feature surfaces)
+- **Blockers:** Access to a Windows build+test machine (the user continues this slice on Windows). NVIDIA driver / CUDA toolkit availability if GPU acceleration is in scope.
+- **Unknowns:**
+  - **WhisperX engine on Windows — GPU vs CPU configuration (the big one)** — the PyInstaller onefile sidecar must be rebuilt on Windows with a Windows torch build. Decide the acceleration target: CUDA (NVIDIA — much faster, but requires the matching `torch`+CUDA wheel, cuDNN/cuBLAS DLLs bundled or detected, and a driver floor) vs. a CPU-only build (portable, slow), vs. shipping both and selecting at runtime. macOS uses MPS/CPU — none of that translates. — Owner: user. Block: yes (defines sidecar size, speed, and minimum-spec story; resolve before building the sidecar).
+  - **Build scripts are bash** — `sidecar/build.sh` and `sidecar/fetch-ffmpeg.sh` are macOS/bash. Need a Windows equivalent (PowerShell / `.bat`, or run under Git-Bash/WSL) to produce `whisperx-engine-x86_64-pc-windows-msvc.exe`, fetch a **static** Windows FFmpeg (`ffmpeg-x86_64-pc-windows-msvc.exe`), and stage `align_models/` beside the binary. — Owner: user. Block: no (mechanical port of the existing scripts).
+  - **`keyring` Windows backend** — mirror the S-11 `apple-native` lesson: the crate ships no store by default. Enable the `windows-native` feature in `Cargo.toml` or Credential Manager writes silently no-op. Verify the boot-time hydrate + the (macOS-only) localStorage→Keychain migration is a no-op / correctly scoped on Windows. — Owner: user. Block: no (one Cargo feature + a verification pass).
+  - **`tauri.conf.json` externalBin + bundle targets** — `externalBin` entries are architecture-suffixed; Tauri resolves the `-x86_64-pc-windows-msvc.exe` variants per target, so both the macOS and Windows suffixed binaries must exist for their respective builds. Add Windows bundle targets (`msi`/`nsis`) and a code-signing path (Windows Authenticode cert — distinct from Apple notarization). — Owner: user. Block: no.
+  - **Path / shell assumptions in Rust + docs** — audit `whisper.rs` / `ffmpeg.rs` / `waveform.rs` and the cache-dir logic for POSIX path or `~/.cargo/bin/cargo` assumptions; Windows path separators, `appCacheDir`, and the FFmpeg spawn must all resolve. — Owner: team. Block: no.
+- **Risk:** Largest surface outside the feature set — it is a *configuration + packaging* slice, not a logic change, but it spans the whole native bottom layer (two sidecars, the credential store, the bundler, signing) and can only be validated on real Windows hardware. The CUDA-vs-CPU decision dominates: get it wrong and the sidecar is either multi-GB-unshippable or unusably slow. The frontend JS, parser, exporters and frame-math are platform-agnostic and should need **no** changes — keep it that way (run `node --experimental-vm-modules test/regression.js` on Windows to confirm the pipeline is byte-identical). All user-facing strings stay Polish. Reuse the macOS sidecar contract verbatim where possible so the two platforms don't diverge into separate codepaths.
+- **Status:** proposed
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID                      | Suggested issue title                                   | Ready for `/10x-plan` | Notes                                            |
@@ -397,6 +447,9 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-19       | word-level-srt-export          | Word-by-word SRT export — reels-ready captions          | done                  | Archived 2026-06-18; implementation broken — tracked by S-20 |
 | S-20       | word-srt-fix                   | Fix broken word-by-word SRT export (S-19 manual steps skipped) | yes            | Needs S-19 (archived); `/10x-plan word-srt-fix` |
 | S-21       | app-crash-fix                  | Diagnose and fix random spontaneous app exit during `tauri dev` | yes            | Prereq-free; fix before other interactive QA; `/10x-plan app-crash-fix` |
+| S-22       | segment-chunk-slider           | Segment chunk-size slider — word-level segmentation granularity | yes            | Needs S-05 (shipped); upstream chunk size, distinct from the merge-gap; `/10x-plan segment-chunk-slider` |
+| S-23       | stop-ai-analysis               | Stop button to cancel in-flight AI analysis (OpenRouter lag) | yes            | Needs S-01 (shipped); thread `AbortController` through `callOpenRouter`; share cancel primitive with S-07; `/10x-plan stop-ai-analysis` |
+| S-24       | windows-port                   | Windows port — sidecars (CUDA/CPU), Credential Manager, MSI/NSIS installer | yes | Needs S-05 + S-11 (shipped); continued on Windows machine; resolve CUDA-vs-CPU WhisperX config first; `keyring` `windows-native` feature; port the bash build scripts; `/10x-plan windows-port` |
 
 ## Open Roadmap Questions
 
@@ -409,7 +462,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **In-app video render / video editor (any future return)** — Why parked: PRD §Non-Goals hard lock — "its absence is the product's identity." (Note: F-01 *removes* the existing render path; this entry blocks it ever coming back.)
 - **Cloud / SaaS / collaboration / hosted AI** — Why parked: PRD §Non-Goals hard lock — fully local, single-user.
 - **Browser/web version of the app** — Why parked: PRD §Non-Goals (from AppContext.md).
-- **Linux support** — Why parked: PRD §Non-Goals; macOS-first, Windows later.
+- **Linux support** — Why parked: PRD §Non-Goals; macOS-first. (Windows is no longer "later" — promoted to slice **S-24** `windows-port`; Linux stays parked.)
 - **General plugin architecture beyond the Resolve integration** — Why parked: PRD §Non-Goals.
 - **Multi-region / high-availability architecture** — Why parked: PRD §Non-Goals; single device.
 - **URL ingest (YouTube/Vimeo)** — Why parked: PRD §Non-Goals deferred set (later change).
