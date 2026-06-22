@@ -13,7 +13,7 @@ import { generateTranscriptVTT } from '../exporters/transcript.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
 import { toast } from './toast.js';
-import { exportTranscriptSrt } from './export-srt.js';
+import { exportTranscriptSrt, transcriptBase } from './export-srt.js';
 
 export function init() {
   // Export trigger now lives in the header (next to Settings) and the sidebar
@@ -235,10 +235,6 @@ function videoBase() {
   const lastDot = name.lastIndexOf('.');
   const base = lastDot > 0 ? name.slice(0, lastDot) : name;
   return base || 'reels';
-}
-
-function transcriptBase() {
-  return (state.srtName || 'transkrypcja').replace(/\.(srt|vtt)$/i, '');
 }
 
 async function copyText(content, okMsg = 'Skopiowano ✓') {

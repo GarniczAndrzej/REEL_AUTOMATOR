@@ -22,3 +22,10 @@
 - **Problem**: Synchronous JS dialogs hard-crash Tauri's macOS WKWebView. S-03 planned native `window.prompt`/`window.confirm` for preset save-as/rename/delete; they crashed the window, forcing an in-app overlay modal (`promptNative`/`openModal`) + the async Tauri `ask()` plugin for delete, and `alert()`→`toast()` swaps in step2-prompt-panel.js / save-file.js.
 - **Rule**: Never use synchronous `window.prompt/confirm/alert` in the Tauri webview. Use an in-app overlay modal for text input/confirmation, the async `@tauri-apps/plugin-dialog` `ask()`/`message()` for native prompts, and `toast()` for notifications. Keep all user-facing strings Polish.
 - **Applies to**: plan, plan-review, implement, impl-review
+
+## Incidental Prettier churn must not ride into a feature commit
+
+- **Context**: Committing a phase of an in-scope change when unrelated files (e.g. `src/ai/api-key.js`, `src/ui/step2-preset-bar.js`) carry pre-existing Prettier reformatting in the working tree.
+- **Problem**: Phase 1 commit `ee34f17` swept in two Prettier-only files that the plan's "What We're NOT Doing" explicitly told to leave untouched. The diffs were harmless, but the commit then contradicted its own plan's scope guardrail.
+- **Rule**: Commit only files in the change's scope. If incidental formatting/churn is in the working tree, either stage it in a separate prep commit BEFORE the feature work, or leave it unstaged — never fold it into a feature/phase commit. If the user explicitly asks to include it, say so in the commit body AND update the plan's "NOT doing" list so the record stays consistent.
+- **Applies to**: implement, impl-review

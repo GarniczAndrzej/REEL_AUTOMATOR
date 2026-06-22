@@ -84,7 +84,10 @@ the GUI flows below pass a hands-on pass in `npm run tauri dev`.
   button" contract is preserved.
 - **Not** moving the auto-align off the export click — it stays inline (hardened), not deferred.
 - **Not** committing/reverting the unrelated `api-key.js` / `step2-preset-bar.js` Prettier edits —
-  left untouched in the working tree; noted here only so they aren't mistaken for this change.
+  noted here only so they aren't mistaken for this change. *(Post-impl reconciliation: at the
+  user's explicit request these two Prettier-only files were ultimately included in the Phase 1
+  commit `ee34f17` — pure formatting, no behavior change. See lessons.md → "Incidental Prettier
+  churn must not ride into a feature commit".)*
 
 ## Implementation Approach
 
@@ -341,6 +344,21 @@ launch/critical path.
 No data-model or `.reelproj` schema change. `wordLevelSrtExport` already exists in
 `state.whisperAdvanced` (default `false`, `state.js:114`) and in the `edl_whisper_advanced`
 localStorage bag; existing users' settings load unchanged.
+
+## Addenda (post-implementation)
+
+- **Phase 2 — SRT export extracted to a shared module (impl-review 2026-06-22).** The plan
+  scoped Phase 2 §1 as an in-place toast audit of `exportSRT` inside `export-popover.js`.
+  Implementation (commit `f8e8987`) instead extracted a new `src/ui/export-srt.js`
+  (`exportTranscriptSrt`), removed `exportSRT`/`hasFrameWords` from `export-popover.js`, and
+  routed **both** SRT buttons through it: the export-popover `#exSrtBtn` and the import-section
+  `#exportSrtBtn`. This was a deliberate scope expansion that fixed a latent bug the plan did not
+  name — the import-section `#exportSrtBtn` previously called `transcribe.js`'s
+  `exportTranscriptSRT`, which **always** emitted sentence-level SRT and ignored the
+  word-by-word toggle entirely. Unifying both entry points through one module realizes the
+  plan's stated intent ("the toggle behaves identically"). The static import cycle
+  (`export-srt.js` ↔ `transcribe.js`) is broken with a dynamic `import('./import/transcribe.js')`
+  in the align-fallback branch. No timing-math change; regression suite green.
 
 ## References
 

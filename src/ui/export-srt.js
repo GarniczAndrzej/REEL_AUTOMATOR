@@ -28,7 +28,12 @@ function hasFrameWords() {
   );
 }
 
-function transcriptBase() {
+/**
+ * Default filename stem for transcript exports — the loaded SRT/VTT name minus
+ * its extension, or a Polish fallback. Shared with export-popover.js (VTT).
+ * @returns {string}
+ */
+export function transcriptBase() {
   return (state.srtName || 'transkrypcja').replace(/\.(srt|vtt)$/i, '');
 }
 
