@@ -9,15 +9,11 @@ import { state, emit } from '../state.js';
 import { generateEDL } from '../exporters/edl.js';
 import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
-import {
-  generateTranscriptSRT,
-  generateTranscriptVTT,
-  generateWordSRT,
-} from '../exporters/transcript.js';
+import { generateTranscriptVTT } from '../exporters/transcript.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
 import { toast } from './toast.js';
-import { alignToWords } from './import/transcribe.js';
+import { exportTranscriptSrt } from './export-srt.js';
 
 export function init() {
   // Export trigger now lives in the header (next to Settings) and the sidebar
@@ -56,7 +52,9 @@ export function init() {
     ?.addEventListener('click', () => copyFormat('lua'));
 
   // "More" — transcript + segments + prompt.
-  document.getElementById('exSrtBtn')?.addEventListener('click', exportSRT);
+  document
+    .getElementById('exSrtBtn')
+    ?.addEventListener('click', exportTranscriptSrt);
   document.getElementById('exVttBtn')?.addEventListener('click', exportVTT);
   document.getElementById('exMdBtn')?.addEventListener('click', exportMD);
   document.getElementById('exPromptBtn')?.addEventListener('click', copyPrompt);
@@ -184,53 +182,8 @@ async function copyFormat(key) {
 }
 
 // ── "More" — transcript / segments / prompt ────────────────────────
-
-async function exportSRT() {
-  if (!state.sentences.length) {
-    toast('Brak transkrypcji do eksportu.', 'info');
-    return;
-  }
-  // Mode OFF → sentence-level .srt (unchanged behavior).
-  if (!state.whisperAdvanced.wordLevelSrtExport) {
-    const saved = await saveTextToPath({
-      defaultName: transcriptBase() + '.srt',
-      content: generateTranscriptSRT(state.sentences, state.fps),
-    });
-    if (saved) toast('Zapisano transkrypcję ✓', 'success');
-    return;
-  }
-  // Mode ON → word-by-word .srt. Needs frame-based words[]; auto-align when
-  // missing (heavy, ~37–67s cold spawn) only when a video is loaded.
-  if (!hasFrameWords()) {
-    const videoPath = state.videoPath || state._whisperVideoPath;
-    if (!videoPath) {
-      toast(
-        'Najpierw wybierz plik wideo, aby dopasować napisy do audio.',
-        'info',
-      );
-      return;
-    }
-    const ok = await alignToWords();
-    if (!ok || !hasFrameWords()) return; // align failed/cancelled — don't write
-  }
-  const saved = await saveTextToPath({
-    defaultName: transcriptBase() + '.srt',
-    content: generateWordSRT(state.sentences, state.fps),
-  });
-  if (saved) toast('Zapisano napisy słowo-po-słowie ✓', 'success');
-}
-
-// True when at least one sentence carries a word with a numeric start_frame —
-// i.e. frame-normalized word data the word exporter can actually emit.
-function hasFrameWords() {
-  return state.sentences.some(
-    (s) =>
-      Array.isArray(s.words) &&
-      s.words.some(
-        (w) => Number.isFinite(w.start_frame) && Number.isFinite(w.end_frame),
-      ),
-  );
-}
+// SRT export (sentence vs word-by-word) lives in ./export-srt.js, shared with
+// the import-section "⬇ Eksport .srt" button so the toggle behaves identically.
 
 async function exportVTT() {
   if (!state.sentences.length) {

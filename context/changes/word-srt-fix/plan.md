@@ -361,30 +361,30 @@ localStorage bag; existing users' settings load unchanged.
 
 #### Automated
 
-- [x] 1.1 Regression suite still green
-- [x] 1.2 Rust unaffected (no backend change)
+- [x] 1.1 Regression suite still green — ee34f17
+- [x] 1.2 Rust unaffected (no backend change) — ee34f17
 
 #### Manual
 
-- [ ] 1.3 Tick → close via X → reopen still ticked
-- [ ] 1.4 Tick → close via backdrop → reopen still ticked
-- [ ] 1.5 Tick → restart app → still ticked (criterion 3.3)
-- [ ] 1.6 Untick + Zapisz → stays unticked across restart
+- [x] 1.3 Tick → close via X → reopen still ticked — ee34f17
+- [x] 1.4 Tick → close via backdrop → reopen still ticked — ee34f17
+- [x] 1.5 Tick → restart app → still ticked (criterion 3.3) — ee34f17
+- [x] 1.6 Untick + Zapisz → stays unticked across restart — ee34f17
 
 ### Phase 2: Export feedback + align hardening
 
 #### Automated
 
-- [ ] 2.1 Regression suite still green
-- [ ] 2.2 Prettier clean on export-popover.js + transcribe.js
+- [x] 2.1 Regression suite still green
+- [x] 2.2 Prettier clean on export-popover.js + transcribe.js
 
 #### Manual
 
-- [ ] 2.3 Mode ON + imported .srt + no video → Polish toast, no file (3.7)
-- [ ] 2.4 Mode ON + imported .srt + video → confirm → align → save; cancel hides progress, writes nothing (3.6)
-- [ ] 2.5 Cancel align mid-spawn → Polish "Anulowano", no file
-- [ ] 2.6 Mode ON + WhisperX project (frame-words) → per-word .srt, no align prompt (3.4)
-- [ ] 2.7 Mode OFF → normal sentence .srt (3.5)
+- [x] 2.3 Mode ON + imported .srt + no video → Polish toast, no file (3.7)
+- [x] 2.4 Mode ON + imported .srt + video → confirm → align → save; cancel hides progress, writes nothing (3.6)
+- [x] 2.5 Cancel align mid-spawn → Polish "Anulowano", no file
+- [x] 2.6 Mode ON + WhisperX project (frame-words) → per-word .srt, no align prompt (3.4)
+- [x] 2.7 Mode OFF → normal sentence .srt (3.5)
 
 ### Phase 3: Latent-trap guard + regression locks
 

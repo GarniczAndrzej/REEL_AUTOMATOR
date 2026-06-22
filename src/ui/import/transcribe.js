@@ -6,12 +6,10 @@
 import { state, emit } from '../../state.js';
 import { toast } from '../toast.js';
 import { segmentFromWords } from '../../parser/word-segments.js';
-import {
-  generateTranscriptSRT,
-  generateTranscriptVTT,
-} from '../../exporters/transcript.js';
+import { generateTranscriptVTT } from '../../exporters/transcript.js';
 import { getApiKey, setApiKey } from '../../ai/api-key.js';
 import { saveTextToPath } from '../../util/save-file.js';
+import { exportTranscriptSrt } from '../export-srt.js';
 import { populateVideoMeta } from '../../util/video-meta.js';
 import {
   MIN_CHARS,
@@ -28,7 +26,7 @@ export function initTranscribe() {
     .addEventListener('click', alignImportedTranscript);
   document
     .getElementById('exportSrtBtn')
-    .addEventListener('click', exportTranscriptSRT);
+    .addEventListener('click', exportTranscriptSrt);
   document
     .getElementById('exportVttBtn')
     .addEventListener('click', exportTranscriptVTT);
@@ -532,9 +530,14 @@ export function syncAlignBtn() {
  * resulting (frame-normalized) words onto state.sentences. Returns true on
  * success, false on missing prerequisites / cancel / failure (surfaced via
  * toast + progress label; never throws to the caller).
+ * @param {{ confirm?: boolean }} [opts] When `confirm` is true (the word-SRT
+ *   export auto-align fallback), shows an async ask() notice about the 37–67s
+ *   cold-spawn cost before starting; declining returns false without spawning.
+ *   The manual "Dopasuj do audio" button passes no opts (no extra prompt — the
+ *   click is already explicit).
  * @returns {Promise<boolean>}
  */
-export async function alignToWords() {
+export async function alignToWords(opts = {}) {
   const videoPath = state._whisperVideoPath || state.videoPath;
   if (!videoPath) {
     toast(
@@ -546,6 +549,22 @@ export async function alignToWords() {
   if (!state.srtContent) {
     toast('Brak transkrypcji do dopasowania.', 'info');
     return false;
+  }
+  // Export-driven fallback: warn about the cold-spawn wait before showing the
+  // progress box. NEVER window.confirm — it hard-crashes the WKWebView (see
+  // context/foundation/lessons.md); use the async plugin-dialog ask().
+  if (opts.confirm) {
+    const { ask } = await import('@tauri-apps/plugin-dialog');
+    const proceed = await ask(
+      'Brak słów na poziomie ramek. Dopasowanie napisów do audio może potrwać 37–67 s przy pierwszym uruchomieniu. Kontynuować?',
+      {
+        title: 'Dopasuj do audio',
+        kind: 'info',
+        okLabel: 'Dopasuj',
+        cancelLabel: 'Anuluj',
+      },
+    );
+    if (!proceed) return false;
   }
   document.getElementById('whisperProgressBox').style.display = 'block';
   setWhisperProgress('Dopasowanie do audio…', 0);
@@ -580,6 +599,11 @@ export async function alignToWords() {
     const msg = String(e);
     if (msg.includes('ANULOWANO')) {
       setWhisperProgress('Anulowano.', 0);
+      // Mirror the success path: don't leave the progress box stuck on screen
+      // after a cancel — hide it shortly after surfacing "Anulowano.".
+      setTimeout(() => {
+        document.getElementById('whisperProgressBox').style.display = 'none';
+      }, 2000);
     } else {
       setWhisperProgress('Błąd: ' + e, 0);
       toast('Dopasowanie nieudane: ' + e, 'error');
@@ -605,16 +629,8 @@ function saveTranscriptToPath(ext, content) {
   return saveTextToPath({ defaultName: `${base}.${ext}`, content });
 }
 
-async function exportTranscriptSRT() {
-  if (!state.sentences || !state.sentences.length) {
-    toast('Brak transkrypcji do eksportu.', 'info');
-    return;
-  }
-  await saveTranscriptToPath(
-    'srt',
-    generateTranscriptSRT(state.sentences, state.fps),
-  );
-}
+// SRT export (sentence vs word-by-word) is handled by the shared
+// ./export-srt.js → exportTranscriptSrt, wired to #exportSrtBtn in initTranscribe.
 
 async function exportTranscriptVTT() {
   if (!state.sentences || !state.sentences.length) {
