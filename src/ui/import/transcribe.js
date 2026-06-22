@@ -428,6 +428,19 @@ function initWhisperAdvanced() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) close();
   });
+  // Live-persist the word-SRT toggle on change (not just on "Zapisz"), so the
+  // flag sticks regardless of how the modal is dismissed (Zapisz / X / backdrop)
+  // and survives a restart. Write ONLY the checkbox here — calling the full
+  // applyWhisperAdvancedForm would capture the other unsaved fields and break
+  // the Zapisz/Anuluj semantics the rest of the modal relies on.
+  const wordSrtEl = document.getElementById('advWordLevelSrt');
+  if (wordSrtEl) {
+    wordSrtEl.addEventListener('change', (e) => {
+      state.whisperAdvanced.wordLevelSrtExport = e.target.checked;
+      saveWhisperAdvancedToLS();
+      emit();
+    });
+  }
   document.getElementById('advSaveBtn').addEventListener('click', () => {
     applyWhisperAdvancedForm();
     saveWhisperAdvancedToLS();

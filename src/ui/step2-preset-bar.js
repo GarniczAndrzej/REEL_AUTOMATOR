@@ -31,8 +31,7 @@ export function renderPresetBar() {
     `<option value="" disabled>— wybierz preset —</option>` +
     presets
       .map(
-        (p) =>
-          `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`,
+        (p) => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`,
       )
       .join('');
 
@@ -70,7 +69,10 @@ export function initPresetBar() {
   saveBtn?.addEventListener('click', async () => {
     const name = await promptNative('Nazwa presetu:', 'Nowy preset');
     if (name === null || name.trim() === '') return;
-    const preset = addPreset({ name: name.trim(), userPrompt: state.userPrompt });
+    const preset = addPreset({
+      name: name.trim(),
+      userPrompt: state.userPrompt,
+    });
     if (!preset) {
       toast('Nie udało się zapisać presetu.', 'error');
       return;

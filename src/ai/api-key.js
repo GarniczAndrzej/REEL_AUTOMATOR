@@ -61,7 +61,10 @@ export async function setApiKey(provider, key) {
     await invoke('set_credential', { provider, secret: key });
   } catch (e) {
     console.error('[api-key] set_credential failed:', e);
-    toast('Nie udało się zapisać klucza w Keychain — działa tylko w tej sesji', 'error');
+    toast(
+      'Nie udało się zapisać klucza w Keychain — działa tylko w tej sesji',
+      'error',
+    );
   }
 }
 
@@ -111,7 +114,10 @@ export async function hydrateKeys() {
       console.error('[api-key] migration failed for', provider, e);
       // Keep plaintext, keep the session working, retry next launch.
       cache.set(provider, plain);
-      toast('Nie udało się przenieść klucza do Keychain — spróbuję ponownie przy następnym uruchomieniu', 'error');
+      toast(
+        'Nie udało się przenieść klucza do Keychain — spróbuję ponownie przy następnym uruchomieniu',
+        'error',
+      );
     }
   }
 }
