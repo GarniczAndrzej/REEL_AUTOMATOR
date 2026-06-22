@@ -1,10 +1,6 @@
 import { mergeAdjacentClips } from '../parser/segments.js';
-import { framesToTC } from '../parser/srt.js';
+import { framesToTC, isDropFrame } from '../parser/srt.js';
 import { MARKER_LABELS } from './markers.js';
-
-function _isDropFrame(fps) {
-  return Math.abs(fps - 29.97) < 0.02 || Math.abs(fps - 59.94) < 0.02;
-}
 
 export function generateEDL({
   reelsData,
@@ -14,7 +10,7 @@ export function generateEDL({
   videoFilename,
   mergeThreshold,
 }) {
-  const fcm = _isDropFrame(fps) ? 'DROP FRAME' : 'NON-DROP FRAME';
+  const fcm = isDropFrame(fps) ? 'DROP FRAME' : 'NON-DROP FRAME';
   let out = `TITLE: REELS_EDL_AUTOMATOR\nFCM: ${fcm}\n\n`;
   let cursor = 3600 * fps;
   let eventNum = 1;

@@ -85,6 +85,7 @@ Zasady:
   edlContent: '',
   xmlContent: '',
   luaContent: '',
+  fcpxmlContent: '',
 
   // openrouter
   orAllModels: [],

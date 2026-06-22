@@ -3,15 +3,16 @@ export function parseTime(str) {
   return +h * 3600 + +m * 60 + parseFloat(s);
 }
 
-// Drop-frame applies to 29.97 and 59.94 only.
-function _isDropFrame(fps) {
+// Drop-frame applies to 29.97 and 59.94 only. Exported as the single source of
+// truth for the predicate, shared by edl.js (FCM line) and fcpxml.js (tcFormat).
+export function isDropFrame(fps) {
   return Math.abs(fps - 29.97) < 0.02 || Math.abs(fps - 59.94) < 0.02;
 }
 
 export function framesToTC(frames, fps) {
   frames = Math.max(0, Math.floor(frames));
 
-  if (_isDropFrame(fps)) {
+  if (isDropFrame(fps)) {
     // SMPTE drop-frame timecode. Nominal integer rate N (30 or 60);
     // D = frames dropped at the start of each non-10th minute (2 or 4).
     const N = Math.round(fps); // 30 or 60

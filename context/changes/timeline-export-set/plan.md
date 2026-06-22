@@ -258,9 +258,9 @@ None material — exporters are in-memory string builders over a small `reelsDat
 
 #### Automated
 
-- [x] 1.1 Regression suite passes: `node --experimental-vm-modules test/regression.js`
-- [x] 1.2 Rust type-check unaffected: `cargo check`
-- [x] 1.3 Prettier clean on touched exporter files
+- [x] 1.1 Regression suite passes: `node --experimental-vm-modules test/regression.js` — 0125d09
+- [x] 1.2 Rust type-check unaffected: `cargo check` — 0125d09
+- [x] 1.3 Prettier clean on touched exporter files — 0125d09
 
 #### Manual
 
@@ -272,9 +272,9 @@ None material — exporters are in-memory string builders over a small `reelsDat
 
 #### Automated
 
-- [ ] 2.1 Regression suite passes (incl. FCPXML cases)
-- [ ] 2.2 Prettier clean on `src/**/*.{js,html}`
-- [ ] 2.3 No `state` import inside `src/exporters/fcpxml.js` (purity check)
+- [x] 2.1 Regression suite passes (incl. FCPXML cases)
+- [x] 2.2 Prettier clean on `src/**/*.{js,html}`
+- [x] 2.3 No `state` import inside `src/exporters/fcpxml.js` (purity check)
 
 #### Manual
 

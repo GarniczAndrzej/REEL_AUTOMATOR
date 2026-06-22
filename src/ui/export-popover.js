@@ -9,6 +9,7 @@ import { state, emit } from '../state.js';
 import { generateEDL } from '../exporters/edl.js';
 import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
+import { generateFCPXML } from '../exporters/fcpxml.js';
 import { generateTranscriptVTT } from '../exporters/transcript.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
@@ -50,6 +51,12 @@ export function init() {
   document
     .getElementById('exLuaCopy')
     ?.addEventListener('click', () => copyFormat('lua'));
+  document
+    .getElementById('exFcpxmlGen')
+    ?.addEventListener('click', () => saveFormat('fcpxml'));
+  document
+    .getElementById('exFcpxmlCopy')
+    ?.addEventListener('click', () => copyFormat('fcpxml'));
 
   // "More" — transcript + segments + prompt.
   document
@@ -135,6 +142,27 @@ function genLua() {
   });
 }
 
+function genFCPXML() {
+  if (!state.videoPath) {
+    toast(
+      'Brak ścieżki wideo — wybierz plik wideo (sekcja Import lub „Przeglądaj").',
+      'info',
+    );
+    return null;
+  }
+  const videoFile = state.videoFilename || 'source_video.mp4';
+  return generateFCPXML({
+    reelsData: state.reelsData,
+    sentences: state.sentences,
+    fps: state.fps,
+    videoFilename: videoFile,
+    videoPath: state.videoPath,
+    videoResolution: state.videoResolution,
+    projectName: state.projectName,
+    mergeThreshold: state.mergeThreshold,
+  });
+}
+
 const FORMATS = {
   edl: {
     gen: genEDL,
@@ -149,6 +177,12 @@ const FORMATS = {
     store: 'xmlContent',
   },
   lua: { gen: genLua, ext: 'lua', suffix: '_davinci.lua', store: 'luaContent' },
+  fcpxml: {
+    gen: genFCPXML,
+    ext: 'fcpxml',
+    suffix: '_timeline.fcpxml',
+    store: 'fcpxmlContent',
+  },
 };
 
 async function saveFormat(key) {
