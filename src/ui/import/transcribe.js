@@ -735,7 +735,14 @@ async function transcribeWithWhisper() {
       emit();
     } else {
       // Fallback (legacy/no segments): store flat words for merge after parse.
+      // No segments means state.sentences is NOT populated here, so a later
+      // word-by-word .srt export would silently emit nothing. Guard the trap
+      // with a Polish notice so the user knows to parse first (S-20 Phase 3).
       state._pendingWhisperWords = result.words || [];
+      toast(
+        'Transkrypcja nie zwróciła segmentów — kliknij „Parsuj”, aby dokończyć podział na zdania (wymagany do eksportu napisów słowo-po-słowie).',
+        'info',
+      );
     }
     setWhisperProgress('Gotowe! SRT wczytany.', 100);
     setTimeout(() => {

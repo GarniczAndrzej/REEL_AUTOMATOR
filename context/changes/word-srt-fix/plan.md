@@ -375,27 +375,27 @@ localStorage bag; existing users' settings load unchanged.
 
 #### Automated
 
-- [x] 2.1 Regression suite still green
-- [x] 2.2 Prettier clean on export-popover.js + transcribe.js
+- [x] 2.1 Regression suite still green — f8e8987
+- [x] 2.2 Prettier clean on export-popover.js + transcribe.js — f8e8987
 
 #### Manual
 
-- [x] 2.3 Mode ON + imported .srt + no video → Polish toast, no file (3.7)
-- [x] 2.4 Mode ON + imported .srt + video → confirm → align → save; cancel hides progress, writes nothing (3.6)
-- [x] 2.5 Cancel align mid-spawn → Polish "Anulowano", no file
-- [x] 2.6 Mode ON + WhisperX project (frame-words) → per-word .srt, no align prompt (3.4)
-- [x] 2.7 Mode OFF → normal sentence .srt (3.5)
+- [x] 2.3 Mode ON + imported .srt + no video → Polish toast, no file (3.7) — f8e8987
+- [x] 2.4 Mode ON + imported .srt + video → confirm → align → save; cancel hides progress, writes nothing (3.6) — f8e8987
+- [x] 2.5 Cancel align mid-spawn → Polish "Anulowano", no file — f8e8987
+- [x] 2.6 Mode ON + WhisperX project (frame-words) → per-word .srt, no align prompt (3.4) — f8e8987
+- [x] 2.7 Mode OFF → normal sentence .srt (3.5) — f8e8987
 
 ### Phase 3: Latent-trap guard + regression locks
 
 #### Automated
 
-- [ ] 3.1 Full regression suite green incl. new F1 case
-- [ ] 3.2 New test fails if Math.max clamp is reverted (verify locally)
-- [ ] 3.3 Prettier clean on regression.js + segments.js
+- [x] 3.1 Full regression suite green incl. new F1 case
+- [x] 3.2 New test fails if Math.max clamp is reverted (verify locally)
+- [x] 3.3 Prettier clean on regression.js + segments.js
 
 #### Manual
 
-- [ ] 3.4 WhisperX-card ⬇ Eksport .srt still sentence-level (3.9)
-- [ ] 3.5 All new strings Polish (3.10)
-- [ ] 3.6 Load video on imported-SRT project → auto-align then save end-to-end (3.8)
+- [x] 3.4 WhisperX-card ⬇ Eksport .srt still sentence-level (3.9)
+- [x] 3.5 All new strings Polish (3.10)
+- [x] 3.6 Load video on imported-SRT project → auto-align then save end-to-end (3.8)

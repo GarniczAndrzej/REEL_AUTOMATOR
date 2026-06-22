@@ -890,8 +890,7 @@ assert(
 );
 assert(
   alignSentences[0].words.every(
-    (w) =>
-      Number.isInteger(w.start_frame) && Number.isInteger(w.end_frame),
+    (w) => Number.isInteger(w.start_frame) && Number.isInteger(w.end_frame),
   ),
   'align-path words carry integer start_frame/end_frame',
 );
@@ -1261,6 +1260,62 @@ assert(
   staleWordSRT.includes('ok') && !staleWordSRT.includes('stale'),
   'words lacking numeric start_frame/end_frame are skipped',
 );
+
+// ─────────────────────────────────────────────────────────────────
+// Test 16: word-SRT reversed-cue / diarized-overlap clamp (S-20 / F1)
+// Test 15's onsets strictly increase, so the `Math.max(start, next.start)`
+// clamp is never exercised against a successor whose onset PRECEDES the
+// current word's start (the diarized / overlapping-onset case). Here word B's
+// onset (frame 8) is < word A's start (frame 10). The clamp must yield
+// end = max(start, next.start) = start — never a reversed cue (end < start).
+// Reverting the guard to `end = next.start_frame` would emit end 8 < start 10.
+// FPS=25 → 1 frame = 40ms.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 16: word-SRT reversed-cue / overlap clamp ───────');
+
+const overlapSentences = [
+  {
+    id: 1,
+    text: 'A B',
+    start_frame: 8,
+    end_frame: 20,
+    words: [
+      { text: 'A', start_frame: 10, end_frame: 20 }, // dur 10 > floor
+      { text: 'B', start_frame: 8, end_frame: 18 }, // onset 8 PRECEDES A's start 10
+    ],
+  },
+];
+
+const overlapSRT = generateWordSRT(overlapSentences, FPS);
+
+const expectedOverlapSRT = [
+  '1',
+  '00:00:00,400 --> 00:00:00,400', // A: start 10 pinned; end clamped to max(10, 8) = 10
+  'A',
+  '',
+  '2',
+  '00:00:00,320 --> 00:00:00,720', // B: final word, start 8 pinned, end 18 (free pad)
+  'B',
+  '',
+].join('\n');
+
+assertEq(
+  overlapSRT,
+  expectedOverlapSRT,
+  'word .srt clamps overlapping onset to start (no reversed cue)',
+);
+
+// Every cue is non-reversed: start stamp ≤ end stamp (fixed-width zero-padded
+// stamps compare correctly as strings). Fails if the Math.max guard regresses.
+const overlapLines = overlapSRT.split('\n');
+[1, 5].forEach((tcLine) => {
+  const [a, b] = overlapLines[tcLine].split(' --> ');
+  assert(
+    a <= b,
+    `cue at line ${tcLine} is non-reversed (start ≤ end): ${a} --> ${b}`,
+  );
+});
 
 // ─────────────────────────────────────────────────────────────────
 // Summary
