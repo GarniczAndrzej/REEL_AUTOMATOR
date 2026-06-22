@@ -656,6 +656,16 @@ textarea::placeholder {
   background: rgba(61, 214, 140, 0.25);
 }
 
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:hover {
+  background: var(--red);
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
 .btn-row {
   display: flex;
   gap: 10px;

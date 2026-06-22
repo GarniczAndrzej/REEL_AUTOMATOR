@@ -19,7 +19,7 @@ import { toast } from './toast.js';
 export function initPromptPanel() {
   document
     .getElementById('analyzeBtn')
-    .addEventListener('click', runAIAnalysis);
+    .addEventListener('click', onAnalyzeClick);
   document
     .getElementById('copyPromptBtn')
     ?.addEventListener('click', copyPromptMD);
@@ -35,6 +35,35 @@ export function initPromptPanel() {
 }
 
 // ── AI analysis ────────────────────────────────────────────────────
+
+// Holds the AbortController for the active run; null when idle. Doubles as the
+// single-run guard and the run-vs-cancel discriminator for the analyze button.
+let analysisController = null;
+
+// The analyze button toggles between "run" and "stop" modes during a run, so a
+// single click handler dispatches by current state instead of swapping
+// listeners (avoids double-bind bugs).
+function onAnalyzeClick() {
+  if (analysisController) {
+    analysisController.abort();
+  } else {
+    runAIAnalysis();
+  }
+}
+
+/** @param {'running' | 'idle'} mode */
+function setAnalyzeBtnMode(mode) {
+  const btn = document.getElementById('analyzeBtn');
+  if (mode === 'running') {
+    btn.textContent = '⏹ Zatrzymaj';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-danger');
+  } else {
+    btn.textContent = 'Analizuj z OpenRouter →';
+    btn.classList.remove('btn-danger');
+    btn.classList.add('btn-primary');
+  }
+}
 
 async function runAIAnalysis() {
   const apiKey =
@@ -56,8 +85,12 @@ async function runAIAnalysis() {
     return;
   }
 
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  analyzeBtn.disabled = true;
+  // Re-entrancy guard: ignore a fresh run while one is in flight (the button is
+  // in "Zatrzymaj" mode then, so a click cancels via onAnalyzeClick instead).
+  if (analysisController) return;
+  const controller = new AbortController();
+  analysisController = controller;
+  setAnalyzeBtnMode('running');
 
   const progressBox = document.getElementById('progressBox');
   progressBox.classList.add('visible');
@@ -95,7 +128,7 @@ async function runAIAnalysis() {
       fromCache,
       hashShort,
     } = await withLlmCache(cacheKey, () =>
-      callOpenRouter(apiKey, prompt, orModel),
+      callOpenRouter(apiKey, prompt, orModel, controller.signal),
     );
 
     rawResponse = responseText;
@@ -125,21 +158,31 @@ async function runAIAnalysis() {
     document.getElementById('step2Next').style.display = 'flex';
     emit();
   } catch (e) {
-    setPS(2, 'err');
-    setPS(3, 'err');
-    log('BŁĄD: ' + e.message, 'err');
-    if (rawResponse) {
-      // FR-018: validation/parse failed — keep the raw text for paste-and-fix.
-      revealPasteFix(rawResponse, 'Błąd walidacji: ' + e.message);
-      log(
-        'Surowa odpowiedź zachowana w polu „Wklej JSON od AI" — popraw i zastosuj.',
-        'err',
-      );
+    if (e.name === 'AbortError') {
+      // User cancel — distinct from a real failure, no error dialog / paste-fix.
+      // Leave existing state.reelsData untouched.
+      setPS(2, '');
+      setPS(3, '');
+      log('Anulowano.', 'info');
+      toast('Anulowano analizę', 'info');
     } else {
-      log('Sprawdź API key i połączenie internetowe.', 'err');
+      setPS(2, 'err');
+      setPS(3, 'err');
+      log('BŁĄD: ' + e.message, 'err');
+      if (rawResponse) {
+        // FR-018: validation/parse failed — keep the raw text for paste-and-fix.
+        revealPasteFix(rawResponse, 'Błąd walidacji: ' + e.message);
+        log(
+          'Surowa odpowiedź zachowana w polu „Wklej JSON od AI" — popraw i zastosuj.',
+          'err',
+        );
+      } else {
+        log('Sprawdź API key i połączenie internetowe.', 'err');
+      }
     }
   } finally {
-    analyzeBtn.disabled = false;
+    analysisController = null;
+    setAnalyzeBtnMode('idle');
   }
 }
 

@@ -263,27 +263,27 @@ None — no persisted state, schema, or backend changes.
 
 #### Automated
 
-- [x] 1.1 Rust still type-checks (`cargo check`)
-- [x] 1.2 Regression suite green
-- [x] 1.3 Prettier clean on `providers.js`
+- [x] 1.1 Rust still type-checks (`cargo check`) — 0bbbd69
+- [x] 1.2 Regression suite green — 0bbbd69
+- [x] 1.3 Prettier clean on `providers.js` — 0bbbd69
 
 #### Manual
 
-- [x] 1.4 Normal analysis (no cancel) still completes and returns reels
+- [x] 1.4 Normal analysis (no cancel) still completes and returns reels — 0bbbd69
 
 ### Phase 2: Cancel control + lifecycle
 
 #### Automated
 
-- [ ] 2.1 Regression suite green
-- [ ] 2.2 Prettier clean on `step2-prompt-panel.js`
-- [ ] 2.3 App builds (Rust unchanged)
+- [x] 2.1 Regression suite green
+- [x] 2.2 Prettier clean on `step2-prompt-panel.js`
+- [x] 2.3 App builds (Rust unchanged)
 
 #### Manual
 
-- [ ] 2.4 Running state shows "⏹ Zatrzymaj" (red)
-- [ ] 2.5 Cancel stops within ~1s with "Anulowano." log + toast + reverted button
-- [ ] 2.6 Previously loaded reels unchanged after cancel
-- [ ] 2.7 Genuine error still shows error/paste-fix path
-- [ ] 2.8 Cache-hit run does not leave a stuck stop button
-- [ ] 2.9 Normal successful run unaffected
+- [x] 2.4 Running state shows "⏹ Zatrzymaj" (red)
+- [x] 2.5 Cancel stops within ~1s with "Anulowano." log + toast + reverted button
+- [x] 2.6 Previously loaded reels unchanged after cancel
+- [x] 2.7 Genuine error still shows error/paste-fix path
+- [x] 2.8 Cache-hit run does not leave a stuck stop button
+- [x] 2.9 Normal successful run unaffected
