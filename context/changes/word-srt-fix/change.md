@@ -1,7 +1,7 @@
 ---
 change_id: word-srt-fix
 title: Fix word-by-word SRT export — diagnose and repair broken implementation
-status: implementing
+status: implemented
 created: 2026-06-19
 updated: 2026-06-22
 archived_at: null

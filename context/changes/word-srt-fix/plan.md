@@ -390,12 +390,12 @@ localStorage bag; existing users' settings load unchanged.
 
 #### Automated
 
-- [x] 3.1 Full regression suite green incl. new F1 case
-- [x] 3.2 New test fails if Math.max clamp is reverted (verify locally)
-- [x] 3.3 Prettier clean on regression.js + segments.js
+- [x] 3.1 Full regression suite green incl. new F1 case — 2bf6b11
+- [x] 3.2 New test fails if Math.max clamp is reverted (verify locally) — 2bf6b11
+- [x] 3.3 Prettier clean on regression.js + segments.js — 2bf6b11
 
 #### Manual
 
-- [x] 3.4 WhisperX-card ⬇ Eksport .srt still sentence-level (3.9)
-- [x] 3.5 All new strings Polish (3.10)
-- [x] 3.6 Load video on imported-SRT project → auto-align then save end-to-end (3.8)
+- [x] 3.4 WhisperX-card ⬇ Eksport .srt still sentence-level (3.9) — 2bf6b11
+- [x] 3.5 All new strings Polish (3.10) — 2bf6b11
+- [x] 3.6 Load video on imported-SRT project → auto-align then save end-to-end (3.8) — 2bf6b11
