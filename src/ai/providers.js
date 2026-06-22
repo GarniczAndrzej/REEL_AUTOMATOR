@@ -1,7 +1,16 @@
-export async function callOpenRouter(apiKey, prompt, orModel) {
+/**
+ * @param {string} apiKey
+ * @param {string} prompt
+ * @param {string} orModel
+ * @param {AbortSignal} [signal] Optional abort signal; aborting rejects the
+ *   returned promise with an `AbortError`-named exception (propagated unchanged).
+ * @returns {Promise<string>}
+ */
+export async function callOpenRouter(apiKey, prompt, orModel, signal) {
   if (!orModel) throw new Error('Nie wybrano modelu OpenRouter!');
   const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer ' + apiKey,
