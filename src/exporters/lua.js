@@ -1,4 +1,9 @@
 import { mergeAdjacentClips } from '../parser/segments.js';
+import { MARKER_LABELS } from './markers.js';
+
+// hook/body/punchline → DaVinci Resolve marker color name. Labels come from the
+// shared MARKER_LABELS; colors stay Lua-local.
+const LUA_MARKER_COLORS = { hook: 'Green', body: 'Blue', punchline: 'Red' };
 
 export function generateLua({
   reelsData,
@@ -101,6 +106,11 @@ export function generateLua({
     0,
   );
 
+  // JS-side mirror of the Lua `cursor`, used to compute marker record frames at
+  // generation time (merging + gaps are deterministic). markerCalls collects the
+  // timeline:AddMarker(...) lines to emit after the batched append.
+  let recCursor = 0;
+  const markerCalls = [];
   reelsData.forEach((reel, ri) => {
     const spans = mergeAdjacentClips(
       reel.clip_ids,
@@ -112,7 +122,16 @@ export function generateLua({
     lines.push(
       `print("  Dodaję reel ${ri + 1}/${reelsData.length}: ${reelName}")`,
     );
+    const recordFrameById = new Map();
     spans.forEach((span, si) => {
+      for (const id of span.ids) {
+        const s = sentences.find((x) => x.id === id);
+        if (s)
+          recordFrameById.set(
+            id,
+            recCursor + (s.start_frame - span.start_frame),
+          );
+      }
       const key = `r${ri + 1}s${si + 1}`;
       lines.push(`if segs["${key}"] then`);
       lines.push(
@@ -120,11 +139,27 @@ export function generateLua({
       );
       lines.push(`  cursor = cursor + segs["${key}"].d`);
       lines.push(`end`);
+      recCursor += span.duration_frame;
     });
+    // Collect markers for this reel (gated on reel.markers) — emitted after the
+    // append so the timeline exists.
+    if (reel.markers) {
+      for (const [key, label] of MARKER_LABELS) {
+        const cid = reel.markers[key];
+        if (cid == null) continue;
+        const recFrame = recordFrameById.get(cid);
+        if (recFrame == null) continue;
+        const safeLabel = label.replace(/"/g, "'");
+        markerCalls.push(
+          `timeline:AddMarker(${recFrame}, "${LUA_MARKER_COLORS[key]}", "${safeLabel}", "", 1, "")`,
+        );
+      }
+    }
     if (ri < reelsData.length - 1) {
       lines.push(
         `cursor = cursor + ${gapFrames}  -- przerwa ${gapFrames} klatek`,
       );
+      recCursor += gapFrames;
     }
     lines.push('');
   });
@@ -144,6 +179,14 @@ export function generateLua({
     `  print("BŁĄD: Nie udało się dodać klipów. Sprawdź czy plik wideo jest w Media Pool.")`,
   );
   lines.push('end');
+
+  // Markery hook/body/punchline (jeśli reel je niesie). Gated — marker-free
+  // runs add nothing and stay functionally identical to the legacy baseline.
+  if (markerCalls.length) {
+    lines.push('');
+    lines.push('-- Markery hook/body/punchline');
+    markerCalls.forEach((call) => lines.push(call));
+  }
 
   return lines.join('\n');
 }

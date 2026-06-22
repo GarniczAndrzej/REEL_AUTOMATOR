@@ -1,7 +1,7 @@
 ---
 change_id: timeline-export-set
 title: Timeline export set
-status: new
+status: implementing
 created: 2026-06-22
 updated: 2026-06-22
 archived_at: null

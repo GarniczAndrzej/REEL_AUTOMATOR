@@ -1,5 +1,6 @@
 import { mergeAdjacentClips } from '../parser/segments.js';
 import { framesToTC } from '../parser/srt.js';
+import { MARKER_LABELS } from './markers.js';
 
 function _isDropFrame(fps) {
   return Math.abs(fps - 29.97) < 0.02 || Math.abs(fps - 59.94) < 0.02;
@@ -18,12 +19,15 @@ export function generateEDL({
   let cursor = 3600 * fps;
   let eventNum = 1;
 
-  // hook/body/punchline → EDL locator color + name
-  const MARKER_DEFS = [
-    ['hook', 'GREEN', 'HOOK'],
-    ['body', 'BLUE', 'BODY'],
-    ['punchline', 'RED', 'PUNCHLINE'],
-  ];
+  // hook/body/punchline → EDL locator color + name. Labels come from the shared
+  // canonical constant; the GREEN/BLUE/RED colors stay EDL-local (each format's
+  // color vocabulary differs).
+  const EDL_COLORS = { hook: 'GREEN', body: 'BLUE', punchline: 'RED' };
+  const MARKER_DEFS = MARKER_LABELS.map(([key, name]) => [
+    key,
+    EDL_COLORS[key],
+    name,
+  ]);
 
   for (const [reelIdx, reel] of reelsData.entries()) {
     const spans = mergeAdjacentClips(

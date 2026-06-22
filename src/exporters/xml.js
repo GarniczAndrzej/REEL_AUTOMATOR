@@ -1,4 +1,9 @@
 import { mergeAdjacentClips } from '../parser/segments.js';
+import { MARKER_LABELS } from './markers.js';
+
+// hook/body/punchline → xmeml marker color name (record-frame markers). Labels
+// come from the shared MARKER_LABELS; colors stay xmeml-local.
+const XML_MARKER_COLORS = { hook: 'Green', body: 'Blue', punchline: 'Red' };
 
 export function generateXML({
   reelsData,
@@ -61,8 +66,17 @@ export function generateXML({
     );
     lines.push(`        <track>`);
 
+    // clip_id → per-sequence record frame, built while walking spans (cursor
+    // from 0, no CMX-3600 offset). Mirrors edl.js's recordFrameById.
+    const recordFrameById = new Map();
+
     let cursor = 0;
     spans.forEach((span, ci) => {
+      for (const id of span.ids) {
+        const s = sentences.find((x) => x.id === id);
+        if (s)
+          recordFrameById.set(id, cursor + (s.start_frame - span.start_frame));
+      }
       const clipId = `clip_r${ri + 1}_c${ci + 1}`;
       const clipName = esc(
         `#${span.ids.join(',')} ${span.text.substring(0, 55)}`,
@@ -116,6 +130,22 @@ export function generateXML({
     );
     lines.push(`      </audio>`);
     lines.push(`    </media>`);
+    // Sequence-level markers (record-frame), gated on reel.markers so a
+    // marker-free reel stays byte-identical to the legacy baseline.
+    if (reel.markers) {
+      for (const [key, label] of MARKER_LABELS) {
+        const cid = reel.markers[key];
+        if (cid == null) continue;
+        const recFrame = recordFrameById.get(cid);
+        if (recFrame == null) continue;
+        lines.push(`    <marker>`);
+        lines.push(`      <name>${esc(label)}</name>`);
+        lines.push(`      <in>${recFrame}</in>`);
+        lines.push(`      <out>${recFrame + 1}</out>`);
+        lines.push(`      <color>${XML_MARKER_COLORS[key]}</color>`);
+        lines.push(`    </marker>`);
+      }
+    }
     lines.push(`  </sequence>`);
   });
 
