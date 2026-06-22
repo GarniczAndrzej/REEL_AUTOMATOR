@@ -22,6 +22,7 @@ import {
 import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
 import { generateLua } from '../src/exporters/lua.js';
+import { generateFCPXML } from '../src/exporters/fcpxml.js';
 import { buildPrompt, DEFAULT_SCORING_GUIDANCE } from '../src/ai/prompt.js';
 
 const SRT_PATH = new URL('./sample.srt', import.meta.url).pathname;
@@ -1090,6 +1091,262 @@ const noMarkerEDL = generateEDL({
   mergeThreshold: MERGE_0,
 });
 assert(!noMarkerEDL.includes('* LOC:'), 'marker-free run emits zero LOC lines');
+
+// ─────────────────────────────────────────────────────────────────
+// Test 13a: XML markers — sequence-level <marker> (S-08 Phase 1)
+// Mirrors Test 13 but for xmeml: 3 record-frame markers (Green/Blue/Red)
+// for the marked reel, zero for the unmarked reel; marker-free run stays
+// byte-identical to the Test 4 baseline.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 13a: XML markers (hook/body/punchline) ──────────');
+
+const markerXML = generateXML({
+  reelsData: markerReels,
+  sentences: newSentences,
+  fps: FPS,
+  videoFilename: VIDEO_FILE,
+  videoPath: VIDEO_PATH,
+  videoResolution: RESOLUTION,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+
+const xmlMarkerBlocks = [
+  ...markerXML.matchAll(
+    /<marker>\s*<name>([^<]+)<\/name>\s*<in>(\d+)<\/in>\s*<out>(\d+)<\/out>\s*<color>([^<]+)<\/color>\s*<\/marker>/g,
+  ),
+];
+assert(
+  xmlMarkerBlocks.length === 3,
+  `exactly 3 <marker> elements from the one markered reel (got ${xmlMarkerBlocks.length})`,
+);
+
+// Expected name→color pairing (hook=Green, body=Blue, punchline=Red).
+const xmlByName = new Map(
+  xmlMarkerBlocks.map((m) => [m[1], { in: Number(m[2]), color: m[4] }]),
+);
+assert(xmlByName.get('HOOK')?.color === 'Green', 'XML HOOK marker is Green');
+assert(xmlByName.get('BODY')?.color === 'Blue', 'XML BODY marker is Blue');
+assert(
+  xmlByName.get('PUNCHLINE')?.color === 'Red',
+  'XML PUNCHLINE marker is Red',
+);
+
+// Per-sequence record-frame range (cursor from 0, threshold=0): [0, dur2+dur3).
+const xmlRecStart = 0;
+const xmlRecEnd = m2.duration_frame + m3.duration_frame;
+xmlMarkerBlocks.forEach((m, i) => {
+  const recFrame = Number(m[2]);
+  assert(
+    recFrame >= xmlRecStart && recFrame < xmlRecEnd,
+    `XML marker[${i}] record frame ${recFrame} inside reel A range [${xmlRecStart}, ${xmlRecEnd})`,
+  );
+  // <out> is always <in>+1 (1-frame marker).
+  assert(Number(m[3]) === recFrame + 1, `XML marker[${i}] <out> = <in>+1`);
+});
+
+// Exact record frames: hook(2)=0, punchline(3)=dur2 (cursor-from-0).
+assert(xmlByName.get('HOOK')?.in === 0, 'XML HOOK marker at record frame 0');
+assert(
+  xmlByName.get('PUNCHLINE')?.in === m2.duration_frame,
+  `XML PUNCHLINE marker at record frame ${m2.duration_frame}`,
+);
+
+// The unmarked reel's sequence carries zero markers.
+const xmlSeqs = markerXML.split('<sequence id="seq_');
+assert(
+  (xmlSeqs[2].match(/<marker>/g) || []).length === 0,
+  'unmarked reel sequence has zero <marker> elements',
+);
+
+// A fully marker-free run stays byte-identical to the Test 4 legacy baseline.
+const noMarkerXML = generateXML({
+  reelsData,
+  sentences: newSentences,
+  fps: FPS,
+  videoFilename: VIDEO_FILE,
+  videoPath: VIDEO_PATH,
+  videoResolution: RESOLUTION,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+assert(
+  !noMarkerXML.includes('<marker>'),
+  'marker-free XML emits zero <marker> elements',
+);
+assertEq(
+  noMarkerXML,
+  legXML,
+  'marker-free XML byte-identical to legacy baseline',
+);
+
+// ─────────────────────────────────────────────────────────────────
+// Test 13b: Lua markers — timeline:AddMarker (S-08 Phase 1)
+// 3 AddMarker calls (Green/Blue/Red) for the marked reel at the record
+// frame each clip was appended; zero for a marker-free run.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 13b: Lua markers (hook/body/punchline) ──────────');
+
+const markerLua = generateLua({
+  reelsData: markerReels,
+  sentences: newSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoPath: VIDEO_PATH,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+
+const addMarkerLines = markerLua
+  .split('\n')
+  .filter((l) => l.startsWith('timeline:AddMarker('));
+assert(
+  addMarkerLines.length === 3,
+  `exactly 3 AddMarker lines from the one markered reel (got ${addMarkerLines.length})`,
+);
+
+// Record frames (cursor from 0, threshold=0): hook(2)=0, body(2)=0,
+// punchline(3)=dur2. Color/label per format constant.
+assert(
+  markerLua.includes('timeline:AddMarker(0, "Green", "HOOK", "", 1, "")'),
+  'Lua HOOK marker at frame 0, Green',
+);
+assert(
+  markerLua.includes('timeline:AddMarker(0, "Blue", "BODY", "", 1, "")'),
+  'Lua BODY marker at frame 0, Blue',
+);
+assert(
+  markerLua.includes(
+    `timeline:AddMarker(${m2.duration_frame}, "Red", "PUNCHLINE", "", 1, "")`,
+  ),
+  `Lua PUNCHLINE marker at frame ${m2.duration_frame}, Red`,
+);
+
+// A fully marker-free run emits zero AddMarker calls (functional baseline).
+const noMarkerLua = generateLua({
+  reelsData,
+  sentences: newSentences,
+  fps: FPS,
+  gapFrames: GAP_FRAMES,
+  videoPath: VIDEO_PATH,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+assert(
+  !noMarkerLua.includes('timeline:AddMarker('),
+  'marker-free Lua emits zero AddMarker calls',
+);
+
+// ─────────────────────────────────────────────────────────────────
+// Test 13c: FCPXML — structure + clip-local markers (S-08 Phase 2)
+// Valid 1.9 skeleton, shared resources, one project per reel, rational
+// time, 3 EMPTY <marker value> clip-local for the marked reel, 0 for the
+// unmarked reel. The pure fn always needs videoPath in opts (the wrapper
+// guards a missing path, not the pure fn — so it is not exercised here).
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 13c: FCPXML structure + markers ─────────────────');
+
+const markerFcpxml = generateFCPXML({
+  reelsData: markerReels,
+  sentences: newSentences,
+  fps: FPS,
+  videoFilename: VIDEO_FILE,
+  videoPath: VIDEO_PATH,
+  videoResolution: RESOLUTION,
+  projectName: PROJECT_NAME,
+  mergeThreshold: MERGE_0,
+});
+
+// Skeleton + shared resources.
+assert(
+  markerFcpxml.startsWith('<?xml version="1.0"'),
+  'FCPXML starts with declaration',
+);
+assert(markerFcpxml.includes('<!DOCTYPE fcpxml>'), 'FCPXML has DOCTYPE');
+assert(
+  markerFcpxml.includes('<fcpxml version="1.9">'),
+  'FCPXML is version 1.9',
+);
+assert(
+  (markerFcpxml.match(/<format /g) || []).length === 1,
+  'FCPXML has exactly one <format> in resources',
+);
+assert(
+  (markerFcpxml.match(/<asset /g) || []).length === 1,
+  'FCPXML has exactly one shared <asset> in resources',
+);
+const fcpProjects = markerFcpxml.split('<project name=');
+assert(
+  fcpProjects.length - 1 === markerReels.length,
+  `FCPXML has one <project> per reel (${markerReels.length})`,
+);
+assert(markerFcpxml.includes('tcFormat="NDF"'), 'FCPXML tcFormat NDF at 25fps');
+
+// Rational-seconds time model (fps=25 → den 2500); never a decimal.
+assert(
+  /start="\d+\/2500s"/.test(markerFcpxml),
+  'FCPXML uses rational-seconds start attributes (…/2500s)',
+);
+
+// Clip-local markers: EMPTY <marker start duration value> — no color channel.
+const fcpMarkers = [
+  ...markerFcpxml.matchAll(
+    /<marker start="([^"]+)" duration="([^"]+)" value="([^"]+)"\/>/g,
+  ),
+];
+assert(
+  fcpMarkers.length === 3,
+  `exactly 3 FCPXML clip-local markers (got ${fcpMarkers.length})`,
+);
+const fcpValues = fcpMarkers.map((m) => m[3]);
+assert(
+  fcpValues.includes('HOOK') &&
+    fcpValues.includes('BODY') &&
+    fcpValues.includes('PUNCHLINE'),
+  'FCPXML markers carry HOOK/BODY/PUNCHLINE values',
+);
+
+// Each marker start is rational and within its clip's [start, start+duration].
+// Reel A spans (threshold=0): clip 2 = [m2.start, m2.end], clip 3 = [m3.start, m3.end].
+const ratToFrames = (r) => {
+  if (r === '0s') return 0;
+  const [numer, denom] = r.replace('s', '').split('/').map(Number);
+  return Math.round((numer / denom) * FPS);
+};
+fcpMarkers.forEach((m, i) => {
+  assert(
+    /^(\d+\/\d+s|0s)$/.test(m[1]),
+    `FCPXML marker[${i}] start is rational`,
+  );
+  const f = ratToFrames(m[1]);
+  const inClip2 = f >= m2.start_frame && f <= m2.end_frame;
+  const inClip3 = f >= m3.start_frame && f <= m3.end_frame;
+  assert(
+    inClip2 || inClip3,
+    `FCPXML marker[${i}] start frame ${f} within a clip's [start, start+duration]`,
+  );
+});
+
+// Exact source frames: hook(2) on clip 2, punchline(3) on clip 3.
+const fcpHook = fcpMarkers.find((m) => m[3] === 'HOOK');
+assert(
+  ratToFrames(fcpHook[1]) === m2.start_frame,
+  `FCPXML HOOK marker source frame = ${m2.start_frame}`,
+);
+const fcpPunch = fcpMarkers.find((m) => m[3] === 'PUNCHLINE');
+assert(
+  ratToFrames(fcpPunch[1]) === m3.start_frame,
+  `FCPXML PUNCHLINE marker source frame = ${m3.start_frame}`,
+);
+
+// The unmarked reel's project carries zero markers.
+assert(
+  !fcpProjects[2].includes('<marker '),
+  'unmarked reel project carries zero markers',
+);
 
 // ─────────────────────────────────────────────────────────────────
 // Test 14: buildPrompt assembly — export-safety invariant (S-03 FR-015)

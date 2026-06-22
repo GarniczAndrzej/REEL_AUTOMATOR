@@ -272,9 +272,9 @@ None material — exporters are in-memory string builders over a small `reelsDat
 
 #### Automated
 
-- [x] 2.1 Regression suite passes (incl. FCPXML cases)
-- [x] 2.2 Prettier clean on `src/**/*.{js,html}`
-- [x] 2.3 No `state` import inside `src/exporters/fcpxml.js` (purity check)
+- [x] 2.1 Regression suite passes (incl. FCPXML cases) — 4151921
+- [x] 2.2 Prettier clean on `src/**/*.{js,html}` — 4151921
+- [x] 2.3 No `state` import inside `src/exporters/fcpxml.js` (purity check) — 4151921
 
 #### Manual
 
@@ -286,8 +286,8 @@ None material — exporters are in-memory string builders over a small `reelsDat
 
 #### Automated
 
-- [ ] 3.1 Full suite passes with new cases (206 baseline + new asserts, 0 failed)
-- [ ] 3.2 Suite exits 0
+- [x] 3.1 Full suite passes with new cases (206 baseline + new asserts, 0 failed)
+- [x] 3.2 Suite exits 0
 
 #### Manual
 
