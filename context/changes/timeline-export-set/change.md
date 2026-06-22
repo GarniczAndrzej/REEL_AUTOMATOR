@@ -5,7 +5,7 @@ status: implementing
 created: 2026-06-22
 updated: 2026-06-22
 archived_at: null
-last_phase: 2
+last_phase: 3
 ---
 
 ## Notes

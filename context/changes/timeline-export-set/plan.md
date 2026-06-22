@@ -286,8 +286,8 @@ None material — exporters are in-memory string builders over a small `reelsDat
 
 #### Automated
 
-- [x] 3.1 Full suite passes with new cases (206 baseline + new asserts, 0 failed)
-- [x] 3.2 Suite exits 0
+- [x] 3.1 Full suite passes with new cases (206 baseline + new asserts, 0 failed) — 7f47f22
+- [x] 3.2 Suite exits 0 — 7f47f22
 
 #### Manual
 
