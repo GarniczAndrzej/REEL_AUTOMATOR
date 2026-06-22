@@ -275,15 +275,15 @@ None — no persisted state, schema, or backend changes.
 
 #### Automated
 
-- [x] 2.1 Regression suite green
-- [x] 2.2 Prettier clean on `step2-prompt-panel.js`
-- [x] 2.3 App builds (Rust unchanged)
+- [x] 2.1 Regression suite green — a38fb35
+- [x] 2.2 Prettier clean on `step2-prompt-panel.js` — a38fb35
+- [x] 2.3 App builds (Rust unchanged) — a38fb35
 
 #### Manual
 
-- [x] 2.4 Running state shows "⏹ Zatrzymaj" (red)
-- [x] 2.5 Cancel stops within ~1s with "Anulowano." log + toast + reverted button
-- [x] 2.6 Previously loaded reels unchanged after cancel
-- [x] 2.7 Genuine error still shows error/paste-fix path
-- [x] 2.8 Cache-hit run does not leave a stuck stop button
-- [x] 2.9 Normal successful run unaffected
+- [x] 2.4 Running state shows "⏹ Zatrzymaj" (red) — a38fb35
+- [x] 2.5 Cancel stops within ~1s with "Anulowano." log + toast + reverted button — a38fb35
+- [x] 2.6 Previously loaded reels unchanged after cancel — a38fb35
+- [x] 2.7 Genuine error still shows error/paste-fix path — a38fb35
+- [x] 2.8 Cache-hit run does not leave a stuck stop button — a38fb35
+- [x] 2.9 Normal successful run unaffected — a38fb35

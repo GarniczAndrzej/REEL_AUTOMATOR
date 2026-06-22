@@ -1,7 +1,7 @@
 ---
 change_id: stop-ai-analysis
 title: Stop ai analysis
-status: implementing
+status: implemented
 created: 2026-06-22
 updated: 2026-06-22
 archived_at: null
