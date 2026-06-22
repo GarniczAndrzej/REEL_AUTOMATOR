@@ -213,6 +213,43 @@ Extend `test/regression.js` after Test 13 with one marker case per new format, e
 
 ---
 
+## Phase 4: Lua timeline-name collision dedup (objection follow-up)
+
+### Overview
+
+Follow-up to the user objection in `objekcja.md`: the Lua export baked the project name into `CreateEmptyTimeline(...)`, which returns `nil` in DaVinci Resolve when a timeline of that name already exists — the script then printed an error and bailed. Make the script resolve a free name at runtime (`Reels_2`, `Reels_3`, …) instead of failing.
+
+### Changes Required:
+
+#### 1. Runtime timeline-name dedup
+
+**File**: `src/exporters/lua.js`
+
+**Intent**: Before creating the timeline, collect existing timeline names and bump a numeric suffix until a free name is found; create with the resolved name.
+
+**Contract**: Emit a Lua block that builds `existingNames` via `project:GetTimelineCount()` / `project:GetTimelineByIndex(i)` / `tl:GetName()`, then a `while existingNames[tlName]` loop computing `tlName = baseTlName .. "_" .. tlSuffix`. `CreateEmptyTimeline(tlName)` and the closing `GOTOWE!` print now reference the runtime `tlName` variable, not a generation-time-baked string. Base name still derives from `projectName` (escape `\` and `"`). Marker emission and the batched append are unchanged.
+
+#### 2. Regression assert
+
+**File**: `test/regression.js`
+
+**Intent**: Guard the dedup loop and the runtime-resolved create call.
+
+**Contract**: Test 5 asserts `local baseTlName = "<PROJECT_NAME>"`, `CreateEmptyTimeline(tlName)`, and the presence of the dedup loop (`GetTimelineCount`, `while existingNames[tlName]`, `tlName = baseTlName .. "_" .. tlSuffix`).
+
+### Success Criteria:
+
+#### Automated Verification:
+
+- Regression suite passes: `node --experimental-vm-modules test/regression.js`
+- Prettier clean on touched files: `npx prettier --check "src/exporters/lua.js" "test/regression.js"`
+
+#### Manual Verification:
+
+- In Resolve, run the exported `.lua` twice into the same project: the second run creates `Reels_2` (not an error); the `GOTOWE!` line reports the actual name.
+
+---
+
 ## Testing Strategy
 
 ### Unit Tests (regression suite):
@@ -292,3 +329,14 @@ None material — exporters are in-memory string builders over a small `reelsDat
 #### Manual
 
 - [ ] 3.3 New test output lines confirm each case ran with real frame values
+
+### Phase 4: Lua timeline-name collision dedup (objection follow-up)
+
+#### Automated
+
+- [x] 4.1 Regression suite passes: `node --experimental-vm-modules test/regression.js` (247 passed, 0 failed) — bd3e0f7
+- [x] 4.2 Prettier clean on `src/exporters/lua.js` + `test/regression.js` — bd3e0f7
+
+#### Manual
+
+- [ ] 4.3 Running the `.lua` twice into the same Resolve project creates `Reels_2` instead of erroring
