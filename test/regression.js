@@ -482,8 +482,20 @@ assert(
   'Lua has batch append call',
 );
 assert(
-  newLua.includes(`CreateEmptyTimeline("${PROJECT_NAME}")`),
-  'Lua creates timeline with project name',
+  newLua.includes(`local baseTlName = "${PROJECT_NAME}"`),
+  'Lua sets base timeline name from project name',
+);
+assert(
+  newLua.includes('local timeline = mediaPool:CreateEmptyTimeline(tlName)'),
+  'Lua creates timeline with the runtime-resolved unique name',
+);
+// Duplicate-name guard: collect existing timeline names, then bump a numeric
+// suffix ("Reels_2", "Reels_3", …) until a free name is found instead of erroring.
+assert(
+  newLua.includes('for i = 1, project:GetTimelineCount() do') &&
+    newLua.includes('while existingNames[tlName] do') &&
+    newLua.includes('tlName = baseTlName .. "_" .. tlSuffix'),
+  'Lua picks a free timeline name on collision (base_2, base_3, …)',
 );
 assert(newLua.includes(`przerwa ${GAP_FRAMES} klatek`), 'Lua has gap comment');
 

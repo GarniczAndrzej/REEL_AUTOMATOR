@@ -1,0 +1,1 @@
+Mam obiekcje co do lua eksportu. Kiedy nazwa tego samego timeline'u istnieje, wywala błąd. a skrypt powinien stworzyć timeline, ale nazwać go na przykład Reels_2.

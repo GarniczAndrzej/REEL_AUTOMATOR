@@ -78,11 +78,28 @@ export function generateLua({
   lines.push('}');
   lines.push('');
 
-  const tlName = projectName.replace(/"/g, "'");
+  const baseTlName = projectName.replace(/\\/g, '\\\\').replace(/"/g, "'");
 
-  lines.push(`print("\\nTworzę timeline: ${tlName}...")`);
+  // Znajdź wolną nazwę timeline'u. CreateEmptyTimeline zwraca nil, gdy timeline
+  // o tej nazwie już istnieje — zamiast przerywać, dobieramy "<base>_2",
+  // "<base>_3", … aż trafimy na nazwę nieużywaną. Faktyczna nazwa jest
+  // wyznaczana w runtime, więc dalsze printy używają zmiennej `tlName`.
+  lines.push(`local baseTlName = "${baseTlName}"`);
+  lines.push('local existingNames = {}');
+  lines.push('for i = 1, project:GetTimelineCount() do');
+  lines.push('  local tl = project:GetTimelineByIndex(i)');
+  lines.push('  if tl then existingNames[tl:GetName()] = true end');
+  lines.push('end');
+  lines.push('local tlName = baseTlName');
+  lines.push('local tlSuffix = 2');
+  lines.push('while existingNames[tlName] do');
+  lines.push('  tlName = baseTlName .. "_" .. tlSuffix');
+  lines.push('  tlSuffix = tlSuffix + 1');
+  lines.push('end');
   lines.push('');
-  lines.push(`local timeline = mediaPool:CreateEmptyTimeline("${tlName}")`);
+  lines.push('print("\\nTworzę timeline: " .. tlName .. "...")');
+  lines.push('');
+  lines.push('local timeline = mediaPool:CreateEmptyTimeline(tlName)');
   lines.push(`if not timeline then`);
   lines.push(`  print("BŁĄD: Nie można utworzyć timeline!")`);
   lines.push(`  return`);
@@ -168,7 +185,7 @@ export function generateLua({
   lines.push('local ok = mediaPool:AppendToTimeline(allClips)');
   lines.push('if ok then');
   lines.push(`  print("\\n=================================")`);
-  lines.push(`  print("GOTOWE! Timeline '${tlName}' gotowy.")`);
+  lines.push(`  print("GOTOWE! Timeline '" .. tlName .. "' gotowy.")`);
   lines.push(
     `  print("Reelsy: ${reelsData.length}  |  Klipy łącznie: ${totalClips}")`,
   );
