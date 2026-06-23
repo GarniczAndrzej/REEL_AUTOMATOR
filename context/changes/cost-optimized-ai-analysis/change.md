@@ -1,9 +1,9 @@
 ---
 change_id: cost-optimized-ai-analysis
 title: Cost optimized ai analysis
-status: implementing
+status: implemented
 created: 2026-06-23
-updated: 2026-06-23
+updated: 2026-06-24
 archived_at: null
 ---
 

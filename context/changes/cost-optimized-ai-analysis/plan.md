@@ -718,11 +718,11 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Automated
 
-- [x] 5.1 Regression suite passes
-- [x] 5.2 Stage-1 prompt token estimate materially lower than full projection
+- [x] 5.1 Regression suite passes — b25f39b
+- [x] 5.2 Stage-1 prompt token estimate materially lower than full projection — b25f39b
 
 #### Manual
 
-- [x] 5.3 Supporting provider shows non-zero `cached_tokens` on second+ bucket
-- [x] 5.4 Non-supporting provider still succeeds (cache_control ignored)
-- [x] 5.5 Cluster quality unchanged after minification
+- [x] 5.3 Supporting provider shows non-zero `cached_tokens` on second+ bucket — b25f39b
+- [x] 5.4 Non-supporting provider still succeeds (cache_control ignored) — b25f39b
+- [x] 5.5 Cluster quality unchanged after minification — b25f39b
