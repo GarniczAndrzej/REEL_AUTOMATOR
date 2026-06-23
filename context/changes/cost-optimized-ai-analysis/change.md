@@ -1,7 +1,7 @@
 ---
 change_id: cost-optimized-ai-analysis
 title: Cost optimized ai analysis
-status: implemented
+status: impl_reviewed
 created: 2026-06-23
 updated: 2026-06-24
 archived_at: null
@@ -30,3 +30,22 @@ long-context models. Both underdeliver on curation quality:
 input → the model-swap lever does not fix curation. **Gate OPEN.** Proceed to Phase 3 (model
 tiering) → Phase 4 (cluster→curate pipeline) → Phase 5 (cost levers). **Phase 2a
 (cost-levers-only, gate-closed branch) is skipped.**
+
+### Impl-review F1 (2026-06-24): Phase-5 cache_control lever is inert
+
+The `cache_control: ephemeral` cost lever (Phase 5 #2, `providers.js:27-29`) delivers no
+measurable benefit in this architecture and manual check 5.3 (non-zero `cached_tokens` on
+second+ bucket) is **not substantiated**:
+
+- Any prompt-identical re-call is served from the disk cache (`withLlmCache`) *before*
+  `callOpenRouter` reaches the network, so the provider cache never fires on the one case it
+  would help.
+- The marker wraps the *entire* user message as a single block; variable content (per-bucket
+  segments, trailing guidance) is not isolated as a suffix after the cache breakpoint, so no
+  reusable stable prefix exists — and across Stage-2 buckets only the small `userPrompt`
+  string is common anyway.
+
+The lever is **no-op-safe** (5.4 holds — non-supporting/ignoring providers still succeed) and
+the primary input-cost win (Stage-1 minification, Phase 5 #1) is real and working. Accepted
+as-is this slice; making cache_control meaningful would require splitting prompts into a
+stable-prefix (cached) block + variable-suffix block, deferred as low-payoff.

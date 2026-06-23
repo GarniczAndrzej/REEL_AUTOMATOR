@@ -723,6 +723,6 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Manual
 
-- [x] 5.3 Supporting provider shows non-zero `cached_tokens` on second+ bucket — b25f39b
+- [~] 5.3 Supporting provider shows non-zero `cached_tokens` on second+ bucket — b25f39b — NOT substantiated; see impl-review F1 (cache_control no-op in this architecture: disk cache shadows the provider cache, and the marker wraps the whole variable message rather than isolating a stable prefix)
 - [x] 5.4 Non-supporting provider still succeeds (cache_control ignored) — b25f39b
 - [x] 5.5 Cluster quality unchanged after minification — b25f39b
