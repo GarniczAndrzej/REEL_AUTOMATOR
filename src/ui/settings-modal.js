@@ -63,6 +63,8 @@ export function initSettingsModal() {
   // S-25 Phase 3: same boot-seed pattern for the cluster/curate guidances.
   state.clusterPrompt = savedSettings.clusterPrompt ?? DEFAULT_CLUSTER_GUIDANCE;
   state.curatePrompt = savedSettings.curatePrompt ?? DEFAULT_CURATE_GUIDANCE;
+  // S-25 Phase 4: pipeline mode (auto/single/pipeline), same boot-seed pattern.
+  state.aiPipelineMode = savedSettings.aiPipelineMode ?? 'auto';
 
   // System prompt (FR-015) → state + settings bag (persists across sessions).
   const sysPromptEl = document.getElementById('systemPrompt');
@@ -78,6 +80,16 @@ export function initSettingsModal() {
   // the systemPrompt write-through pattern above.
   bindPromptTextarea('clusterPrompt', 'clusterPrompt');
   bindPromptTextarea('curatePrompt', 'curatePrompt');
+
+  // S-25 Phase 4: pipeline-mode selector → state + settings bag.
+  const modeEl = document.getElementById('aiPipelineMode');
+  if (modeEl) {
+    modeEl.addEventListener('change', (e) => {
+      state.aiPipelineMode = e.target.value;
+      saveSettings({ aiPipelineMode: e.target.value });
+      emit();
+    });
+  }
 
   // Project/source fields re-homed here (acceptance feedback). These inputs
   // live in this modal, so this module owns their bindings (one component owns
@@ -145,6 +157,7 @@ function fillSettingsForm() {
   setVal('systemPrompt', state.systemPrompt ?? DEFAULT_SCORING_GUIDANCE);
   setVal('clusterPrompt', state.clusterPrompt ?? DEFAULT_CLUSTER_GUIDANCE);
   setVal('curatePrompt', state.curatePrompt ?? DEFAULT_CURATE_GUIDANCE);
+  setVal('aiPipelineMode', state.aiPipelineMode ?? 'auto');
 }
 
 function setVal(id, value) {

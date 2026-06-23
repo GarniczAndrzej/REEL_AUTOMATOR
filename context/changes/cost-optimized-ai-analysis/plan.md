@@ -688,22 +688,22 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Automated
 
-- [x] 3.1 Regression suite passes
-- [x] 3.2 `grep` confirms single-shot reads `orSelectedModel`, new picker reads `aiModels.*`
+- [x] 3.1 Regression suite passes — 99abd05
+- [x] 3.2 `grep` confirms single-shot reads `orSelectedModel`, new picker reads `aiModels.*` — 99abd05
 
 #### Manual
 
-- [ ] 3.3 Both model pickers appear, load models, persist across restart
-- [ ] 3.4 Single-shot analysis still runs unchanged
-- [ ] 3.5 Cluster/curate prompt fields editable with Polish defaults
+- [x] 3.3 Both model pickers appear, load models, persist across restart — 99abd05
+- [x] 3.4 Single-shot analysis still runs unchanged — 99abd05
+- [x] 3.5 Cluster/curate prompt fields editable with Polish defaults — 99abd05
 
 ### Phase 4: Cluster → curate pipeline
 
 #### Automated
 
-- [ ] 4.1 Regression suite passes (exporter inputs unchanged)
-- [ ] 4.2 `grep` confirms no exporter field consumer changed
-- [ ] 4.3 Rust type-check passes
+- [x] 4.1 Regression suite passes (exporter inputs unchanged)
+- [x] 4.2 `grep` confirms no exporter field consumer changed
+- [x] 4.3 Rust type-check passes
 
 #### Manual
 

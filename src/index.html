@@ -433,6 +433,7 @@
             </div>
             <div class="log-box" id="logBox"></div>
             <div class="usage-box" id="usageBox"></div>
+            <div class="bucket-list" id="bucketList"></div>
           </div>
 
           <div class="card" id="reelsCard" style="display: none">
@@ -886,6 +887,24 @@
                 <button class="or-load-btn" id="orLoadBtn_curate">
                   Załaduj modele
                 </button>
+              </div>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Tryb analizy AI</label>
+              <select id="aiPipelineMode">
+                <option value="auto">
+                  Automatyczny (pipeline dla długich transkrypcji)
+                </option>
+                <option value="single">Zawsze pojedyncze zapytanie</option>
+                <option value="pipeline">
+                  Zawsze pipeline (klaster → kuracja)
+                </option>
+              </select>
+              <div class="fps-note">
+                Pipeline dzieli długą transkrypcję na tematy (Etap 1, model
+                klastrowania) i kuruje każdy temat osobno (Etap 2, model
+                kuracji). Tryb automatyczny używa pojedynczego zapytania poniżej
+                150 segmentów.
               </div>
             </div>
           </div>

@@ -826,6 +826,51 @@ textarea::placeholder {
   color: var(--text3);
 }
 
+/* S-25 Phase 4: per-bucket Stage-2 progress list (cluster→curate pipeline). */
+.bucket-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+.bucket-list:empty {
+  display: none;
+}
+.bucket-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+}
+.bucket-row.running {
+  border-color: var(--accent2);
+}
+.bucket-row.ok .bucket-status {
+  color: var(--green);
+}
+.bucket-row.err {
+  border-color: var(--red);
+}
+.bucket-row.err .bucket-status {
+  color: var(--red);
+}
+.bucket-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bucket-retry {
+  padding: 2px 10px;
+  font-size: var(--fs-xs);
+}
+
 .reels-list {
   display: flex;
   flex-direction: column;

@@ -105,6 +105,11 @@ Zasady:
   // global (persisted to localStorage `edl_or_model_cluster`/`_curate`), NOT in
   // .reelproj — model selection is per-machine, not per-project (research §D).
   aiModels: { cluster: null, curate: null },
+  // S-25 Phase 4: cluster→curate pipeline mode. 'auto' collapses to the legacy
+  // single-shot call below PIPELINE_AUTO_THRESHOLD segments and runs the pipeline
+  // above it; 'single'/'pipeline' force one path. Machine-global, persisted via
+  // the settings bag (edl_app_settings), NOT in .reelproj.
+  aiPipelineMode: 'auto',
 
   // Phase 4 F1 / S-05 model manager
   modelId: '', // selected managed faster-whisper model id (S-05)

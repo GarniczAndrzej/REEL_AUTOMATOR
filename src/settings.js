@@ -14,6 +14,7 @@ const LS_KEY = 'edl_app_settings';
  * @property {string} [systemPrompt] - persisted scoring guidance (system prompt)
  * @property {string} [clusterPrompt] - persisted Stage-1 cluster guidance (S-25)
  * @property {string} [curatePrompt] - persisted Stage-2 curate guidance (S-25)
+ * @property {'auto'|'single'|'pipeline'} [aiPipelineMode] - cluster→curate pipeline mode (S-25 Phase 4)
  */
 
 /**

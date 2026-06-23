@@ -24,6 +24,7 @@ import { generateXML } from '../src/exporters/xml.js';
 import { generateLua } from '../src/exporters/lua.js';
 import { generateFCPXML } from '../src/exporters/fcpxml.js';
 import { buildPrompt, DEFAULT_SCORING_GUIDANCE } from '../src/ai/prompt.js';
+import { validateThemes } from '../src/ai/validate.js';
 
 const SRT_PATH = new URL('./sample.srt', import.meta.url).pathname;
 const srtText = readFileSync(SRT_PATH, 'utf-8');
@@ -1585,6 +1586,100 @@ const overlapLines = overlapSRT.split('\n');
     `cue at line ${tcLine} is non-reversed (start ≤ end): ${a} --> ${b}`,
   );
 });
+
+// ─────────────────────────────────────────────────────────────────
+// Test 17: validateThemes — Stage-1 cluster validator (S-25 Phase 4)
+// Structural failures throw; hallucinated/non-integer ids are dropped against
+// the real segment set; a theme that ends up with zero valid ids is dropped;
+// an all-empty result throws. Separate from validateReels (no reel_name here).
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 17: validateThemes (S-25 Phase 4) ───────────────');
+
+const themeSentences = [
+  { id: 1, text: 'a' },
+  { id: 2, text: 'b' },
+  { id: 3, text: 'c' },
+  { id: 4, text: 'd' },
+];
+
+// Happy path: known ids pass through; order preserved as given.
+const okThemes = validateThemes(
+  {
+    themes: [
+      { title: 'Temat A', candidate_ids: [1, 2] },
+      { title: 'Temat B', candidate_ids: [3, 4] },
+    ],
+  },
+  themeSentences,
+);
+assert(
+  okThemes.length === 2 &&
+    okThemes[0].candidate_ids.join(',') === '1,2' &&
+    okThemes[1].title === 'Temat B',
+  'validateThemes passes valid themes through unchanged',
+);
+
+// Hallucinated / non-integer ids are dropped; known ones kept; dupes collapsed.
+const dropped = validateThemes(
+  { themes: [{ title: 'T', candidate_ids: [1, 99, 2, 2, 3.5, 'x'] }] },
+  themeSentences,
+);
+assert(
+  dropped.length === 1 && dropped[0].candidate_ids.join(',') === '1,2',
+  'validateThemes drops unknown/non-integer/duplicate ids, keeps known',
+);
+
+// A theme whose ids are all hallucinated is dropped entirely.
+const emptyThemeDropped = validateThemes(
+  {
+    themes: [
+      { title: 'Good', candidate_ids: [1] },
+      { title: 'AllFake', candidate_ids: [100, 200] },
+    ],
+  },
+  themeSentences,
+);
+assert(
+  emptyThemeDropped.length === 1 && emptyThemeDropped[0].title === 'Good',
+  'validateThemes drops a theme with zero valid ids',
+);
+
+// Structural failures throw.
+function throws(fn) {
+  try {
+    fn();
+    return false;
+  } catch {
+    return true;
+  }
+}
+assert(
+  throws(() => validateThemes([], themeSentences)),
+  'validateThemes throws on a non-object (array) top level',
+);
+assert(
+  throws(() => validateThemes({ themes: [] }, themeSentences)),
+  'validateThemes throws on empty themes array',
+);
+assert(
+  throws(() =>
+    validateThemes(
+      { themes: [{ title: '', candidate_ids: [1] }] },
+      themeSentences,
+    ),
+  ),
+  'validateThemes throws on a theme missing a title',
+);
+assert(
+  throws(() =>
+    validateThemes(
+      { themes: [{ title: 'T', candidate_ids: [999] }] },
+      themeSentences,
+    ),
+  ),
+  'validateThemes throws when no theme has any valid ids',
+);
 
 // ─────────────────────────────────────────────────────────────────
 // Summary

@@ -107,3 +107,62 @@ export function validateReels(parsed, sentences) {
 
   return parsed;
 }
+
+/**
+ * Validate the Stage-1 cluster shape `{themes:[{title, candidate_ids[]}]}` (S-25
+ * Phase 4) and drop hallucinated ids against the real segment set before buckets
+ * are built. Separate from `validateReels` — raw clusters carry no `reel_name`
+ * and would be rejected by it. Structural failures throw (Polish message); stray
+ * ids are dropped silently (don't throw on a hallucinated id).
+ * @param {unknown} parsed - the JSON.parse result to validate
+ * @param {import('../state.js').Sentence[]} sentences - state.sentences
+ * @returns {{title: string, candidate_ids: number[]}[]} validated, id-filtered themes
+ * @throws {Error} Polish message on structural failure
+ */
+export function validateThemes(parsed, sentences) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(
+      'Oczekiwano obiektu JSON { "themes": [...] } na najwyższym poziomie.',
+    );
+  }
+  const themes = parsed.themes;
+  if (!Array.isArray(themes) || !themes.length) {
+    throw new Error('Pole "themes" musi być niepustą tablicą.');
+  }
+
+  const knownIds = new Set(sentences.map((s) => s.id));
+  const out = [];
+
+  themes.forEach((theme, i) => {
+    const where = `Temat ${i + 1}`;
+    if (!theme || typeof theme !== 'object') {
+      throw new Error(`${where}: oczekiwano obiektu tematu.`);
+    }
+    if (typeof theme.title !== 'string' || !theme.title.trim()) {
+      throw new Error(`${where}: brak tytułu (title).`);
+    }
+    if (!Array.isArray(theme.candidate_ids)) {
+      throw new Error(
+        `${where} "${theme.title}": candidate_ids musi być tablicą.`,
+      );
+    }
+    // Keep only known integer ids; drop unknown/non-integer (hallucinated) and
+    // dedupe so bucket prompts hash deterministically. A theme that ends up with
+    // zero valid ids is dropped entirely (not an error).
+    const seen = new Set();
+    const validIds = theme.candidate_ids.filter((id) => {
+      if (!isInteger(id) || !knownIds.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    if (!validIds.length) return;
+    out.push({ title: theme.title, candidate_ids: validIds });
+  });
+
+  if (!out.length) {
+    throw new Error(
+      'Żaden temat nie zawiera prawidłowych identyfikatorów segmentów.',
+    );
+  }
+  return out;
+}
