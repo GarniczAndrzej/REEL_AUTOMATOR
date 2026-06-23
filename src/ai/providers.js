@@ -4,7 +4,10 @@
  * @param {string} orModel
  * @param {AbortSignal} [signal] Optional abort signal; aborting rejects the
  *   returned promise with an `AbortError`-named exception (propagated unchanged).
- * @returns {Promise<string>}
+ * @returns {Promise<{ content: string, usage: object|null, finishReason: string|null }>}
+ *   `usage` is `data.usage` verbatim (includes `prompt_tokens`,
+ *   `completion_tokens`, and `prompt_tokens_details.cached_tokens` when present);
+ *   `finishReason` is the provider's `finish_reason` (e.g. `'length'` on truncation).
  */
 export async function callOpenRouter(apiKey, prompt, orModel, signal) {
   if (!orModel) throw new Error('Nie wybrano modelu OpenRouter!');
@@ -39,5 +42,10 @@ export async function callOpenRouter(apiKey, prompt, orModel, signal) {
   }
   const data = await resp.json();
   if (data.error) throw new Error(data.error.message || 'OpenRouter error');
-  return data.choices?.[0]?.message?.content || '';
+  const choice = data.choices?.[0];
+  return {
+    content: choice?.message?.content || '',
+    usage: data.usage || null,
+    finishReason: choice?.finish_reason || null,
+  };
 }

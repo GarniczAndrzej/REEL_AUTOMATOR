@@ -98,6 +98,7 @@ async function runAIAnalysis() {
   setPS(2, '');
   setPS(3, '');
   logClear();
+  document.getElementById('usageBox')?.classList.remove('visible');
   document.getElementById('reelsCard').style.display = 'none';
   document.getElementById('step2Next').style.display = 'none';
 
@@ -123,13 +124,10 @@ async function runAIAnalysis() {
       model: orModel || '',
       prompt,
     });
-    const {
-      result: responseText,
-      fromCache,
-      hashShort,
-    } = await withLlmCache(cacheKey, () =>
+    const { result, fromCache, hashShort } = await withLlmCache(cacheKey, () =>
       callOpenRouter(apiKey, prompt, orModel, controller.signal),
     );
+    const { content: responseText, usage, finishReason } = result;
 
     rawResponse = responseText;
     if (fromCache) {
@@ -140,6 +138,13 @@ async function runAIAnalysis() {
         'info',
       );
     }
+    if (finishReason === 'length') {
+      log(
+        'Odpowiedź ucięta przez limit tokenów (finish_reason=length).',
+        'err',
+      );
+    }
+    renderUsage(usage, orModel, fromCache);
     setPS(2, 'done');
     setPS(3, 'running');
 
@@ -272,6 +277,40 @@ async function copyPromptMD() {
   } catch {
     toast('Nie udało się skopiować — użyj „Eksportuj prompt .txt".', 'error');
   }
+}
+
+// Compact Polish post-run token/cost readout. On a cache hit there is no fresh
+// usage, so show a "z pamięci podręcznej" badge instead of fabricated numbers.
+/**
+ * @param {object|null} usage `data.usage` verbatim (`prompt_tokens`,
+ *   `completion_tokens`, `prompt_tokens_details.cached_tokens`) or null.
+ * @param {string} model OpenRouter model id used for the run.
+ * @param {boolean} fromCache whether the result came from the disk cache.
+ */
+function renderUsage(usage, model, fromCache) {
+  const box = document.getElementById('usageBox');
+  if (!box) return;
+  box.classList.add('visible');
+  const modelTag = `<span class="usage-model">${esc(model || '')}</span>`;
+  if (fromCache || !usage) {
+    box.innerHTML =
+      '<span class="usage-badge">z pamięci podręcznej</span>' + modelTag;
+    return;
+  }
+  const promptTok = usage.prompt_tokens || 0;
+  const completionTok = usage.completion_tokens || 0;
+  const cachedTok = usage.prompt_tokens_details?.cached_tokens || 0;
+  const m = state.orAllModels.find((x) => x.id === model);
+  const pPrice = +m?.pricing?.prompt || 0;
+  const cPrice = +m?.pricing?.completion || 0;
+  const cost = promptTok * pPrice + completionTok * cPrice;
+  const costStr = pPrice || cPrice ? '$' + cost.toFixed(4) : 'brak cennika';
+  const cachedStr = cachedTok ? ` (z cache: ${cachedTok})` : '';
+  box.innerHTML =
+    `<span class="usage-item">Wejście: <b>${promptTok}</b> tok${cachedStr}</span>` +
+    `<span class="usage-item">Wyjście: <b>${completionTok}</b> tok</span>` +
+    `<span class="usage-item">Szac. koszt: <b>${costStr}</b></span>` +
+    modelTag;
 }
 
 function setPS(n, s) {

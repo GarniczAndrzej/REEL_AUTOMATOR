@@ -794,6 +794,37 @@ textarea::placeholder {
 .log-line.info {
   color: var(--accent2);
 }
+.usage-box {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-xs);
+  color: var(--text2);
+  font-family: var(--mono);
+}
+.usage-box.visible {
+  display: flex;
+}
+.usage-item b {
+  color: var(--text);
+}
+.usage-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent2);
+  color: #fff;
+  font-size: var(--fs-xs);
+}
+.usage-model {
+  margin-left: auto;
+  color: var(--text3);
+}
 
 .reels-list {
   display: flex;
