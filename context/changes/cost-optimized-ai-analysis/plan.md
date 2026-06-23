@@ -662,13 +662,13 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Automated
 
-- [x] 2.1 Regression suite still green
+- [x] 2.1 Regression suite still green — 3b0f046
 
 #### Manual
 
-- [x] 2.2 Two runs (current + strong long-context model) completed with cost panels captured
-- [x] 2.3 Both reel sets reviewed against the "forgets half / mixes order" symptom
-- [x] 2.4 Written gate verdict recorded in `change.md` Notes
+- [x] 2.2 Two runs (current + strong long-context model) completed with cost panels captured — 3b0f046
+- [x] 2.3 Both reel sets reviewed against the "forgets half / mixes order" symptom — 3b0f046
+- [x] 2.4 Written gate verdict recorded in `change.md` Notes — 3b0f046
 
 ### Phase 2a: Single-shot cost levers
 
@@ -688,8 +688,8 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Automated
 
-- [ ] 3.1 Regression suite passes
-- [ ] 3.2 `grep` confirms single-shot reads `orSelectedModel`, new picker reads `aiModels.*`
+- [x] 3.1 Regression suite passes
+- [x] 3.2 `grep` confirms single-shot reads `orSelectedModel`, new picker reads `aiModels.*`
 
 #### Manual
 

@@ -183,7 +183,7 @@ header {
   display: flex;
 }
 
-#orModelSearch {
+.or-model-search {
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text);
@@ -195,10 +195,10 @@ header {
   outline: none;
   transition: border-color 0.2s;
 }
-#orModelSearch:focus {
+.or-model-search:focus {
   border-color: var(--accent);
 }
-#orModelSearch::placeholder {
+.or-model-search::placeholder {
   color: var(--text3);
 }
 

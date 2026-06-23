@@ -6,7 +6,16 @@
 import { state, emit } from '../state.js';
 import { getApiKey, setApiKey } from '../ai/api-key.js';
 import { loadSettings, saveSettings } from '../settings.js';
-import { DEFAULT_SCORING_GUIDANCE } from '../ai/prompt.js';
+import {
+  DEFAULT_SCORING_GUIDANCE,
+  DEFAULT_CLUSTER_GUIDANCE,
+  DEFAULT_CURATE_GUIDANCE,
+} from '../ai/prompt.js';
+import {
+  init as initOrPicker,
+  CLUSTER_CONFIG,
+  CURATE_CONFIG,
+} from '../ai/openrouter-picker.js';
 import { populateVideoMeta } from '../util/video-meta.js';
 import { toast } from './toast.js';
 
@@ -23,6 +32,12 @@ export function initSettingsModal() {
   // provider since S-17, so reveal it unconditionally.
   const orWrap = document.getElementById('orModelWrap');
   if (orWrap) orWrap.classList.add('visible');
+
+  // S-25 Phase 3: mount the cluster + curate model pickers for the cluster→curate
+  // pipeline. They share the model list/cache with the legacy picker (mounted from
+  // main.js); only the selection (state.aiModels.* + localStorage key) differs.
+  initOrPicker(CLUSTER_CONFIG);
+  initOrPicker(CURATE_CONFIG);
 
   const saveBtn = document.getElementById('saveApiKeyBtn');
   if (saveBtn) saveBtn.addEventListener('click', saveApiKey);
@@ -43,7 +58,11 @@ export function initSettingsModal() {
   // falling back to the default scoring guidance when unset. No emit() here by
   // design — this is a pre-subscriber boot seed (runs before any listener is
   // registered), so the "emit after any mutation" rule does not apply.
-  state.systemPrompt = loadSettings().systemPrompt ?? DEFAULT_SCORING_GUIDANCE;
+  const savedSettings = loadSettings();
+  state.systemPrompt = savedSettings.systemPrompt ?? DEFAULT_SCORING_GUIDANCE;
+  // S-25 Phase 3: same boot-seed pattern for the cluster/curate guidances.
+  state.clusterPrompt = savedSettings.clusterPrompt ?? DEFAULT_CLUSTER_GUIDANCE;
+  state.curatePrompt = savedSettings.curatePrompt ?? DEFAULT_CURATE_GUIDANCE;
 
   // System prompt (FR-015) → state + settings bag (persists across sessions).
   const sysPromptEl = document.getElementById('systemPrompt');
@@ -54,6 +73,11 @@ export function initSettingsModal() {
       emit();
     });
   }
+
+  // S-25 Phase 3: cluster + curate prompts → state + settings bag, mirroring
+  // the systemPrompt write-through pattern above.
+  bindPromptTextarea('clusterPrompt', 'clusterPrompt');
+  bindPromptTextarea('curatePrompt', 'curatePrompt');
 
   // Project/source fields re-homed here (acceptance feedback). These inputs
   // live in this modal, so this module owns their bindings (one component owns
@@ -119,6 +143,8 @@ function fillSettingsForm() {
   setVal('videoResolution', state.videoResolution || '');
   setVal('projectName', state.projectName || '');
   setVal('systemPrompt', state.systemPrompt ?? DEFAULT_SCORING_GUIDANCE);
+  setVal('clusterPrompt', state.clusterPrompt ?? DEFAULT_CLUSTER_GUIDANCE);
+  setVal('curatePrompt', state.curatePrompt ?? DEFAULT_CURATE_GUIDANCE);
 }
 
 function setVal(id, value) {
@@ -137,6 +163,23 @@ function bindProjectInput(id, key) {
   if (!el) return;
   el.addEventListener('input', (e) => {
     state[key] = e.target.value;
+    emit();
+  });
+}
+
+/**
+ * Wire an editable prompt textarea to a `state` field with settings-bag
+ * persistence (mirrors the systemPrompt write-through). S-25 Phase 3.
+ * @param {string} id element id
+ * @param {'clusterPrompt'|'curatePrompt'} key state + settings-bag field
+ * @returns {void}
+ */
+function bindPromptTextarea(id, key) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', (e) => {
+    state[key] = e.target.value;
+    saveSettings({ [key]: e.target.value });
     emit();
   });
 }

@@ -12,6 +12,8 @@ const LS_KEY = 'edl_app_settings';
  * @typedef {Object} AppSettings
  * @property {number} [mergeThreshold] - default EDL merge-gap (frames)
  * @property {string} [systemPrompt] - persisted scoring guidance (system prompt)
+ * @property {string} [clusterPrompt] - persisted Stage-1 cluster guidance (S-25)
+ * @property {string} [curatePrompt] - persisted Stage-2 curate guidance (S-25)
  */
 
 /**

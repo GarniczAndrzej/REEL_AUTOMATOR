@@ -24,7 +24,11 @@
  * @property {Word[]} [words] - word-level timings (engine/align path only)
  */
 
-import { DEFAULT_SCORING_GUIDANCE } from './ai/prompt.js';
+import {
+  DEFAULT_SCORING_GUIDANCE,
+  DEFAULT_CLUSTER_GUIDANCE,
+  DEFAULT_CURATE_GUIDANCE,
+} from './ai/prompt.js';
 
 /**
  * A reusable userPrompt preset stored in the local library.
@@ -68,6 +72,11 @@ Zasady:
   // FR-015: editable global scoring guidance. Defaults to the machine guidance;
   // boot override comes from loadSettings(); round-trips in .reelproj v6.
   systemPrompt: DEFAULT_SCORING_GUIDANCE,
+  // S-25 Phase 3: editable Stage-1 (cluster) and Stage-2 (curate) guidances for
+  // the cluster→curate pipeline. Persist/round-trip via the settings bag like
+  // `systemPrompt`; boot override comes from loadSettings().
+  clusterPrompt: DEFAULT_CLUSTER_GUIDANCE,
+  curatePrompt: DEFAULT_CURATE_GUIDANCE,
   // FR-016: in-memory preset library. Populated at boot from localStorage
   // (edl_prompt_presets) by seedPresetsIfEmpty + loadPresets in main.js.
   /** @type {PromptPreset[]} */
@@ -89,7 +98,13 @@ Zasady:
 
   // openrouter
   orAllModels: [],
+  // Single-shot / legacy / Phase-2 test model (flat scalar). The cluster→curate
+  // pipeline (S-25) uses the `aiModels` pair below instead.
   orSelectedModel: null,
+  // S-25 Phase 3: two-model tiering for the cluster→curate pipeline. Machine-
+  // global (persisted to localStorage `edl_or_model_cluster`/`_curate`), NOT in
+  // .reelproj — model selection is per-machine, not per-project (research §D).
+  aiModels: { cluster: null, curate: null },
 
   // Phase 4 F1 / S-05 model manager
   modelId: '', // selected managed faster-whisper model id (S-05)

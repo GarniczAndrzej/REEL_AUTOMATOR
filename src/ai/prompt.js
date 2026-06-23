@@ -40,6 +40,48 @@ export const DEFAULT_SCORING_GUIDANCE = `ZASADY OCENY:
 - "reason" to dokładnie jedno zdanie uzasadnienia po polsku.
 - "markers.hook", "markers.body", "markers.punchline" to clip_id wybrane z listy "clip_ids" tego Reela (muszą do niej należeć).`;
 
+// Stage-1 (clustering) machine-owned response-format example. Elicits the
+// lightweight `{themes:[{title, candidate_ids[]}]}` shape that `validateThemes`
+// (Phase 4) consumes — NOT the scored reel schema. Always injected by the
+// cluster static block independent of the editable cluster guidance.
+const CLUSTER_RESPONSE_FORMAT = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty JSON, zero komentarzy, zero markdown:
+{
+  "themes": [
+    { "title": "Temat 1 - krótki opis", "candidate_ids": [1, 2, 5, 6, 12] },
+    { "title": "Temat 2 - krótki opis", "candidate_ids": [10, 11, 3, 20] }
+  ]
+}`;
+
+// Default editable Stage-1 clustering guidance (S-25 Phase 3). Seeds
+// `state.clusterPrompt`. Like DEFAULT_SCORING_GUIDANCE this is NOT machine-owned —
+// the themes JSON example + segments + validateThemes remain the safety guarantee.
+// INSTRUCTIONS are in English (per user note) — English tokenizes ~30% leaner
+// than Polish, and the instruction block rides on every call. The model is told
+// to keep its OUTPUT (titles) Polish, so the UI stays Polish.
+export const DEFAULT_CLUSTER_GUIDANCE = `CLUSTERING RULES:
+- Group the segments into thematically coherent clusters ("themes") that will later become Reels.
+- Each theme is one potential Reel: a concise "title" plus a "candidate_ids" list of the segments that fit it.
+- Combine segments that are related in content (same thread, story, concept) — order can be changed at a later stage.
+- Aim for ~10 themes; ~15–25 of the strongest candidates per theme.
+- Use ONLY existing segment ids from the list below. Never invent ids.
+- Write each "title" value in Polish.`;
+
+// Default editable Stage-2 (curation) guidance (S-25 Phase 3). Seeds
+// `state.curatePrompt`. Curation must still elicit the scored reel schema. Kept
+// standalone (not embedding the Polish DEFAULT_SCORING_GUIDANCE) so the whole
+// instruction block is English for token efficiency; the model is told to keep
+// "reason" / reel names Polish so the UI stays Polish.
+export const DEFAULT_CURATE_GUIDANCE = `SCORING RULES:
+- Score each Reel 0–100 on four axes: hook (opening strength), flow (editing smoothness and logic), value (substantive value), trend (viral potential / trend fit).
+- "virality_score" is the overall 0–100 score for the whole Reel (consistent with the axes).
+- The selection MUST contain the punchline segment — never cut the material before the key message.
+- "reason" is exactly one sentence, written in Polish.
+- "markers.hook", "markers.body", "markers.punchline" are clip_ids chosen from this Reel's "clip_ids" (they must belong to it).
+- Write "reel_name" and "reason" in Polish.
+
+CURATION RULE:
+- You receive the segments of a single theme (cluster). Build the best possible Reel from them (HOOK → BODY → CTA), selecting only the strongest segments.`;
+
 // Build the "available segments" block (+ multi-source note). Independent of
 // userPrompt — part of the cacheable static prefix.
 function buildSegmentsSection(sentences, sources, primaryFilename) {
@@ -77,8 +119,14 @@ function buildSegmentsSection(sentences, sources, primaryFilename) {
 
 // The machine-owned static block: multi-source note + segments + response
 // format. ALWAYS injected, independent of any editable prompt text — this is the
-// export-safety invariant (S-03 FR-015).
-function buildStaticBlock(sentences, sources, primaryFilename) {
+// export-safety invariant (S-03 FR-015). `responseFormat` selects the scored
+// reel schema (default) or the Stage-1 themes schema (cluster path).
+function buildStaticBlock(
+  sentences,
+  sources,
+  primaryFilename,
+  responseFormat = RESPONSE_FORMAT,
+) {
   const { segmentsBlock, multiSourceNote } = buildSegmentsSection(
     sentences,
     sources,
@@ -88,7 +136,7 @@ function buildStaticBlock(sentences, sources, primaryFilename) {
 DOSTĘPNE SEGMENTY (plik SRT zamieniony na zdania z timecodes):
 ${segmentsBlock}
 
-${RESPONSE_FORMAT}`;
+${responseFormat}`;
 }
 
 /**
@@ -111,6 +159,53 @@ export function buildPrompt(
   primaryFilename = '',
 ) {
   const guidance = systemPrompt ? `\n\n${systemPrompt}` : '';
+  return `${userPrompt}
+${buildStaticBlock(sentences, sources, primaryFilename)}${guidance}`;
+}
+
+/**
+ * Stage-1 clustering prompt (S-25 Phase 3). Same structure as `buildPrompt` but
+ * injects the themes RESPONSE_FORMAT so the model returns
+ * `{themes:[{title, candidate_ids[]}]}` instead of scored reels. The segment
+ * minification lever lands in Phase 5; here it reuses the full projection.
+ * @param {string} userPrompt
+ * @param {string} clusterGuidance editable cluster guidance (defaults to DEFAULT_CLUSTER_GUIDANCE)
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {Array|null} sources
+ * @param {string} primaryFilename
+ * @returns {string}
+ */
+export function buildClusterPrompt(
+  userPrompt,
+  clusterGuidance,
+  sentences,
+  sources = null,
+  primaryFilename = '',
+) {
+  const guidance = clusterGuidance ? `\n\n${clusterGuidance}` : '';
+  return `${userPrompt}
+${buildStaticBlock(sentences, sources, primaryFilename, CLUSTER_RESPONSE_FORMAT)}${guidance}`;
+}
+
+/**
+ * Stage-2 curation prompt (S-25 Phase 3). Elicits the existing scored reel
+ * schema (byte-identical to `buildPrompt`'s RESPONSE_FORMAT) over a single
+ * theme bucket's segments. In Phase 4 callers pass only that bucket's subset.
+ * @param {string} userPrompt
+ * @param {string} curateGuidance editable curate guidance (defaults to DEFAULT_CURATE_GUIDANCE)
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {Array|null} sources
+ * @param {string} primaryFilename
+ * @returns {string}
+ */
+export function buildCuratePrompt(
+  userPrompt,
+  curateGuidance,
+  sentences,
+  sources = null,
+  primaryFilename = '',
+) {
+  const guidance = curateGuidance ? `\n\n${curateGuidance}` : '';
   return `${userPrompt}
 ${buildStaticBlock(sentences, sources, primaryFilename)}${guidance}`;
 }

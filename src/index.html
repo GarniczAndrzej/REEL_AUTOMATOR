@@ -820,12 +820,13 @@
               ></span>
             </div>
             <div class="setting-item" style="grid-column: 1 / -1">
-              <label>Model</label>
+              <label>Model (pojedyncze zapytanie / legacy)</label>
               <div class="or-model-wrap" id="orModelWrap">
                 <div class="or-search-wrap" id="orSearchWrap">
                   <input
                     type="text"
                     id="orModelSearch"
+                    class="or-model-search"
                     placeholder="Szukaj modelu..."
                     autocomplete="off"
                   />
@@ -835,6 +836,54 @@
                   >brak modelu</span
                 >
                 <button class="or-load-btn" id="orLoadBtn">
+                  Załaduj modele
+                </button>
+              </div>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Model klastrowania (tani, długi kontekst)</label>
+              <div class="or-model-wrap visible" id="orModelWrap_cluster">
+                <div class="or-search-wrap" id="orSearchWrap_cluster">
+                  <input
+                    type="text"
+                    id="orModelSearch_cluster"
+                    class="or-model-search"
+                    placeholder="Szukaj modelu..."
+                    autocomplete="off"
+                  />
+                  <div class="or-dropdown" id="orDropdown_cluster"></div>
+                </div>
+                <span
+                  class="or-selected-badge"
+                  id="orSelectedBadge_cluster"
+                  title=""
+                  >brak modelu</span
+                >
+                <button class="or-load-btn" id="orLoadBtn_cluster">
+                  Załaduj modele
+                </button>
+              </div>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Model kuracji (jakość)</label>
+              <div class="or-model-wrap visible" id="orModelWrap_curate">
+                <div class="or-search-wrap" id="orSearchWrap_curate">
+                  <input
+                    type="text"
+                    id="orModelSearch_curate"
+                    class="or-model-search"
+                    placeholder="Szukaj modelu..."
+                    autocomplete="off"
+                  />
+                  <div class="or-dropdown" id="orDropdown_curate"></div>
+                </div>
+                <span
+                  class="or-selected-badge"
+                  id="orSelectedBadge_curate"
+                  title=""
+                  >brak modelu</span
+                >
+                <button class="or-load-btn" id="orLoadBtn_curate">
                   Załaduj modele
                 </button>
               </div>
@@ -952,6 +1001,30 @@
               <textarea
                 id="systemPrompt"
                 rows="8"
+                style="
+                  width: 100%;
+                  font-family: var(--mono, monospace);
+                  font-size: 12px;
+                "
+              ></textarea>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Prompt klastrowania (Etap 1 — grupowanie tematów)</label>
+              <textarea
+                id="clusterPrompt"
+                rows="6"
+                style="
+                  width: 100%;
+                  font-family: var(--mono, monospace);
+                  font-size: 12px;
+                "
+              ></textarea>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label>Prompt kuracji (Etap 2 — ocena Reelsów)</label>
+              <textarea
+                id="curatePrompt"
+                rows="6"
                 style="
                   width: 100%;
                   font-family: var(--mono, monospace);
