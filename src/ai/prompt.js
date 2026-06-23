@@ -6,6 +6,13 @@ const formatSentence = (s) => ({
   duration_frames: s.duration_frame,
 });
 
+// Stage-1 (clustering) minified projection (S-25 Phase 5). Thematic clustering
+// only needs id + text; the timecodes + duration_frames are export-only fields
+// the cluster model never uses. Combined with a no-spacer serialization this
+// roughly halves Stage-1 input tokens (~30–40 tok/segment vs ~70–80). The
+// single-shot and Stage-2 paths keep the full `formatSentence` projection.
+const formatSentenceMin = (s) => ({ id: s.id, text: s.text });
+
 // Machine-owned response-format example. ALWAYS injected by buildStaticBlock,
 // independent of userPrompt / systemPrompt — editing prompts can never break the
 // export pipeline because the JSON shape + validateReels stay machine-controlled.
@@ -83,8 +90,17 @@ CURATION RULE:
 - You receive the segments of a single theme (cluster). Build the best possible Reel from them (HOOK → BODY → CTA), selecting only the strongest segments.`;
 
 // Build the "available segments" block (+ multi-source note). Independent of
-// userPrompt — part of the cacheable static prefix.
-function buildSegmentsSection(sentences, sources, primaryFilename) {
+// userPrompt — part of the cacheable static prefix. `formatter` selects the
+// segment projection (full `formatSentence` by default; `formatSentenceMin` for
+// the Stage-1 cluster path) and `spacer` is the `JSON.stringify` indent (2 for
+// pretty single-shot/curate output, 0 for the compact cluster serialization).
+function buildSegmentsSection(
+  sentences,
+  sources,
+  primaryFilename,
+  formatter = formatSentence,
+  spacer = 2,
+) {
   let segmentsBlock;
   const hasMultipleSources = sources && sources.length > 0;
 
@@ -102,12 +118,12 @@ function buildSegmentsSection(sentences, sources, primaryFilename) {
           si === 0
             ? `[ŹRÓDŁO 1]${primaryFilename ? ' — ' + primaryFilename : ''}`
             : `[ŹRÓDŁO ${si + 1}]${sources[si - 1]?.videoFilename ? ' — ' + sources[si - 1].videoFilename : ''}`;
-        return `${label}\n${JSON.stringify(group.map(formatSentence), null, 2)}`;
+        return `${label}\n${JSON.stringify(group.map(formatter), null, spacer)}`;
       })
       .filter((_, si) => grouped[si].length > 0);
     segmentsBlock = blocks.join('\n\n');
   } else {
-    segmentsBlock = JSON.stringify(sentences.map(formatSentence), null, 2);
+    segmentsBlock = JSON.stringify(sentences.map(formatter), null, spacer);
   }
 
   const multiSourceNote = hasMultipleSources
@@ -126,11 +142,15 @@ function buildStaticBlock(
   sources,
   primaryFilename,
   responseFormat = RESPONSE_FORMAT,
+  formatter = formatSentence,
+  spacer = 2,
 ) {
   const { segmentsBlock, multiSourceNote } = buildSegmentsSection(
     sentences,
     sources,
     primaryFilename,
+    formatter,
+    spacer,
   );
   return `${multiSourceNote}
 DOSTĘPNE SEGMENTY (plik SRT zamieniony na zdania z timecodes):
@@ -166,8 +186,10 @@ ${buildStaticBlock(sentences, sources, primaryFilename)}${guidance}`;
 /**
  * Stage-1 clustering prompt (S-25 Phase 3). Same structure as `buildPrompt` but
  * injects the themes RESPONSE_FORMAT so the model returns
- * `{themes:[{title, candidate_ids[]}]}` instead of scored reels. The segment
- * minification lever lands in Phase 5; here it reuses the full projection.
+ * `{themes:[{title, candidate_ids[]}]}` instead of scored reels. Stage-1 uses
+ * the minified `{id, text}` projection serialized without indent (S-25 Phase 5)
+ * — thematic clustering needs no timecodes/durations — roughly halving input
+ * tokens vs the full single-shot projection.
  * @param {string} userPrompt
  * @param {string} clusterGuidance editable cluster guidance (defaults to DEFAULT_CLUSTER_GUIDANCE)
  * @param {import('../state.js').Sentence[]} sentences
@@ -184,7 +206,7 @@ export function buildClusterPrompt(
 ) {
   const guidance = clusterGuidance ? `\n\n${clusterGuidance}` : '';
   return `${userPrompt}
-${buildStaticBlock(sentences, sources, primaryFilename, CLUSTER_RESPONSE_FORMAT)}${guidance}`;
+${buildStaticBlock(sentences, sources, primaryFilename, CLUSTER_RESPONSE_FORMAT, formatSentenceMin, 0)}${guidance}`;
 }
 
 /**

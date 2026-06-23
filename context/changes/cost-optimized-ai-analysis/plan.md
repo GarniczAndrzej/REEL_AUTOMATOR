@@ -701,28 +701,28 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Automated
 
-- [x] 4.1 Regression suite passes (exporter inputs unchanged)
-- [x] 4.2 `grep` confirms no exporter field consumer changed
-- [x] 4.3 Rust type-check passes
+- [x] 4.1 Regression suite passes (exporter inputs unchanged) — 430651a
+- [x] 4.2 `grep` confirms no exporter field consumer changed — 430651a
+- [x] 4.3 Rust type-check passes — 430651a
 
 #### Manual
 
-- [ ] 4.4 Pipeline run produces valid `Reel[]`; exports open in the target NLE
-- [ ] 4.5 Failed bucket retries without re-running Stage 1 or other buckets
-- [ ] 4.6 Abort mid-Stage-2 keeps already-completed reels
-- [ ] 4.7 Below-threshold auto-runs single-shot; manual override forces the other mode
-- [ ] 4.8 Injected fake Stage-1 id is dropped, not passed to Stage 2
-- [ ] 4.9 Run logs segment coverage (`X / N` clustered) and warns below threshold
+- [x] 4.4 Pipeline run produces valid `Reel[]`; exports open in the target NLE — 430651a
+- [x] 4.5 Failed bucket retries without re-running Stage 1 or other buckets — 430651a
+- [x] 4.6 Abort mid-Stage-2 keeps already-completed reels — 430651a
+- [x] 4.7 Below-threshold auto-runs single-shot; manual override forces the other mode — 430651a
+- [x] 4.8 Injected fake Stage-1 id is dropped, not passed to Stage 2 — 430651a
+- [x] 4.9 Run logs segment coverage (`X / N` clustered) and warns below threshold — 430651a
 
 ### Phase 5: Cost levers (parallel track)
 
 #### Automated
 
-- [ ] 5.1 Regression suite passes
-- [ ] 5.2 Stage-1 prompt token estimate materially lower than full projection
+- [x] 5.1 Regression suite passes
+- [x] 5.2 Stage-1 prompt token estimate materially lower than full projection
 
 #### Manual
 
-- [ ] 5.3 Supporting provider shows non-zero `cached_tokens` on second+ bucket
-- [ ] 5.4 Non-supporting provider still succeeds (cache_control ignored)
-- [ ] 5.5 Cluster quality unchanged after minification
+- [x] 5.3 Supporting provider shows non-zero `cached_tokens` on second+ bucket
+- [x] 5.4 Non-supporting provider still succeeds (cache_control ignored)
+- [x] 5.5 Cluster quality unchanged after minification

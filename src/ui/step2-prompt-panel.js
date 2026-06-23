@@ -299,7 +299,13 @@ async function runPipeline(apiKey, controller) {
     const { result, fromCache, hashShort } = await withLlmCache(
       clusterKey,
       () =>
-        callOpenRouter(apiKey, clusterPrompt, clusterModel, controller.signal),
+        callOpenRouter(
+          apiKey,
+          clusterPrompt,
+          clusterModel,
+          controller.signal,
+          true, // cache_control on the stable transcript prefix (S-25 Phase 5)
+        ),
     );
     const { content, usage, finishReason } = result;
     clusterRaw = content;
@@ -468,7 +474,13 @@ async function runBucket(bucket, apiKey, curateModel, signal) {
       v: 1,
     });
     const { result, fromCache } = await withLlmCache(key, () =>
-      callOpenRouter(apiKey, bucketPrompt, curateModel, signal),
+      callOpenRouter(
+        apiKey,
+        bucketPrompt,
+        curateModel,
+        signal,
+        true, // cache_control on the bucket's stable prefix (S-25 Phase 5)
+      ),
     );
     const { content, usage, finishReason } = result;
     reportStepUsage(
