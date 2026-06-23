@@ -648,27 +648,27 @@ form. The cached-token count already surfaces via the Phase-1 usage readout
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes: `cargo check`
-- [x] 1.2 Regression suite passes: `node --experimental-vm-modules test/regression.js`
-- [x] 1.3 No remaining references to the old string return of `callOpenRouter`
+- [x] 1.1 Rust type-check passes: `cargo check` — b755d52
+- [x] 1.2 Regression suite passes: `node --experimental-vm-modules test/regression.js` — b755d52
+- [x] 1.3 No remaining references to the old string return of `callOpenRouter` — b755d52
 
 #### Manual
 
-- [x] 1.4 Real run shows non-zero tokens + estimated cost in the panel
-- [x] 1.5 Cache-hit run shows the "z pamięci podręcznej" badge
-- [x] 1.6 Forced tiny `max_tokens` produces an explicit truncation log line
+- [x] 1.4 Real run shows non-zero tokens + estimated cost in the panel — b755d52
+- [x] 1.5 Cache-hit run shows the "z pamięci podręcznej" badge — b755d52
+- [x] 1.6 Forced tiny `max_tokens` produces an explicit truncation log line — b755d52
 
 ### Phase 2: Strong-model single-shot A/B (evidence gate)
 
 #### Automated
 
-- [ ] 2.1 Regression suite still green
+- [x] 2.1 Regression suite still green
 
 #### Manual
 
-- [ ] 2.2 Two runs (current + strong long-context model) completed with cost panels captured
-- [ ] 2.3 Both reel sets reviewed against the "forgets half / mixes order" symptom
-- [ ] 2.4 Written gate verdict recorded in `change.md` Notes
+- [x] 2.2 Two runs (current + strong long-context model) completed with cost panels captured
+- [x] 2.3 Both reel sets reviewed against the "forgets half / mixes order" symptom
+- [x] 2.4 Written gate verdict recorded in `change.md` Notes
 
 ### Phase 2a: Single-shot cost levers
 
