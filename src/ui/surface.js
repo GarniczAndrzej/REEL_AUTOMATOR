@@ -20,6 +20,44 @@ const SECTIONS = [
 
 let pendingFrame = null;
 
+// S-07 read-only-during-run: the earlier-stage input controls that could mutate
+// state.sentences mid-analyze (the race research warns about). Force-disabled
+// while an auto run is live; their prior disabled state is restored on exit so
+// each control's own enable logic resumes ownership. The analyze run⇄stop button
+// and the transcription cancel button are deliberately NOT here — they must stay
+// live to drive the run.
+const AUTO_LOCK_IDS = [
+  'transcribeBtn',
+  'browseWhisperVideoBtn',
+  'parseBtn',
+  'clearFileBtn',
+  'srtFile',
+  'alignTranscriptBtn',
+];
+let autoLockActive = false;
+/** @type {Record<string, boolean>} */
+const autoLockPrev = {};
+
+function applyAutoLock() {
+  const running = state.autoMode.running;
+  if (running && !autoLockActive) {
+    autoLockActive = true;
+    AUTO_LOCK_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        autoLockPrev[id] = el.disabled;
+        el.disabled = true;
+      }
+    });
+  } else if (!running && autoLockActive) {
+    autoLockActive = false;
+    AUTO_LOCK_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && id in autoLockPrev) el.disabled = autoLockPrev[id];
+    });
+  }
+}
+
 /**
  * Wire nav-cue clicks and the state-driven reveal/gate loop. Call once after
  * the step modules have rendered their markup.
@@ -55,6 +93,7 @@ function scheduleRender() {
 }
 
 function render() {
+  applyAutoLock();
   SECTIONS.forEach(({ id, gate }) => {
     const el = document.getElementById(id);
     if (!el) return;

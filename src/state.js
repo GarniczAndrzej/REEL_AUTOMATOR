@@ -39,6 +39,16 @@ import {
  */
 
 /**
+ * Auto-mode (S-07) run + config state. Phase 1 carries only the transient run
+ * flags the floating panel and the surface read-only gating read; stage-selection
+ * / output fields (Phase 3) and the batch queue (Phase 4) extend this block.
+ * @typedef {Object} AutoMode
+ * @property {boolean} running - true while an auto-pipeline run is in flight
+ * @property {string|null} activeStage - id of the live stage ('transcribe' |
+ *   'analyze' | …), or null when idle
+ */
+
+/**
  * A scored reel produced by AI selection (S-01). All scored fields are
  * optional for backward-compat — older projects / providers may omit them.
  * @typedef {Object} Reel
@@ -133,6 +143,14 @@ Zasady:
     // S-19 word-by-word .srt export mode. Per-machine preference persisted in
     // localStorage alongside device/computeType — never written to .reelproj.
     wordLevelSrtExport: false,
+  },
+
+  // S-07 auto-mode: transient one-click run state (config/batch fields added in
+  // later phases). Never persisted to .reelproj.
+  /** @type {AutoMode} */
+  autoMode: {
+    running: false,
+    activeStage: null,
   },
 };
 

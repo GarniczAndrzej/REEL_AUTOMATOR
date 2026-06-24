@@ -4,13 +4,21 @@
 
 import { state, emit } from '../state.js';
 import { initReelList } from './step2-reel-list.js';
-import { initPromptPanel } from './step2-prompt-panel.js';
+import {
+  initPromptPanel,
+  runAnalysis,
+  analyzeSentences,
+} from './step2-prompt-panel.js';
 import { initSegmentOps, undo, redo } from './step2-segment-ops.js';
 import { openPopover } from './export-popover.js';
 import { initPresetBar } from './step2-preset-bar.js';
 
 // Re-export the global undo/redo surface for main.js (`import * as step2`).
 export { undo, redo };
+// S-07: the awaitable AI-stage seam the auto-mode orchestrator drives.
+// `runAnalysis` is the state-committing single-video wrapper; `analyzeSentences`
+// is the DOM/state-free core (used by batch).
+export { runAnalysis, analyzeSentences };
 
 export function init() {
   console.log('[step2.init] start');

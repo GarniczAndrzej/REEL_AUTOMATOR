@@ -19,6 +19,10 @@ import {
   escHtml,
 } from './segments.js';
 
+// S-07: re-export so the auto-mode orchestrator + batch segment with the same
+// minimum-sentence-length constant the manual transcribe path uses.
+export { MIN_CHARS };
+
 export function initTranscribe() {
   // S-05 — transcript align + export
   document
@@ -495,7 +499,9 @@ function applyWhisperAdvancedForm() {
 
 // Map the advanced settings to the engine invoke params (Tauri snake_cases the
 // keys). Empty values become null so the engine omits the corresponding flag.
-function whisperAdvancedArgs() {
+// Exported (S-07) so the auto-mode orchestrator + batch call the same engine
+// path the manual button uses.
+export function whisperAdvancedArgs() {
   const a = state.whisperAdvanced;
   return {
     device: a.device || null,
@@ -672,35 +678,63 @@ async function browseWhisperVideo() {
   }
 }
 
-async function transcribeWithWhisper() {
-  const videoPath = state._whisperVideoPath;
-  const modelId = state.modelId;
-  const language = state.whisperLanguage || 'pl';
+/**
+ * DOM/state-free transcription unit (S-07): runs `transcribe_video` for ONE file
+ * + word-driven segmentation, surfacing progress via `onProgress` and routing an
+ * abort `signal` to the global `cancel_transcription` reaper. Takes its inputs as
+ * arguments (never `state`) and RETURNS the derived transcript instead of writing
+ * the surface, so the orchestrator and the Phase-4 batch share the manual path.
+ * Rejects on real failure / `ANULOWANO` cancel rather than swallowing.
+ * @param {{ videoPath:string, modelId:string, language?:string, diarize?:boolean,
+ *   hfToken?:string, fps:number, [k:string]:any }} opts - engine params; extra
+ *   keys (the `whisperAdvancedArgs()` bag) pass through to the invoke verbatim.
+ * @param {{ signal?:AbortSignal, onProgress?:(label:string, percent:number)=>void }} [hooks]
+ * @returns {Promise<{ srtContent:string, srtName:string, sentences:import('../../state.js').Sentence[], words:any[] }>}
+ */
+export async function transcribeDocument(
+  {
+    videoPath,
+    modelId,
+    language = 'pl',
+    diarize = false,
+    hfToken = '',
+    fps,
+    ...advanced
+  },
+  { signal, onProgress } = {},
+) {
+  if (!videoPath || !modelId)
+    throw new Error('Brak pliku wideo lub modelu do transkrypcji.');
 
-  if (!videoPath || !modelId) return;
-
-  document.getElementById('transcribeBtn').disabled = true;
-  document.getElementById('cancelTranscribeBtn').style.display = '';
-  document.getElementById('whisperProgressBox').style.display = 'block';
-  setWhisperProgress('Inicjalizacja…', 0);
+  const { invoke } = await import('@tauri-apps/api/core');
+  // Route an external abort to the global single-reaper cancel (there is no
+  // AbortSignal threaded through the Rust invoke — cancellation is a side-channel
+  // command + atomic flag).
+  const onAbort = () => {
+    invoke('cancel_transcription').catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
 
   let unlisten;
   try {
-    const { listen } = await import('@tauri-apps/api/event');
-    unlisten = await listen('transcribe-progress', (e) => {
-      const { label, percent } = e.payload;
-      setWhisperProgress(label, percent);
-    });
-
-    const { invoke } = await import('@tauri-apps/api/core');
+    if (onProgress) {
+      const { listen } = await import('@tauri-apps/api/event');
+      unlisten = await listen('transcribe-progress', (e) => {
+        const { label, percent } = e.payload;
+        onProgress(label, percent);
+      });
+    }
     // Returns { srt_content, words: [{text,start,end}], segments: [...] }
     const result = await invoke('transcribe_video', {
       videoPath,
       modelId,
       language,
-      diarize: state.diarize,
-      hfToken: state.diarize ? getApiKey('huggingface') : '',
-      ...whisperAdvancedArgs(),
+      diarize,
+      hfToken: diarize ? hfToken : '',
+      ...advanced,
     });
 
     const rawBase = videoPath
@@ -715,16 +749,59 @@ async function transcribeWithWhisper() {
     const modelTag = String(modelId).replace(/[^a-zA-Z0-9_\-]/g, '_');
     const srtName =
       rawBase.replace(/[^a-zA-Z0-9_\-]/g, '_') + '_' + modelTag + '.srt';
-    // Keep the derived SRT for display/save, but the engine path builds
-    // sentences directly from word timestamps (no intermediate re-parse).
-    loadSRTContent(result.srt_content, srtName);
 
+    let sentences = [];
     if (result.segments && result.segments.length) {
       // Word-driven segmentation: gap-free sentences carrying words[].
-      state.sentences = segmentFromWords(result.segments, state.fps, MIN_CHARS);
-      state.sentences.forEach((s) => {
+      sentences = segmentFromWords(result.segments, fps, MIN_CHARS);
+      sentences.forEach((s) => {
         s.source_idx = 0;
       });
+    }
+    return {
+      srtContent: result.srt_content,
+      srtName,
+      sentences,
+      words: result.words || [],
+    };
+  } finally {
+    if (unlisten) unlisten();
+    if (signal) signal.removeEventListener('abort', onAbort);
+  }
+}
+
+async function transcribeWithWhisper() {
+  const videoPath = state._whisperVideoPath;
+  const modelId = state.modelId;
+  const language = state.whisperLanguage || 'pl';
+
+  if (!videoPath || !modelId) return;
+
+  document.getElementById('transcribeBtn').disabled = true;
+  document.getElementById('cancelTranscribeBtn').style.display = '';
+  document.getElementById('whisperProgressBox').style.display = 'block';
+  setWhisperProgress('Inicjalizacja…', 0);
+
+  try {
+    const result = await transcribeDocument(
+      {
+        videoPath,
+        modelId,
+        language,
+        diarize: state.diarize,
+        hfToken: state.diarize ? getApiKey('huggingface') : '',
+        fps: state.fps,
+        ...whisperAdvancedArgs(),
+      },
+      { onProgress: setWhisperProgress },
+    );
+
+    // Keep the derived SRT for display/save, but the engine path builds
+    // sentences directly from word timestamps (no intermediate re-parse).
+    loadSRTContent(result.srtContent, result.srtName);
+
+    if (result.sentences.length) {
+      state.sentences = result.sentences;
       // Engine path owns segmentation; the legacy merge path is retired here
       // (still used by the imported-transcript align path in Phase 5).
       state._pendingWhisperWords = null;
@@ -758,7 +835,6 @@ async function transcribeWithWhisper() {
       toast('Transkrypcja nieudana: ' + e, 'error');
     }
   } finally {
-    if (unlisten) unlisten();
     document.getElementById('cancelTranscribeBtn').style.display = 'none';
     syncTranscribeBtn();
   }

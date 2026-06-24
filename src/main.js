@@ -7,6 +7,7 @@ import { loadSettings } from './settings.js';
 import { seedPresetsIfEmpty, loadPresets } from './ai/prompt-presets.js';
 import { initSurface } from './ui/surface.js';
 import { initSettingsModal } from './ui/settings-modal.js';
+import { initAutoMode } from './ui/auto-mode/index.js';
 import { hydrateKeys } from './ai/api-key.js';
 import { toast } from './ui/toast.js';
 
@@ -77,6 +78,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSettingsModal();
   } catch (e) {
     console.error('[initSettingsModal]', e);
+  }
+
+  // S-07: wire the "Tryb automatyczny" launcher before initSurface() so the
+  // button reflects state from the first render.
+  try {
+    initAutoMode();
+  } catch (e) {
+    console.error('[initAutoMode]', e);
   }
 
   // Progressive surface: reveals/gates sections from real state. Init last so

@@ -53,8 +53,10 @@ const CLUSTER_COVERAGE_WARN = 0.5;
 let analysisController = null;
 
 // S-25 Phase 4: pipeline state retained AFTER a run so the per-bucket retry
-// buttons keep working once runAIAnalysis has returned. Null outside a pipeline
-// run. Shape: { buckets: Bucket[], apiKey: string, curateModel: string }.
+// buttons keep working once the run has returned. Null outside a pipeline run.
+// Shape: { buckets: Bucket[], sentences: Sentence[], apiKey: string, curateModel: string }
+// — `sentences` is captured so a retry curates against the same segment set the
+// run used (S-07: the core no longer reads state.sentences).
 /**
  * @typedef {Object} Bucket
  * @property {number} index
@@ -85,12 +87,14 @@ function onAnalyzeClick() {
 
 // Decide single-shot vs cluster→curate pipeline for this run (S-25 Phase 4).
 // 'single'/'pipeline' force a path; 'auto' collapses to single-shot below the
-// segment-count threshold.
-function shouldUsePipeline() {
+// segment-count threshold. Takes the segment set explicitly so the DOM/state-free
+// core (`analyzeSentences`) can decide off its passed input, not `state`.
+/** @param {import('../state.js').Sentence[]} sentences */
+function shouldUsePipeline(sentences) {
   const mode = state.aiPipelineMode || 'auto';
   if (mode === 'single') return false;
   if (mode === 'pipeline') return true;
-  return state.sentences.length >= PIPELINE_AUTO_THRESHOLD;
+  return sentences.length >= PIPELINE_AUTO_THRESHOLD;
 }
 
 /** @param {'running' | 'idle'} mode */
@@ -107,11 +111,29 @@ function setAnalyzeBtnMode(mode) {
   }
 }
 
+// Manual analyze-button entry. Reads the API key from the step-2 DOM input (its
+// one DOM coupling) and delegates the actual run to the exported, DOM-free
+// `runAnalysis` wrapper so auto-mode (S-07) and the button share one code path.
 async function runAIAnalysis() {
   const apiKey =
     document.getElementById('apiKeyInput').value.trim() ||
     getApiKey('openrouter');
-  if (!apiKey) {
+  await runAnalysis({ apiKey });
+}
+
+// Single-video wrapper (S-07): the state-committing entry the orchestrator and
+// the manual button both drive. Resolves the key (no DOM read — falls back to
+// the keychain cache), guards prerequisites, owns the AbortController + progress
+// reset, calls the DOM/state-free `analyzeSentences` core, then commits the
+// returned reels. An external `signal` (auto-mode) is linked to the internal
+// controller so the existing run⇄stop button still cancels an auto-driven run.
+/**
+ * @param {{ apiKey?: string, signal?: AbortSignal }} [opts]
+ * @returns {Promise<void>}
+ */
+export async function runAnalysis({ apiKey, signal } = {}) {
+  const key = (apiKey || getApiKey('openrouter') || '').trim();
+  if (!key) {
     toast('Otwórz „⚙ Ustawienia" i wklej API key OpenRouter!', 'error');
     return;
   }
@@ -120,7 +142,7 @@ async function runAIAnalysis() {
     return;
   }
 
-  const usePipeline = shouldUsePipeline();
+  const usePipeline = shouldUsePipeline(state.sentences);
 
   // Validate the model(s) the chosen path needs. The pipeline falls back to the
   // single-shot model when a stage model is unset, so any one model is enough.
@@ -146,6 +168,15 @@ async function runAIAnalysis() {
   // in "Zatrzymaj" mode then, so a click cancels via onAnalyzeClick instead).
   if (analysisController) return;
   const controller = new AbortController();
+  // Link an external (auto-mode) signal to the internal controller so a per-stage
+  // cancel routed to either side aborts the live fetch.
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else
+      signal.addEventListener('abort', () => controller.abort(), {
+        once: true,
+      });
+  }
   analysisController = controller;
   setAnalyzeBtnMode('running');
 
@@ -170,31 +201,48 @@ async function runAIAnalysis() {
   document.getElementById('step2Next').style.display = 'none';
 
   try {
-    if (usePipeline) {
-      await runPipeline(apiKey, controller);
-    } else {
-      await runSingleShot(apiKey, controller);
-    }
+    const reels = await analyzeSentences({
+      sentences: state.sentences,
+      apiKey: key,
+      signal: controller.signal,
+    });
+    if (reels && reels.length) commitReels(reels);
   } finally {
     analysisController = null;
     setAnalyzeBtnMode('idle');
   }
 }
 
-// Legacy single-shot path: one call → validate → commit. Unchanged behavior from
-// S-01; the convergence tail is now the shared `commitReels` helper. Owns its own
-// try/catch so the FR-018 paste-fix recovery stays byte-identical.
-async function runSingleShot(apiKey, controller) {
+// DOM/state-free analysis core (S-07): runs the S-25 cluster→curate pipeline or
+// the legacy single-shot path against the PASSED segments, and RETURNS the
+// validated reels (the partial set on a mid-run abort) instead of committing
+// them. Never reads #apiKeyInput, never writes state.reelsData, never emit()s —
+// so batch (Phase 4) can analyze a document without touching the live surface.
+/**
+ * @param {{ sentences: import('../state.js').Sentence[], apiKey: string, signal?: AbortSignal }} args
+ * @returns {Promise<import('../state.js').Reel[]>}
+ */
+export async function analyzeSentences({ sentences, apiKey, signal }) {
+  if (shouldUsePipeline(sentences)) {
+    return await runPipeline(sentences, apiKey, signal);
+  }
+  return await runSingleShot(sentences, apiKey, signal);
+}
+
+// Legacy single-shot path: one call → validate → RETURN reels (no commit; the
+// `runAnalysis` wrapper owns the state write). Owns its own try/catch so the
+// FR-018 paste-fix recovery stays byte-identical. Returns [] on cancel / failure.
+async function runSingleShot(sentences, apiKey, signal) {
   const orModel = state.orSelectedModel;
   const prompt = buildPrompt(
     state.userPrompt,
     state.systemPrompt,
-    state.sentences,
+    sentences,
     null,
     state.videoFilename || '',
   );
   log('Tryb: pojedyncze zapytanie.', 'info');
-  log('Przygotowano prompt. Segmentów: ' + state.sentences.length, 'info');
+  log('Przygotowano prompt. Segmentów: ' + sentences.length, 'info');
   log('Model: ' + orModel, 'info');
   setPS(1, 'done');
   setPS(2, 'running');
@@ -207,7 +255,7 @@ async function runSingleShot(apiKey, controller) {
       prompt,
     });
     const { result, fromCache, hashShort } = await withLlmCache(cacheKey, () =>
-      callOpenRouter(apiKey, prompt, orModel, controller.signal),
+      callOpenRouter(apiKey, prompt, orModel, signal),
     );
     const { content: responseText, usage, finishReason } = result;
 
@@ -231,10 +279,10 @@ async function runSingleShot(apiKey, controller) {
     setPS(3, 'running');
 
     const cleaned = responseText.replace(/```json|```/g, '').trim();
-    const parsed = validateReels(JSON.parse(cleaned), state.sentences);
-    commitReels(parsed);
+    const parsed = validateReels(JSON.parse(cleaned), sentences);
     setPS(3, 'done');
-    log('Sparsowano ' + state.reelsData.length + ' reelsów', 'ok');
+    log('Sparsowano ' + parsed.length + ' reelsów', 'ok');
+    return parsed;
   } catch (e) {
     if (e.name === 'AbortError') {
       // User cancel — distinct from a real failure, no error dialog / paste-fix.
@@ -258,20 +306,22 @@ async function runSingleShot(apiKey, controller) {
         log('Sprawdź API key i połączenie internetowe.', 'err');
       }
     }
+    return [];
   }
 }
 
 // S-25 Phase 4 — cluster→curate pipeline. Stage 1 clusters all segments into
-// themes; Stage 2 curates each theme bucket into scored reels; both fan in
-// through the shared `commitReels` convergence tail. Owns its own error/abort
-// handling: a Stage-1 failure routes to paste-fix (like single-shot); a Stage-2
-// abort commits the buckets already done (partial success).
-async function runPipeline(apiKey, controller) {
+// themes; Stage 2 curates each theme bucket into scored reels; the collected
+// reels are RETURNED (the `runAnalysis` wrapper commits them — S-07). Owns its
+// own error/abort handling: a Stage-1 failure routes to paste-fix (like
+// single-shot); a Stage-2 abort returns the buckets already done (partial
+// success).
+async function runPipeline(sentences, apiKey, signal) {
   const clusterModel = state.aiModels.cluster || state.orSelectedModel;
   const curateModel = state.aiModels.curate || state.orSelectedModel;
 
   log('Tryb: pipeline klaster → kuracja.', 'info');
-  log('Segmentów: ' + state.sentences.length, 'info');
+  log('Segmentów: ' + sentences.length, 'info');
   log('Model klastrowania: ' + clusterModel, 'info');
   log('Model kuracji: ' + curateModel, 'info');
 
@@ -279,7 +329,7 @@ async function runPipeline(apiKey, controller) {
   const clusterPrompt = buildClusterPrompt(
     state.userPrompt,
     state.clusterPrompt,
-    state.sentences,
+    sentences,
     null,
     state.videoFilename || '',
   );
@@ -303,7 +353,7 @@ async function runPipeline(apiKey, controller) {
           apiKey,
           clusterPrompt,
           clusterModel,
-          controller.signal,
+          signal,
           true, // cache_control on the stable transcript prefix (S-25 Phase 5)
         ),
     );
@@ -325,14 +375,14 @@ async function runPipeline(apiKey, controller) {
     }
     reportStepUsage('Etap 1 (klaster)', usage, clusterModel, fromCache);
     const cleaned = content.replace(/```json|```/g, '').trim();
-    themes = validateThemes(JSON.parse(cleaned), state.sentences);
+    themes = validateThemes(JSON.parse(cleaned), sentences);
   } catch (e) {
     if (e.name === 'AbortError') {
       setPS(2, '');
       setPS(3, '');
       log('Anulowano.', 'info');
       toast('Anulowano analizę', 'info');
-      return;
+      return [];
     }
     setPS(2, 'err');
     setPS(3, 'err');
@@ -346,7 +396,7 @@ async function runPipeline(apiKey, controller) {
     } else {
       log('Sprawdź API key i połączenie internetowe.', 'err');
     }
-    return;
+    return [];
   }
 
   // Coverage instrument: the fixed cluster defaults can leave most of a long
@@ -355,7 +405,7 @@ async function runPipeline(apiKey, controller) {
   const distinct = new Set();
   themes.forEach((t) => t.candidate_ids.forEach((id) => distinct.add(id)));
   const covered = distinct.size;
-  const total = state.sentences.length;
+  const total = sentences.length;
   log(
     `Sklastrowano ${covered} / ${total} segmentów w ${themes.length} tematach.`,
     'ok',
@@ -378,7 +428,7 @@ async function runPipeline(apiKey, controller) {
     reels: null,
     error: null,
   }));
-  pipelineState = { buckets, apiKey, curateModel };
+  pipelineState = { buckets, sentences, apiKey, curateModel };
   renderBucketList(buckets);
   setPS(2, 'done');
   setPS(3, 'running');
@@ -387,7 +437,7 @@ async function runPipeline(apiKey, controller) {
   let aborted = false;
   for (const bucket of buckets) {
     try {
-      await runBucket(bucket, apiKey, curateModel, controller.signal);
+      await runBucket(bucket, sentences, apiKey, curateModel, signal);
     } catch (e) {
       if (e.name === 'AbortError') {
         aborted = true;
@@ -399,11 +449,10 @@ async function runPipeline(apiKey, controller) {
     }
   }
 
-  // Convergence: commit whatever validated. Completed buckets persist even when
-  // some failed or the run was aborted mid-Stage-2.
+  // Convergence: RETURN whatever validated. Completed buckets persist even when
+  // some failed or the run was aborted mid-Stage-2 (the wrapper commits them).
   const all = collectPipelineReels();
   if (all.length) {
-    commitReels(all);
     const doneCount = buckets.filter((b) => b.status === 'done').length;
     log(
       'Złożono ' + all.length + ' reelsów z ' + doneCount + ' tematów.',
@@ -426,6 +475,7 @@ async function runPipeline(apiKey, controller) {
     );
   }
   logCostSummary();
+  return all;
 }
 
 // Quick total-cost summary line into the log (the usage box shows the same live
@@ -447,18 +497,19 @@ function logCostSummary() {
 // commit the buckets already done.
 /**
  * @param {Bucket} bucket
+ * @param {import('../state.js').Sentence[]} sentences
  * @param {string} apiKey
  * @param {string} curateModel
  * @param {AbortSignal} [signal]
  * @returns {Promise<void>}
  */
-async function runBucket(bucket, apiKey, curateModel, signal) {
+async function runBucket(bucket, sentences, apiKey, curateModel, signal) {
   bucket.status = 'running';
   bucket.error = null;
   updateBucketRow(bucket);
   try {
     const idSet = new Set(bucket.candidate_ids);
-    const segs = state.sentences.filter((s) => idSet.has(s.id));
+    const segs = sentences.filter((s) => idSet.has(s.id));
     const bucketPrompt = buildCuratePrompt(
       state.userPrompt,
       state.curatePrompt,
@@ -496,7 +547,7 @@ async function runBucket(bucket, apiKey, curateModel, signal) {
       );
     }
     const cleaned = content.replace(/```json|```/g, '').trim();
-    const reels = validateReels(JSON.parse(cleaned), state.sentences);
+    const reels = validateReels(JSON.parse(cleaned), sentences);
     bucket.reels = reels;
     bucket.status = 'done';
     log(
@@ -525,7 +576,12 @@ async function retryBucket(index) {
   if (!pipelineState) return;
   const bucket = pipelineState.buckets[index];
   if (!bucket || bucket.status === 'running') return;
-  await runBucket(bucket, pipelineState.apiKey, pipelineState.curateModel);
+  await runBucket(
+    bucket,
+    pipelineState.sentences,
+    pipelineState.apiKey,
+    pipelineState.curateModel,
+  );
   const all = collectPipelineReels();
   if (all.length) {
     commitReels(all, false);
