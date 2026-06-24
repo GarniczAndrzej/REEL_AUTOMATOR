@@ -1,7 +1,7 @@
 ---
 change_id: refactor-ai-prompts
 title: Refactor ai prompts
-status: implemented
+status: impl_reviewed
 created: 2026-06-24
 updated: 2026-06-24
 archived_at: null

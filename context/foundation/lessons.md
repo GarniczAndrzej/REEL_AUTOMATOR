@@ -29,3 +29,10 @@
 - **Problem**: Phase 1 commit `ee34f17` swept in two Prettier-only files that the plan's "What We're NOT Doing" explicitly told to leave untouched. The diffs were harmless, but the commit then contradicted its own plan's scope guardrail.
 - **Rule**: Commit only files in the change's scope. If incidental formatting/churn is in the working tree, either stage it in a separate prep commit BEFORE the feature work, or leave it unstaged — never fold it into a feature/phase commit. If the user explicitly asks to include it, say so in the commit body AND update the plan's "NOT doing" list so the record stays consistent.
 - **Applies to**: implement, impl-review
+
+## Changing DEFAULT_*_GUIDANCE text breaks regression marker assertions
+
+- **Context**: Editing the per-phase guidance constants in `src/ai/prompt.js` (`DEFAULT_SCORING_GUIDANCE`, `DEFAULT_CLUSTER_GUIDANCE`, `DEFAULT_CURATE_GUIDANCE`) — wording, language flip, or restructuring.
+- **Problem**: The regression suite is widely assumed to be prompt-agnostic (it "only covers parser/exporter"), but `test/regression.js` hard-codes string markers from the guidance defaults (e.g. it asserted on the Polish `'ZASADY OCENY'`). S-26's EN-flip of `DEFAULT_SCORING_GUIDANCE` silently staled those assertions; the suite would fail until the marker was updated to a phrase unique to the new block (`'find every Reel worth cutting'`).
+- **Rule**: When you change any `DEFAULT_*_GUIDANCE` text, grep `test/regression.js` for the old marker string and update both the "omits guidance" negative assertion and the "exported default" positive assertion to a phrase unique to the new text. Run `node --experimental-vm-modules test/regression.js` to confirm green.
+- **Applies to**: implement, impl-review
