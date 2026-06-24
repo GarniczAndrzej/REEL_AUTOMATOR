@@ -571,10 +571,10 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes
-- [x] 1.2 Regression suite passes
-- [x] 1.3 Prettier clean on touched files
-- [x] 1.4 `runAnalysis` + `analyzeSentences` exported from `step2-analyze.js`
+- [x] 1.1 Rust type-check passes — 9201dfe
+- [x] 1.2 Regression suite passes — 9201dfe
+- [x] 1.3 Prettier clean on touched files — 9201dfe
+- [x] 1.4 `runAnalysis` + `analyzeSentences` exported from `step2-analyze.js` — 9201dfe
 
 #### Manual
 
