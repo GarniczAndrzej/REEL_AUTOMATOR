@@ -38,7 +38,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-03  | prompt-presets              | edit the system prompt and manage reusable prompt presets    | S-01               | FR-015, FR-016                                | done     |
 | S-04  | segment-tuning-ops          | reorder, merge, delete segments (reorder/merge/delete ops need rework) | S-01      | FR-022                                        | done     |
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
-| S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
+| S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | done     |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | done |
 | S-09  | resolve-plugin-handoff      | auto-collect timeline audio, transcribe in-panel, insert subtitles onto Subtitles track, and create reel timelines — all from inside Resolve | S-01, S-05, S-08, F-02 | FR-030, FR-031, US-02 | go-with-rework |
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | done     |
@@ -216,7 +216,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Orchestration over slices that must already exist; the sharp edges are cancelability mid-stage and not blocking the window. Sequenced after both the selection (S-01) and transcription (S-05) engines are real.
-- **Status:** proposed
+- **Status:** done
 
 ### S-08: Full timeline-export set — Premiere XML / FCPXML / Resolve Lua
 
@@ -538,5 +538,6 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-19: export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions** — Archived 2026-06-18 → `context/archive/2026-06-18-word-level-srt-export/`. Lesson: —.
 - **S-21: The app no longer randomly closes mid-session during `npm run tauri dev`. Root cause is identified (Rust panic, unhandled JS exception, Tauri IPC crash, sidecar OOM, or OS-level signal) and fixed — with a reproducibility note and a regression guard where possible.** — Archived 2026-06-22 → `context/archive/2026-06-19-app-crash-fix/`. No single smoking gun; hardened the most plausible silent-exit mechanisms — bounded the unbounded WhisperX `stderr_buf` (top OOM amplifier), closed the cancel/completion orphan race so a cancelled run is always reaped (single atomic reaper), switched release `panic = unwind`, and added a Rust `[PANIC]` hook + JS global error/rejection handlers so the next crash is no longer silent. Lesson: `drop(CommandChild)` does NOT kill the OS process — a cancelled sidecar must be explicitly reaped (SIGTERM→SIGKILL) by a single deterministic owner, or orphaned torch workers accumulate into cumulative OOM.
 - **S-20: The word-by-word SRT export (S-19) actually works in the app: the "Eksport słowo-po-słowie" checkbox in the WhisperX advanced modal triggers per-word cues when clicked, the auto-align fallback runs when word data is missing, and the saved `.srt` opens cleanly in a caption viewer.** — Archived 2026-06-22 → `context/archive/2026-06-19-word-srt-fix/`. Lesson: —.
+- **S-07: Editor triggers a one-click automatic run (after an API key is set, with confirmation) that drives import → transcription → alignment → diarization → segmentation → AI selection and auto-advances, with the ability to return to earlier steps; a single continuous staged progress indicator shows per-stage %, a per-stage cancel button, and no blocking modal.** — Archived 2026-06-24 → `context/archive/2026-06-22-auto-mode-pipeline/`. Lesson: —.
 - **S-23: cancel an in-flight AI analysis with a Stop button when OpenRouter is slow/laggy (varies by model)** — Archived 2026-06-22 → `context/archive/2026-06-22-stop-ai-analysis/`. Lesson: —.
 - **S-08: Editor exports FCP7 xmeml `.xml` (Premiere), `.fcpxml` (Final Cut Pro X, generated separately from xmeml), and a DaVinci Resolve `.lua` console script — all carrying the new markers and importing cleanly.** — Archived 2026-06-24 → `context/archive/2026-06-22-timeline-export-set/`. Lesson: —.
