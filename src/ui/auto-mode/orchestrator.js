@@ -18,15 +18,21 @@ import {
   alignToWords,
 } from '../import/transcribe.js';
 import { loadSRTContent, renderSegments } from '../import/segments.js';
-import { showPanel, hidePanel, updateStage } from './progress-panel.js';
+import {
+  showPanel,
+  hidePanel,
+  updateStage,
+  showOpenFolder,
+} from './progress-panel.js';
 import { generateEDL } from '../../exporters/edl.js';
 import { generateXML } from '../../exporters/xml.js';
 import { generateLua } from '../../exporters/lua.js';
 import {
-  generateTranscriptSRT,
   generateTranscriptVTT,
   generateWordJSON,
+  generateSegmentsMd,
 } from '../../exporters/transcript.js';
+import { buildSrtContent } from './srt-mode.js';
 import { transcriptBase } from '../export-srt.js';
 import {
   saveTextToPath,
@@ -344,6 +350,7 @@ async function runExportStage(controller) {
     percent: 100,
     label: `Zapisano ${ok} z ${items.length}`,
   });
+  if (ok) showOpenFolder(folder);
   toast(
     `Zapisano ${ok} z ${items.length} plików ✓`,
     ok === items.length ? 'success' : 'info',
@@ -367,7 +374,7 @@ function collectOutputs() {
   if (o.srt && haveSeg)
     items.push({
       name: tBase + '.srt',
-      content: generateTranscriptSRT(state.sentences, state.fps),
+      content: buildSrtContent(state.sentences, state.fps),
     });
   if (o.vtt && haveSeg)
     items.push({
@@ -436,16 +443,12 @@ function genLua() {
 }
 
 /**
- * Build the segment-listing `.md` (mirrors export-popover's inline builder).
- * Phase 4 extracts this into a pure `generateSegmentsMd` with a regression case.
+ * Build the segment-listing `.md` from the live document via the shared pure
+ * `generateSegmentsMd` (Phase 4 extracted it; batch reuses the same builder).
  * @returns {string}
  */
 function buildSegmentsMd() {
-  let md = `# Segmenty SRT\n\nPlik: ${state.srtName || 'nieznany'}\nFPS: ${state.fps}\nSegmentów: ${state.sentences.length}\n\n---\n\n`;
-  state.sentences.forEach((s) => {
-    md += `**#${s.id}** \`${s.start_tc} → ${s.end_tc}\` (${(s.duration_frame / state.fps).toFixed(1)}s)\n\n${s.text}\n\n---\n\n`;
-  });
-  return md;
+  return generateSegmentsMd(state.sentences, state.fps, state.srtName);
 }
 
 /** Filename stem derived from the source video (matches export-popover). */

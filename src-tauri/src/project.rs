@@ -28,6 +28,18 @@ pub fn load_text_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+/// Reveal a folder (or file) in the OS file manager. This is a macOS-only app
+/// (see CLAUDE.md), so it shells out to `open`. Backs the auto/batch
+/// "Otwórz folder docelowy" button shown after export completes.
+#[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 // ── F7 LLM cache ─────────────────────────────────────────────────────
 
 #[tauri::command]

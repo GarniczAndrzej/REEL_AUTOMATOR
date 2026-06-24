@@ -12,6 +12,7 @@
 
 import { state, subscribe } from '../../state.js';
 import { renderConfig, refreshConfig, setConfigEnabled } from './config.js';
+import { openPath } from '../../util/save-file.js';
 
 // Fixed stage list. Segmentation runs inside the transcription unit, so its row
 // is marked done right after transcription; `Eksport` runs last (Phase 3).
@@ -40,6 +41,10 @@ let panelEl = null;
 let activeController = null;
 /** @type {(()=>any)|null} */
 let startHandler = null;
+/** @type {(()=>any)|null} */
+let batchHandler = null;
+/** @type {string|null} */
+let openFolderPath = null;
 
 /**
  * Register the launch handler invoked by the panel's "Uruchom" button. Wired by
@@ -49,6 +54,16 @@ let startHandler = null;
  */
 export function setStartHandler(fn) {
   startHandler = fn;
+}
+
+/**
+ * Register the handler invoked by the panel's "Uruchom wsadowo" button (Phase 4
+ * batch). Wired by `index.js` to the gated batch launch.
+ * @param {()=>any} fn
+ * @returns {void}
+ */
+export function setBatchHandler(fn) {
+  batchHandler = fn;
 }
 
 /**
@@ -91,6 +106,8 @@ export function mountProgressPanel() {
     <div class="auto-panel-stages">${rows}</div>
     <div class="auto-panel-foot">
       <button class="auto-panel-start btn btn-primary" type="button">▶ Uruchom</button>
+      <button class="auto-panel-batch btn btn-primary" type="button" style="display:none">▶ Uruchom wsadowo</button>
+      <button class="auto-panel-openfolder btn btn-secondary" type="button" style="display:none">📂 Otwórz folder docelowy</button>
     </div>`;
 
   document.body.appendChild(panelEl);
@@ -103,6 +120,14 @@ export function mountProgressPanel() {
   panelEl.querySelector('.auto-panel-start').addEventListener('click', () => {
     if (!state.autoMode.running && startHandler) startHandler();
   });
+  panelEl.querySelector('.auto-panel-batch').addEventListener('click', () => {
+    if (!state.autoMode.running && batchHandler) batchHandler();
+  });
+  panelEl
+    .querySelector('.auto-panel-openfolder')
+    .addEventListener('click', () => {
+      if (openFolderPath) openPath(openFolderPath);
+    });
   panelEl.querySelectorAll('.auto-stage-cancel').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.closest('.auto-stage')?.dataset.stage;
@@ -129,6 +154,15 @@ function syncRunState() {
   setConfigEnabled(!running);
   const start = panelEl.querySelector('.auto-panel-start');
   if (start) start.disabled = running;
+  // The batch launch button only appears once videos are queued; its label
+  // carries the queue count so the user sees how many will be processed.
+  const batch = panelEl.querySelector('.auto-panel-batch');
+  const n = state.autoMode.batchQueue.length;
+  if (batch) {
+    batch.style.display = n ? '' : 'none';
+    batch.disabled = running;
+    batch.textContent = `▶ Uruchom wsadowo (${n})`;
+  }
   panelEl.classList.toggle('running', running);
 }
 
@@ -140,6 +174,7 @@ function syncRunState() {
 export function openForConfig() {
   mountProgressPanel();
   activeController = null;
+  showOpenFolder(null);
   for (const s of STAGES) {
     updateStage(s.id, { status: 'pending', percent: 0, label: '' });
   }
@@ -157,6 +192,7 @@ export function openForConfig() {
 export function showPanel({ controller } = {}) {
   mountProgressPanel();
   activeController = controller || null;
+  showOpenFolder(null);
   for (const s of STAGES) {
     updateStage(s.id, { status: 'pending', percent: 0, label: '' });
   }
@@ -167,6 +203,20 @@ export function showPanel({ controller } = {}) {
 /** Hide (dismiss) the panel without destroying it. @returns {void} */
 export function hidePanel() {
   if (panelEl) panelEl.classList.remove('visible');
+}
+
+/**
+ * Reveal (or hide) the "Otwórz folder docelowy" button. Called after an
+ * export/batch finishes with the destination folder; passing a falsy path hides
+ * it. The button opens the folder in Finder via the `open_path` command.
+ * @param {string|null} path
+ * @returns {void}
+ */
+export function showOpenFolder(path) {
+  openFolderPath = path || null;
+  if (!panelEl) return;
+  const btn = panelEl.querySelector('.auto-panel-openfolder');
+  if (btn) btn.style.display = openFolderPath ? '' : 'none';
 }
 
 /**

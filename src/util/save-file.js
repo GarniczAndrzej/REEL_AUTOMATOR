@@ -52,6 +52,21 @@ export async function pickFolder() {
 }
 
 /**
+ * Reveal a folder (or file) in the OS file manager (macOS Finder). Backs the
+ * auto/batch "Otwórz folder docelowy" button shown after export completes.
+ * @param {string} path Folder or file path to open.
+ * @returns {Promise<void>}
+ */
+export async function openPath(path) {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_path', { path });
+  } catch (e) {
+    toast('Nie udało się otworzyć folderu: ' + e, 'error');
+  }
+}
+
+/**
  * Write one text file into a previously chosen folder — no per-file dialog.
  * Used by multi-output single-video export (S-07 Phase 3) and batch (Phase 4),
  * which call `pickFolder()` once then `saveTextToFolder(...)` per file.

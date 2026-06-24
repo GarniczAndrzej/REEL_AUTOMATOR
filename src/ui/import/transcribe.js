@@ -89,6 +89,28 @@ function syncTranscribeBtn() {
 let _modelStatus = {};
 let _downloadingId = null;
 
+// Per-machine: the last-selected WhisperX model id. Persisted so the choice is
+// remembered across sessions (and available to auto/batch runs without a loaded
+// project). NOT written to .reelproj — model availability is per-machine.
+const MODEL_LS_KEY = 'edl_whisper_model';
+
+/**
+ * Restore the remembered model selection from localStorage when nothing has set
+ * it yet (a loaded project takes precedence). Only restores a model that is
+ * still downloaded on this machine, so a stale id can't disable transcription.
+ * @returns {void}
+ */
+function restoreSelectedModel() {
+  if (state.modelId) return; // a loaded project already chose one
+  try {
+    const saved = localStorage.getItem(MODEL_LS_KEY);
+    if (saved && _modelStatus[saved]?.downloaded) {
+      state.modelId = saved;
+      emit();
+    }
+  } catch (e) {}
+}
+
 async function initModelManager() {
   // Render the model list immediately. The launch badge is a pure cache READ
   // (whisperx_engine_cached) — it never spawns the sidecar, because even the
@@ -96,6 +118,7 @@ async function initModelManager() {
   // import). The badge paints only from a prior "Pełna weryfikacja" result; a
   // miss invites the user to run it on demand. Kick it off without awaiting.
   await refreshModelStatus();
+  restoreSelectedModel();
   await renderModelManager();
   refreshEngineReadiness();
 }
@@ -269,6 +292,9 @@ async function deleteModel(id) {
     await invoke('delete_model', { modelId: id });
     if (state.modelId === id) {
       state.modelId = '';
+      try {
+        localStorage.removeItem(MODEL_LS_KEY);
+      } catch (e) {}
       emit();
     }
     await refreshModelStatus();
@@ -280,6 +306,9 @@ async function deleteModel(id) {
 
 function selectModel(id) {
   state.modelId = id;
+  try {
+    localStorage.setItem(MODEL_LS_KEY, id);
+  } catch (e) {}
   emit();
   renderModelManager();
   syncTranscribeBtn();

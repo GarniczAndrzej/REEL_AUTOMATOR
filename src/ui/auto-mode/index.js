@@ -7,28 +7,37 @@
 
 import { state, subscribe } from '../../state.js';
 import { runAutoPipeline } from './orchestrator.js';
-import { openForConfig, setStartHandler } from './progress-panel.js';
+import {
+  openForConfig,
+  setStartHandler,
+  setBatchHandler,
+} from './progress-panel.js';
 import { validateSelection } from './config.js';
+import { runBatch } from './batch.js';
 import { toast } from '../toast.js';
 
 export function initAutoMode() {
   const btn = document.getElementById('autoModeBtn');
   if (!btn) return;
-  // The sidebar button opens the config panel; the panel's Uruchom launches.
+  // The sidebar button opens the config panel; the panel's Uruchom launches a
+  // single-document run, Uruchom wsadowo launches the batch (Phase 4).
   btn.addEventListener('click', openForConfig);
   setStartHandler(launchAutoRun);
-  // Reflect real state on every change (input present, not running).
+  setBatchHandler(launchBatchRun);
+  // Reflect real state on every change (not running).
   subscribe(() => syncAutoBtn(btn));
   syncAutoBtn(btn);
 }
 
-/** @param {HTMLButtonElement} btn */
+/**
+ * The sidebar button only OPENS the config panel — a single-document input is no
+ * longer required to open it, because the panel is also where a headless batch
+ * (which needs no loaded document) is assembled. Both launch paths validate
+ * their own preconditions. The button is only gated while a run is live.
+ * @param {HTMLButtonElement} btn
+ */
 function syncAutoBtn(btn) {
-  const hasInput =
-    !!state._whisperVideoPath ||
-    !!state.srtContent ||
-    state.sentences.length > 0;
-  btn.disabled = !hasInput || state.autoMode.running;
+  btn.disabled = state.autoMode.running;
 }
 
 /**
@@ -64,4 +73,15 @@ async function launchAutoRun() {
     if (!proceed) return;
   }
   await runAutoPipeline();
+}
+
+/**
+ * Gated batch launch invoked by the panel's "Uruchom wsadowo" button. `runBatch`
+ * owns its own validation (queue non-empty, outputs selected, key when timeline
+ * outputs are requested) and the one-time folder pick, so this is a thin guard.
+ * @returns {Promise<void>}
+ */
+async function launchBatchRun() {
+  if (state.autoMode.running) return;
+  await runBatch();
 }

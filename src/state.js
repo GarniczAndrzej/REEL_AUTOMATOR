@@ -60,12 +60,19 @@ import {
  * Auto-mode (S-07) run + config state. Phase 1 carries the transient run flags
  * the floating panel and the surface read-only gating read; Phase 3 adds the
  * `stages`/`outputs` selection; the batch queue (Phase 4) extends this block.
+ * @typedef {Object} BatchItem
+ * @property {string} path - absolute source video path
+ * @property {string} name - display file name (basename of `path`)
+ * @property {'pending'|'running'|'done'|'error'} status - per-video progress
+ *
  * @typedef {Object} AutoMode
  * @property {boolean} running - true while an auto-pipeline run is in flight
  * @property {string|null} activeStage - id of the live stage ('transcribe' |
  *   'analyze' | …), or null when idle
  * @property {AutoStages} stages - which pipeline stages the run executes
  * @property {AutoOutputs} outputs - which files the export stage produces
+ * @property {BatchItem[]} batchQueue - videos queued for headless batch (Phase 4)
+ * @property {string|null} batchFolder - folder the batch writes outputs into
  */
 
 /**
@@ -189,6 +196,13 @@ Zasady:
       xml: false,
       lua: false,
     },
+    // S-07 Phase 4 — headless batch: a sequential queue of videos, each
+    // processed end-to-end and written to one folder picked once at start.
+    // Never mutates the single-document surface; never persisted to .reelproj.
+    /** @type {BatchItem[]} */
+    batchQueue: [],
+    /** @type {string|null} */
+    batchFolder: null,
   },
 };
 

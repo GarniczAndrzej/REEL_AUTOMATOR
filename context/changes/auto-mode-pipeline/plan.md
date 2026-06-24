@@ -603,9 +603,9 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Automated
 
-- [x] 3.1 Rust type-check passes
-- [x] 3.2 Regression suite passes
-- [x] 3.3 Prettier clean on touched files
+- [x] 3.1 Rust type-check passes — 76f8e58
+- [x] 3.2 Regression suite passes — 76f8e58
+- [x] 3.3 Prettier clean on touched files — 76f8e58
 
 #### Manual
 
@@ -618,10 +618,10 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Automated
 
-- [ ] 4.1 Rust type-check passes
-- [ ] 4.2 Regression suite passes (output formats unchanged)
-- [ ] 4.3 New `generateSegmentsMd` regression case added and passing
-- [ ] 4.4 Prettier clean on touched files
+- [x] 4.1 Rust type-check passes
+- [x] 4.2 Regression suite passes (output formats unchanged)
+- [x] 4.3 New `generateSegmentsMd` regression case added and passing
+- [x] 4.4 Prettier clean on touched files
 
 #### Manual
 

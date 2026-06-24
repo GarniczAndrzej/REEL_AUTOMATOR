@@ -18,6 +18,7 @@ import {
   generateTranscriptSRT,
   generateTranscriptVTT,
   generateWordSRT,
+  generateSegmentsMd,
 } from '../src/exporters/transcript.js';
 import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
@@ -965,6 +966,50 @@ assert(exportedVTT.startsWith('WEBVTT'), 'exported .vtt starts with WEBVTT');
 assert(
   /00:00:00\.\d{3} --> 00:00:0\d\.\d{3}/.test(exportedVTT),
   'exported .vtt has VTT timestamps (dot separator)',
+);
+
+// ─────────────────────────────────────────────────────────────────
+// Test 11b: generateSegmentsMd — pure segment-listing .md (S-07 Phase 4)
+// Pins the extracted builder's output so batch + the export popover share one
+// byte-identical generator.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 11b: generateSegmentsMd (.md) ───────────────────');
+
+const mdSentences = [
+  {
+    id: 1,
+    text: 'Pierwsze zdanie.',
+    start_tc: '00:00:01:00',
+    end_tc: '00:00:03:00',
+    duration_frame: 50,
+  },
+  {
+    id: 2,
+    text: 'Drugie zdanie.',
+    start_tc: '00:00:03:00',
+    end_tc: '00:00:05:12',
+    duration_frame: 62,
+  },
+];
+const md = generateSegmentsMd(mdSentences, FPS, 'klip.srt');
+assert(
+  md.startsWith('# Segmenty SRT\n\nPlik: klip.srt\nFPS: 25\nSegmentów: 2\n'),
+  'segments .md header carries source name, fps and count',
+);
+assert(
+  md.includes('**#1** `00:00:01:00 → 00:00:03:00` (2.0s)\n\nPierwsze zdanie.'),
+  'segments .md renders an entry with tc span, duration and text',
+);
+assert(
+  md.includes('**#2** `00:00:03:00 → 00:00:05:12` (2.5s)'),
+  'segments .md computes per-segment duration from frames',
+);
+assert(
+  generateSegmentsMd([], FPS).startsWith(
+    '# Segmenty SRT\n\nPlik: nieznany\nFPS: 25\nSegmentów: 0\n',
+  ),
+  'segments .md falls back to "nieznany" when no source name is given',
 );
 
 // ─────────────────────────────────────────────────────────────────

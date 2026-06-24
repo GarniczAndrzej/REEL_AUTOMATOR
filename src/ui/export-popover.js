@@ -10,7 +10,10 @@ import { generateEDL } from '../exporters/edl.js';
 import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
 import { generateFCPXML } from '../exporters/fcpxml.js';
-import { generateTranscriptVTT } from '../exporters/transcript.js';
+import {
+  generateTranscriptVTT,
+  generateSegmentsMd,
+} from '../exporters/transcript.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
 import { toast } from './toast.js';
@@ -236,13 +239,9 @@ async function exportMD() {
     toast('Brak segmentów do eksportu.', 'info');
     return;
   }
-  let md = `# Segmenty SRT\n\nPlik: ${state.srtName || 'nieznany'}\nFPS: ${state.fps}\nSegmentów: ${state.sentences.length}\n\n---\n\n`;
-  state.sentences.forEach((s) => {
-    md += `**#${s.id}** \`${s.start_tc} → ${s.end_tc}\` (${(s.duration_frame / state.fps).toFixed(1)}s)\n\n${s.text}\n\n---\n\n`;
-  });
   const saved = await saveTextToPath({
     defaultName: 'segmenty.md',
-    content: md,
+    content: generateSegmentsMd(state.sentences, state.fps, state.srtName),
   });
   if (saved) toast('Zapisano .md ✓', 'success');
 }

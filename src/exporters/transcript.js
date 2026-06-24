@@ -123,6 +123,25 @@ export function generateWordJSON(sentences, fps) {
 }
 
 /**
+ * Build the human-readable segment-listing `.md` for a transcript — one entry
+ * per sentence with its timecode span, duration and text. Pure function (no DOM,
+ * no state), so the export popover, the single-video auto-mode export, and the
+ * Phase-4 batch all share one builder and a regression case can pin the output.
+ * Output is byte-identical to the previous inline `export-popover.js` builder.
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {number} fps
+ * @param {string} [srtName] - source file name shown in the header
+ * @returns {string}
+ */
+export function generateSegmentsMd(sentences, fps, srtName) {
+  let md = `# Segmenty SRT\n\nPlik: ${srtName || 'nieznany'}\nFPS: ${fps}\nSegmentów: ${sentences.length}\n\n---\n\n`;
+  sentences.forEach((s) => {
+    md += `**#${s.id}** \`${s.start_tc} → ${s.end_tc}\` (${(s.duration_frame / fps).toFixed(1)}s)\n\n${s.text}\n\n---\n\n`;
+  });
+  return md;
+}
+
+/**
  * Generate a `.vtt` transcript from sentences.
  * @param {import('../state.js').Sentence[]} sentences
  * @param {number} fps

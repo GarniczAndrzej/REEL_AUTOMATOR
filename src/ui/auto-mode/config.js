@@ -9,6 +9,7 @@
 
 import { state, emit } from '../../state.js';
 import { getApiKey } from '../../ai/api-key.js';
+import { addVideosToBatch, removeFromBatch } from './batch.js';
 
 /** @type {{id:string,label:string}[]} */
 const STAGE_DEFS = [
@@ -45,6 +46,9 @@ function hasTranscript() {
 function hasReels() {
   return state.reelsData.length > 0;
 }
+function hasBatch() {
+  return state.autoMode.batchQueue.length > 0;
+}
 
 /**
  * @param {{id:string,label:string}} def
@@ -67,6 +71,17 @@ function checkboxRow(def, kind) {
 export function renderConfig(container) {
   rootEl = container;
   container.innerHTML = `
+    <div class="auto-config-group auto-batch">
+      <div class="auto-config-title">Tryb wsadowy</div>
+      <div class="auto-config-hint">
+        Dodaj wiele wideo, aby przetworzyć je po kolei do jednego folderu.
+        Każde przechodzi przez zaznaczone niżej etapy i pliki wyjściowe.
+      </div>
+      <button class="auto-batch-add btn btn-secondary" type="button">
+        + Dodaj wideo…
+      </button>
+      <div class="auto-batch-queue"></div>
+    </div>
     <div class="auto-config-group">
       <div class="auto-config-title">Etapy</div>
       ${STAGE_DEFS.map((d) => checkboxRow(d, 'stage')).join('')}
@@ -81,7 +96,59 @@ export function renderConfig(container) {
   container.querySelectorAll('input[type=checkbox]').forEach((cb) => {
     cb.addEventListener('change', onToggle);
   });
+  container
+    .querySelector('.auto-batch-add')
+    ?.addEventListener('click', addVideosToBatch);
+  // Delegate the per-row remove buttons (the queue list is re-rendered on every
+  // state change, so a single delegated listener survives re-renders).
+  container
+    .querySelector('.auto-batch-queue')
+    ?.addEventListener('click', (e) => {
+      const btn = /** @type {HTMLElement} */ (e.target).closest(
+        '.auto-batch-remove',
+      );
+      if (!btn || configLocked) return;
+      const idx = Number(btn.dataset.idx);
+      if (Number.isInteger(idx)) removeFromBatch(idx);
+    });
   refreshConfig();
+}
+
+// Per-video status glyph for the batch queue rows (mirrors the panel icon set).
+const BATCH_STATUS = {
+  pending: '—',
+  running: 'W toku…',
+  done: '✓ Gotowe',
+  error: '✗ Błąd',
+};
+
+/**
+ * Re-render the batch queue rows from `state.autoMode.batchQueue`. Each row shows
+ * the source video name, its current status, and a remove button (disabled while
+ * a run is live). Cheap + idempotent — called from `refreshConfig`.
+ * @returns {void}
+ */
+function renderBatchQueue() {
+  if (!rootEl) return;
+  const list = rootEl.querySelector('.auto-batch-queue');
+  if (!list) return;
+  const queue = state.autoMode.batchQueue;
+  if (!queue.length) {
+    list.innerHTML = `<div class="auto-batch-empty">Brak wideo w kolejce.</div>`;
+    return;
+  }
+  list.innerHTML = queue
+    .map(
+      (v, i) => `
+      <div class="auto-batch-row ${v.status}">
+        <span class="auto-batch-name" title="${v.name}">${v.name}</span>
+        <span class="auto-batch-status">${BATCH_STATUS[v.status] || ''}</span>
+        <button class="auto-batch-remove" type="button" data-idx="${i}"
+          title="Usuń z kolejki" aria-label="Usuń z kolejki"
+          ${configLocked ? 'disabled' : ''}>✕</button>
+      </div>`,
+    )
+    .join('');
 }
 
 /** @param {Event} e */
@@ -109,22 +176,29 @@ export function refreshConfig() {
   const s = state.autoMode.stages;
   const o = state.autoMode.outputs;
 
-  // Stage enablement (dependency rules): transcription needs a loaded video;
-  // segmentation needs a transcript upstream; analysis needs segments upstream.
+  // Stage enablement (dependency rules). A queued batch supplies the input that
+  // a single loaded document otherwise would, so each batched video transcribes
+  // + segments + (optionally) analyses — the stage checkboxes must stay tickable
+  // even when no single document is loaded.
+  const batch = hasBatch();
   const stageEnabled = {
-    transcription: hasVideo(),
-    segmentation: s.transcription || hasTranscript(),
-    analysis: s.segmentation || state.sentences.length > 0,
+    transcription: hasVideo() || batch,
+    segmentation: s.transcription || hasTranscript() || batch,
+    analysis:
+      s.segmentation || state.sentences.length > 0 || (batch && s.segmentation),
     export: true,
   };
   for (const id of Object.keys(stageEnabled)) {
     if (!stageEnabled[id] && s[id]) s[id] = false;
   }
 
-  // Output enablement depends on the (possibly just-cleared) stage flags. Text
-  // outputs need a transcript; timeline outputs need reels (Analiza AI).
-  const textOk = s.export && (s.transcription || hasTranscript());
-  const timelineOk = s.export && (s.analysis || hasReels());
+  // Output enablement. For a single document the Eksport stage gates outputs;
+  // for a batch, export is implicit (headless to disk), so outputs are gated by
+  // the queue + the stages each video will run. Text outputs need a transcript
+  // (always produced per video); timeline outputs need reels (Analiza AI).
+  const textOk = (s.export && (s.transcription || hasTranscript())) || batch;
+  const timelineOk =
+    (s.export && (s.analysis || hasReels())) || (batch && s.analysis);
   const outEnabled = {
     srt: textOk,
     vtt: textOk,
@@ -150,6 +224,10 @@ export function refreshConfig() {
       el.checked = !!o[id];
     }
   });
+
+  const addBtn = rootEl.querySelector('.auto-batch-add');
+  if (addBtn) addBtn.disabled = configLocked;
+  renderBatchQueue();
 }
 
 /**
