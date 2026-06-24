@@ -437,29 +437,35 @@ human to walk the five migration scenarios above before closing the change.
 
 #### Automated
 
-- [x] 1.1 Regression suite green: `node --experimental-vm-modules test/regression.js`
-- [x] 1.2 Module imports without syntax error (constants are valid template literals)
-- [x] 1.3 Prettier clean on `src/ai/prompt.js`
+- [x] 1.1 Regression suite green: `node --experimental-vm-modules test/regression.js` — a022cd9
+- [x] 1.2 Module imports without syntax error (constants are valid template literals) — a022cd9
+- [x] 1.3 Prettier clean on `src/ai/prompt.js` — a022cd9
 
 #### Manual
 
-- [ ] 1.4 Settings modal shows the three new guidance defaults (single-shot now English/Polish-output)
-- [ ] 1.5 Trial analysis run produces valid JSON passing `validateReels` / `validateThemes`
-- [ ] 1.6 `reason` / `reel_name` / theme `title` outputs are still Polish
+- [x] 1.4 Settings modal shows the three new guidance defaults (single-shot now English/Polish-output) — a022cd9
+- [x] 1.5 Trial analysis run produces valid JSON passing `validateReels` / `validateThemes` — a022cd9
+- [x] 1.6 `reason` / `reel_name` / theme `title` outputs are still Polish — a022cd9
 
 ### Phase 2: Cohort preset library
 
 #### Automated
 
-- [ ] 2.1 Regression suite green
-- [ ] 2.2 `BUILTIN_PRESETS` has 11 entries, ids unique and `builtin-` prefixed
-- [ ] 2.3 Prettier clean on `src/ai/prompt-presets.js`
+- [x] 2.1 Regression suite green
+- [x] 2.2 `BUILTIN_PRESETS` has 11 entries, ids unique and `builtin-` prefixed
+- [x] 2.3 Prettier clean on `src/ai/prompt-presets.js`
+
+> Deviation (user-directed): preset `userPrompt` bodies ship in **English**
+> (labeled AUDIENCE → LOOK FOR → HOOK → LENGTH → CTA + a Polish-output anchor),
+> not the verbatim Polish the Phase 2 block / `prompt-design.md` specified.
+> Aligns with [[llm-prompt-instructions-english]]; output stays Polish; picker
+> names stay Polish. See change.md Notes.
 
 #### Manual
 
-- [ ] 2.4 Fresh profile picker lists all 11 presets with correct Polish names
-- [ ] 2.5 Selecting The5 and Copilot fills the textarea with drafted Polish text
-- [ ] 2.6 A cohort preset + new curate guidance produces a cohort-framed selection
+- [x] 2.4 Fresh profile picker lists all 11 presets with correct Polish names
+- [x] 2.5 Selecting The5 and Copilot fills the textarea with drafted text (now English bodies)
+- [x] 2.6 A cohort preset + new curate guidance produces a cohort-framed selection
 
 ### Phase 3: One-time preset migration
 
