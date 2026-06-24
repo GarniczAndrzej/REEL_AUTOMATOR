@@ -128,10 +128,12 @@ async function runAIAnalysis() {
 // returned reels. An external `signal` (auto-mode) is linked to the internal
 // controller so the existing run⇄stop button still cancels an auto-driven run.
 /**
- * @param {{ apiKey?: string, signal?: AbortSignal }} [opts]
+ * @param {{ apiKey?: string, signal?: AbortSignal, onProgress?: (p:{label:string, percent:number})=>void }} [opts]
+ *   `onProgress` (S-07, Phase 2) feeds the unified auto-mode panel's `Analiza AI`
+ *   row; the manual button passes none (no-op).
  * @returns {Promise<void>}
  */
-export async function runAnalysis({ apiKey, signal } = {}) {
+export async function runAnalysis({ apiKey, signal, onProgress } = {}) {
   const key = (apiKey || getApiKey('openrouter') || '').trim();
   if (!key) {
     toast('Otwórz „⚙ Ustawienia" i wklej API key OpenRouter!', 'error');
@@ -180,8 +182,12 @@ export async function runAnalysis({ apiKey, signal } = {}) {
   analysisController = controller;
   setAnalyzeBtnMode('running');
 
+  // S-07, Phase 2: while an auto run owns the unified floating panel, suppress
+  // the legacy inline #progressBox surface. The setPS/bucket DOM writes below
+  // still run, but stay invisible inside the hidden box (no behavior change for
+  // manual runs, which keep their surface).
   const progressBox = document.getElementById('progressBox');
-  progressBox.classList.add('visible');
+  if (!state.autoMode.running) progressBox.classList.add('visible');
   setPS(1, 'running');
   setPS(2, '');
   setPS(3, '');
@@ -205,6 +211,7 @@ export async function runAnalysis({ apiKey, signal } = {}) {
       sentences: state.sentences,
       apiKey: key,
       signal: controller.signal,
+      onProgress,
     });
     if (reels && reels.length) commitReels(reels);
   } finally {
@@ -219,20 +226,25 @@ export async function runAnalysis({ apiKey, signal } = {}) {
 // them. Never reads #apiKeyInput, never writes state.reelsData, never emit()s —
 // so batch (Phase 4) can analyze a document without touching the live surface.
 /**
- * @param {{ sentences: import('../state.js').Sentence[], apiKey: string, signal?: AbortSignal }} args
+ * @param {{ sentences: import('../state.js').Sentence[], apiKey: string, signal?: AbortSignal, onProgress?: (p:{label:string, percent:number})=>void }} args
  * @returns {Promise<import('../state.js').Reel[]>}
  */
-export async function analyzeSentences({ sentences, apiKey, signal }) {
+export async function analyzeSentences({
+  sentences,
+  apiKey,
+  signal,
+  onProgress,
+}) {
   if (shouldUsePipeline(sentences)) {
-    return await runPipeline(sentences, apiKey, signal);
+    return await runPipeline(sentences, apiKey, signal, onProgress);
   }
-  return await runSingleShot(sentences, apiKey, signal);
+  return await runSingleShot(sentences, apiKey, signal, onProgress);
 }
 
 // Legacy single-shot path: one call → validate → RETURN reels (no commit; the
 // `runAnalysis` wrapper owns the state write). Owns its own try/catch so the
 // FR-018 paste-fix recovery stays byte-identical. Returns [] on cancel / failure.
-async function runSingleShot(sentences, apiKey, signal) {
+async function runSingleShot(sentences, apiKey, signal, onProgress) {
   const orModel = state.orSelectedModel;
   const prompt = buildPrompt(
     state.userPrompt,
@@ -246,6 +258,7 @@ async function runSingleShot(sentences, apiKey, signal) {
   log('Model: ' + orModel, 'info');
   setPS(1, 'done');
   setPS(2, 'running');
+  onProgress?.({ label: 'Wysyłanie zapytania…', percent: 15 });
 
   let rawResponse = '';
   try {
@@ -277,11 +290,13 @@ async function runSingleShot(sentences, apiKey, signal) {
     renderUsage(usage, orModel, fromCache);
     setPS(2, 'done');
     setPS(3, 'running');
+    onProgress?.({ label: 'Przetwarzanie odpowiedzi…', percent: 70 });
 
     const cleaned = responseText.replace(/```json|```/g, '').trim();
     const parsed = validateReels(JSON.parse(cleaned), sentences);
     setPS(3, 'done');
     log('Sparsowano ' + parsed.length + ' reelsów', 'ok');
+    onProgress?.({ label: parsed.length + ' reelsów', percent: 100 });
     return parsed;
   } catch (e) {
     if (e.name === 'AbortError') {
@@ -316,11 +331,12 @@ async function runSingleShot(sentences, apiKey, signal) {
 // own error/abort handling: a Stage-1 failure routes to paste-fix (like
 // single-shot); a Stage-2 abort returns the buckets already done (partial
 // success).
-async function runPipeline(sentences, apiKey, signal) {
+async function runPipeline(sentences, apiKey, signal, onProgress) {
   const clusterModel = state.aiModels.cluster || state.orSelectedModel;
   const curateModel = state.aiModels.curate || state.orSelectedModel;
 
   log('Tryb: pipeline klaster → kuracja.', 'info');
+  onProgress?.({ label: 'Klastrowanie…', percent: 5 });
   log('Segmentów: ' + sentences.length, 'info');
   log('Model klastrowania: ' + clusterModel, 'info');
   log('Model kuracji: ' + curateModel, 'info');
@@ -432,9 +448,13 @@ async function runPipeline(sentences, apiKey, signal) {
   renderBucketList(buckets);
   setPS(2, 'done');
   setPS(3, 'running');
+  onProgress?.({ label: 'Klastry gotowe', percent: 20 });
 
   // ── Stage 2: per-bucket curate ────────────────────────────────────
+  // Percent maps the 20→95 band across the buckets so the auto-mode panel's
+  // `Analiza AI` row advances as each theme is curated.
   let aborted = false;
+  let done = 0;
   for (const bucket of buckets) {
     try {
       await runBucket(bucket, sentences, apiKey, curateModel, signal);
@@ -447,6 +467,11 @@ async function runPipeline(sentences, apiKey, signal) {
       bucket.error = e.message;
       updateBucketRow(bucket);
     }
+    done += 1;
+    onProgress?.({
+      label: `Kuracja ${done}/${buckets.length}`,
+      percent: 20 + Math.round((75 * done) / buckets.length),
+    });
   }
 
   // Convergence: RETURN whatever validated. Completed buckets persist even when
@@ -475,6 +500,7 @@ async function runPipeline(sentences, apiKey, signal) {
     );
   }
   logCostSummary();
+  onProgress?.({ label: all.length + ' reelsów', percent: 100 });
   return all;
 }
 

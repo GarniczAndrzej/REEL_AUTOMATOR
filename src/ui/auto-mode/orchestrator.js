@@ -1,11 +1,12 @@
-// Auto-mode orchestrator (S-07, Phase 1). Sequences the existing pipeline stages
-// for the loaded document — Transcription (video) | Align (imported SRT) → AI
-// analysis — awaiting each, mutating `state` + `emit()`ing so the
+// Auto-mode orchestrator (S-07, Phase 1+2). Sequences the existing pipeline
+// stages for the loaded document — Transcription (video) | Align (imported SRT) →
+// AI analysis — awaiting each, mutating `state` + `emit()`ing so the
 // render-on-change surface auto-advances (no manual show/hide). Holds one
 // AutoRunController that tracks the live stage and routes a per-stage cancel to
 // the correct primitive (`cancel_transcription` for transcription;
-// `AbortController.abort()` for AI). Progress reuses the existing inline surfaces
-// this phase; the unified floating panel arrives in Phase 2.
+// `AbortController.abort()` for AI). Phase 2: progress is fed into the unified
+// non-blocking floating panel (`progress-panel.js`); the legacy inline surfaces
+// are suppressed for the duration of an auto run.
 
 import { state, emit } from '../../state.js';
 import { toast } from '../toast.js';
@@ -17,6 +18,7 @@ import {
   alignToWords,
 } from '../import/transcribe.js';
 import { loadSRTContent, renderSegments } from '../import/segments.js';
+import { showPanel, hidePanel, updateStage } from './progress-panel.js';
 
 // Top-level run guard: only one auto-pipeline at a time. The individual stages
 // have their own guards, but a second LAUNCH must be rejected, not parallelised.
@@ -54,21 +56,6 @@ export class AutoRunController {
   }
 }
 
-// Phase 1 reuses the inline WhisperX progress box for the transcription stage
-// (Phase 2 swaps in the unified panel). Pure DOM, tolerant of missing nodes.
-function showWhisperProgress(label, percent) {
-  const box = document.getElementById('whisperProgressBox');
-  if (box) box.style.display = 'block';
-  const labelEl = document.getElementById('whisperProgressLabel');
-  if (labelEl) labelEl.textContent = label;
-  const fill = document.getElementById('whisperProgressFill');
-  if (fill) fill.style.width = Math.round(percent) + '%';
-}
-function hideWhisperProgressSoon() {
-  const box = document.getElementById('whisperProgressBox');
-  if (box) setTimeout(() => (box.style.display = 'none'), 2000);
-}
-
 /** @param {AutoRunController} controller @param {string|null} stageId */
 function setActiveStage(controller, stageId) {
   controller.activeStage = stageId;
@@ -98,19 +85,38 @@ export async function runAutoPipeline(opts = {}) {
   state.autoMode.activeStage = null;
   emit();
 
+  // Reveal the unified non-blocking panel and bind cancel routing to this run's
+  // controller. The legacy inline surfaces stay hidden for the whole run.
+  showPanel({ controller });
+
   try {
     const hasVideo = !!state._whisperVideoPath;
     if (hasVideo) {
       const ok = await runTranscriptionStage(controller);
       if (!ok) return; // cancelled / failed upstream — nothing to analyse
     } else if (state.srtContent || state.sentences.length) {
-      // Imported-SRT branch: align to audio when a video is available for word
-      // timings; otherwise proceed straight to analysis.
+      // Imported-SRT branch: transcription is skipped; align to audio when a
+      // video is available for word timings; otherwise proceed straight to
+      // analysis.
+      updateStage('transcribe', {
+        status: 'done',
+        percent: 100,
+        label: 'Pominięto (import SRT)',
+      });
       if (state._whisperVideoPath || state.videoPath) {
         setActiveStage(controller, 'align');
+        updateStage('segment', {
+          status: 'running',
+          label: 'Dopasowanie do audio…',
+        });
         await alignToWords();
       }
+      updateStage('segment', {
+        status: 'done',
+        label: state.sentences.length + ' segmentów',
+      });
     } else {
+      hidePanel();
       toast('Najpierw wczytaj wideo lub plik SRT.', 'error');
       return;
     }
@@ -118,7 +124,26 @@ export async function runAutoPipeline(opts = {}) {
     // ── AI analysis stage ──────────────────────────────────────────────
     setActiveStage(controller, 'analyze');
     controller.aiController = new AbortController();
-    await runAnalysis({ apiKey, signal: controller.aiController.signal });
+    updateStage('analyze', {
+      status: 'running',
+      label: 'Analiza AI…',
+      percent: 0,
+    });
+    await runAnalysis({
+      apiKey,
+      signal: controller.aiController.signal,
+      onProgress: ({ label, percent }) =>
+        updateStage('analyze', { status: 'running', label, percent }),
+    });
+    // runAnalysis swallows an abort (S-25 keeps already-committed buckets), so
+    // success vs cancel is read from whether any reels landed.
+    updateStage('analyze', {
+      status: state.reelsData.length ? 'done' : 'error',
+      percent: 100,
+      label: state.reelsData.length
+        ? state.reelsData.length + ' reelsów'
+        : 'Brak reelsów',
+    });
   } finally {
     autoRunning = false;
     state.autoMode.running = false;
@@ -149,10 +174,14 @@ async function runTranscriptionStage(controller) {
     toast('Pomijam diaryzację: brak tokenu HuggingFace.', 'info');
   }
 
-  // Surface the legacy cancel button for the transcription stage (Phase 1).
-  const cancelBtn = document.getElementById('cancelTranscribeBtn');
-  if (cancelBtn) cancelBtn.style.display = '';
-  showWhisperProgress('Inicjalizacja…', 0);
+  // Per-stage cancel now lives on the panel's transcribe row (routes to
+  // cancel_transcription via the controller); the legacy #cancelTranscribeBtn is
+  // no longer surfaced for auto runs.
+  updateStage('transcribe', {
+    status: 'running',
+    label: 'Inicjalizacja…',
+    percent: 0,
+  });
 
   try {
     const result = await transcribeDocument(
@@ -165,7 +194,10 @@ async function runTranscriptionStage(controller) {
         fps: state.fps,
         ...whisperAdvancedArgs(),
       },
-      { onProgress: showWhisperProgress },
+      {
+        onProgress: (label, percent) =>
+          updateStage('transcribe', { status: 'running', label, percent }),
+      },
     );
 
     loadSRTContent(result.srtContent, result.srtName);
@@ -176,11 +208,19 @@ async function runTranscriptionStage(controller) {
     if (segs) segs.textContent = state.sentences.length;
     const card = document.getElementById('segmentsCard');
     if (card && state.sentences.length) card.style.display = 'block';
-    showWhisperProgress('Gotowe! SRT wczytany.', 100);
-    hideWhisperProgressSoon();
+    updateStage('transcribe', {
+      status: 'done',
+      percent: 100,
+      label: 'Gotowe',
+    });
+    updateStage('segment', {
+      status: 'done',
+      label: state.sentences.length + ' segmentów',
+    });
     emit();
 
     if (!state.sentences.length) {
+      updateStage('segment', { status: 'error', label: 'Brak segmentów' });
       toast(
         'Transkrypcja nie zwróciła segmentów — przerwano bieg automatyczny.',
         'error',
@@ -191,15 +231,12 @@ async function runTranscriptionStage(controller) {
   } catch (e) {
     const msg = String(e);
     if (msg.includes('ANULOWANO')) {
-      showWhisperProgress('Anulowano transkrypcję.', 0);
-      hideWhisperProgressSoon();
+      updateStage('transcribe', { status: 'error', label: 'Anulowano' });
       toast('Anulowano', 'info');
     } else {
-      showWhisperProgress('Błąd: ' + e, 0);
+      updateStage('transcribe', { status: 'error', label: 'Błąd: ' + e });
       toast('Transkrypcja nieudana: ' + e, 'error');
     }
     return false;
-  } finally {
-    if (cancelBtn) cancelBtn.style.display = 'none';
   }
 }
