@@ -471,13 +471,13 @@ human to walk the five migration scenarios above before closing the change.
 
 #### Automated
 
-- [x] 3.1 Regression suite green
-- [x] 3.2 Prettier clean on `src/ai/prompt-presets.js` and `src/main.js`
+- [x] 3.1 Regression suite green — 6f83a46
+- [x] 3.2 Prettier clean on `src/ai/prompt-presets.js` and `src/main.js` — 6f83a46
 
 #### Manual
 
-- [x] 3.3 Existing-user upgrade: pristine starters removed, 11 builtins added, flag set
-- [x] 3.4 Edited/renamed old starter preserved; other pristine ones removed
-- [x] 3.5 User-created preset survives migration unchanged
-- [x] 3.6 Idempotency: deleted cohort preset is not resurrected on reload
-- [x] 3.7 Fresh install seeds 11 builtins, sets flag, migration is a no-op
+- [x] 3.3 Existing-user upgrade: pristine starters removed, 11 builtins added, flag set — 6f83a46
+- [x] 3.4 Edited/renamed old starter preserved; other pristine ones removed — 6f83a46
+- [x] 3.5 User-created preset survives migration unchanged — 6f83a46
+- [x] 3.6 Idempotency: deleted cohort preset is not resurrected on reload — 6f83a46
+- [x] 3.7 Fresh install seeds 11 builtins, sets flag, migration is a no-op — 6f83a46
