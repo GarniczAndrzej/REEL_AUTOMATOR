@@ -1454,14 +1454,16 @@ assert(
   'empty systemPrompt still injects format + segments',
 );
 assert(
-  !emptySysPrompt.includes('ZASADY OCENY'),
+  !emptySysPrompt.includes('find every Reel worth cutting'),
   'empty systemPrompt omits scoring guidance (no stray default leaks in)',
 );
 
-// The exported default is non-empty and is what state seeds from.
+// The exported default is non-empty and is what state seeds from. S-26 flipped
+// this guidance from Polish to English instructions (Polish output retained), so
+// the marker is now an English phrase unique to the single-shot scoring block.
 assert(
   typeof DEFAULT_SCORING_GUIDANCE === 'string' &&
-    DEFAULT_SCORING_GUIDANCE.includes('ZASADY OCENY'),
+    DEFAULT_SCORING_GUIDANCE.includes('find every Reel worth cutting'),
   'DEFAULT_SCORING_GUIDANCE is the exported scoring-guidance default',
 );
 

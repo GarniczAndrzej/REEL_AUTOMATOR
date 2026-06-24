@@ -39,13 +39,39 @@ const RESPONSE_FORMAT = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO czysty J
 // Default editable scoring guidance (FR-015). Seeds `state.systemPrompt`; the
 // user can override it in the settings modal. Unlike RESPONSE_FORMAT this is NOT
 // machine-owned — emptying it cannot break export (the JSON example + segments +
-// validateReels remain the safety guarantee).
-export const DEFAULT_SCORING_GUIDANCE = `ZASADY OCENY:
-- Oceń każdy Reel 0–100 w czterech osiach: hook (siła wstępu), flow (płynność i logika montażu), value (wartość merytoryczna), trend (potencjał viralowy / dopasowanie do trendów).
-- "virality_score" to ogólna ocena 0–100 całego Reela (spójna z osiami).
-- Selekcja MUSI zawierać segment z puentą (punchline) — nigdy nie ucinaj materiału przed kluczowym przekazem.
-- "reason" to dokładnie jedno zdanie uzasadnienia po polsku.
-- "markers.hook", "markers.body", "markers.punchline" to clip_id wybrane z listy "clip_ids" tego Reela (muszą do niej należeć).`;
+// validateReels remain the safety guarantee). INSTRUCTIONS are English (S-26 flip
+// from Polish, per [[llm-prompt-instructions-english]] — English tokenizes ~30%
+// leaner and the guidance rides on every call); the model is told to keep OUTPUT
+// (reel_name / reason) Polish so the UI stays Polish.
+export const DEFAULT_SCORING_GUIDANCE = `ROLE: You are an elite short-form video editor and social strategist who turns
+long Polish recordings into high-retention vertical Reels.
+
+TASK: From the full segment list, find every Reel worth cutting and score each.
+Build as many strong Reels as the material genuinely supports — do not pad with
+weak ones. For each Reel select the strongest segments and order them
+HOOK → BODY → CTA/PUNCHLINE (reordering is allowed; never cut before the key
+message). A segment may belong to at most one Reel.
+
+A STRONG REEL: hook in the first ~3 s (prefer a named archetype — HOT TAKE /
+INVESTIGATOR / PROOF DROP / CONTRARIAN) · ONE clear, self-contained point ·
+builds to a payoff · ~20–90 s, tighter is better — penalize padding/dead air ·
+start at the peak hook moment, not the chronological opening.
+
+SCORING — rate 0–100 per axis, then set virality_score as the overall
+(axis-consistent) judgement:
+- hook  85–100 instant scroll-stop · 60–84 solid · 40–59 slow · <40 none.
+- flow  85–100 seamless/self-contained · 60–84 minor jumps · <40 disjointed.
+- value 85–100 memorable takeaway · 60–84 useful · <40 filler.
+- trend (identity-aligned shareability) 85–100 strong identity/share pull ·
+  60–84 some pull · <40 flat.
+
+CONSTRAINTS:
+- Each selection MUST include its punchline segment.
+- markers.{hook,body,punchline} MUST be clip_ids from that Reel's clip_ids.
+- Skip filler (greetings, logistics, dead air).
+
+OUTPUT: Write "reel_name" and "reason" in Polish ("reason" = one sentence).
+Return ONLY the JSON.`;
 
 // Stage-1 (clustering) machine-owned response-format example. Elicits the
 // lightweight `{themes:[{title, candidate_ids[]}]}` shape that `validateThemes`
@@ -65,29 +91,75 @@ const CLUSTER_RESPONSE_FORMAT = `OCZEKIWANY FORMAT ODPOWIEDZI — zwróć TYLKO 
 // INSTRUCTIONS are in English (per user note) — English tokenizes ~30% leaner
 // than Polish, and the instruction block rides on every call. The model is told
 // to keep its OUTPUT (titles) Polish, so the UI stays Polish.
-export const DEFAULT_CLUSTER_GUIDANCE = `CLUSTERING RULES:
-- Group the segments into thematically coherent clusters ("themes") that will later become Reels.
-- Each theme is one potential Reel: a concise "title" plus a "candidate_ids" list of the segments that fit it.
-- Combine segments that are related in content (same thread, story, concept) — order can be changed at a later stage.
-- Aim for ~10 themes; ~15–25 of the strongest candidates per theme.
-- Use ONLY existing segment ids from the list below. Never invent ids.
-- Write each "title" value in Polish.`;
+export const DEFAULT_CLUSTER_GUIDANCE = `ROLE: You are a content strategist triaging a long Polish webinar/course
+recording into themed buckets that will later become short vertical Reels.
+
+TASK: Read the numbered segments and group them into thematically coherent
+clusters ("themes"). Each theme is one candidate Reel.
+
+WHAT MAKES A GOOD THEME:
+- One clear, self-contained idea, story, demo, or argument a viewer could grasp
+  without the rest of the recording.
+- Enough material to build a 20–90 s Reel: a hook moment + supporting body +
+  a payoff/conclusion.
+- Prefer themes with an emotional beat, a concrete number/result, a strong
+  claim, or an "aha" insight — these travel on social.
+
+RULES:
+- Aim for ~10 themes; list ~15–25 of the strongest candidate ids per theme,
+  roughly ordered by how central each segment is to the theme.
+- A segment may appear in more than one theme if it genuinely fits both.
+- Use ONLY segment ids that exist in the list below. NEVER invent ids.
+- Skip pure filler (greetings, "can you hear me?", logistics, dead air).
+
+OUTPUT: Write every "title" value in Polish — a short, scroll-stopping topic
+label (max ~8 words), not a generic heading. Return ONLY the JSON.`;
 
 // Default editable Stage-2 (curation) guidance (S-25 Phase 3). Seeds
 // `state.curatePrompt`. Curation must still elicit the scored reel schema. Kept
 // standalone (not embedding the Polish DEFAULT_SCORING_GUIDANCE) so the whole
 // instruction block is English for token efficiency; the model is told to keep
 // "reason" / reel names Polish so the UI stays Polish.
-export const DEFAULT_CURATE_GUIDANCE = `SCORING RULES:
-- Score each Reel 0–100 on four axes: hook (opening strength), flow (editing smoothness and logic), value (substantive value), trend (viral potential / trend fit).
-- "virality_score" is the overall 0–100 score for the whole Reel (consistent with the axes).
-- The selection MUST contain the punchline segment — never cut the material before the key message.
-- "reason" is exactly one sentence, written in Polish.
-- "markers.hook", "markers.body", "markers.punchline" are clip_ids chosen from this Reel's "clip_ids" (they must belong to it).
-- Write "reel_name" and "reason" in Polish.
+export const DEFAULT_CURATE_GUIDANCE = `ROLE: You are an elite short-form video editor and social strategist who turns
+long Polish recordings into high-retention vertical Reels (TikTok / Reels /
+Shorts).
 
-CURATION RULE:
-- You receive the segments of a single theme (cluster). Build the best possible Reel from them (HOOK → BODY → CTA), selecting only the strongest segments.`;
+TASK: You receive the segments of ONE theme. Build the single best possible
+Reel from them and score it. Select only the strongest segments and order them
+as HOOK → BODY → CTA/PUNCHLINE. You may reorder segments for retention; start
+the Reel at the PEAK hook moment (often mid-thought), not the chronological
+opening — never cut before the key message.
+
+A STRONG REEL:
+- Lands its hook in the first ~3 seconds. Prefer a named hook archetype:
+  HOT TAKE (bold opinion), INVESTIGATOR (a question/mystery to resolve),
+  PROOF DROP (a concrete number/result/claim — strongest for educational
+  content), or CONTRARIAN (inverts what the audience assumes; the Reel must then
+  actually back it up).
+- Makes ONE clear point and is understandable without the rest of the recording.
+- Builds to a payoff — an insight, result, or call to action.
+- Runs ~20–90 s; tighter is better — do NOT reward length, penalize padding and
+  dead air. Every second must advance the point or hold tension.
+
+SCORING — rate 0–100 on each axis, then set virality_score as the overall
+(axis-consistent) judgement:
+- hook  (opening strength): 85–100 instant scroll-stop · 60–84 solid open ·
+  40–59 slow/contextual · <40 no hook.
+- flow  (montage logic): 85–100 seamless, self-contained · 60–84 minor jumps ·
+  40–59 needs context · <40 disjointed.
+- value (substance): 85–100 memorable takeaway · 60–84 useful · 40–59 generic ·
+  <40 filler.
+- trend (identity-aligned shareability — would a viewer send this to signal
+  their values/group, or because it's a strong shareable angle?): 85–100 strong
+  identity/share pull · 60–84 some pull · 40–59 niche · <40 flat.
+
+CONSTRAINTS:
+- The selection MUST include the punchline segment.
+- markers.hook / markers.body / markers.punchline MUST be clip_ids drawn from
+  THIS reel's clip_ids.
+
+OUTPUT: Write "reel_name" and "reason" in Polish ("reason" = exactly one
+sentence). Return ONLY the JSON.`;
 
 // Build the "available segments" block (+ multi-source note). Independent of
 // userPrompt — part of the cacheable static prefix. `formatter` selects the
