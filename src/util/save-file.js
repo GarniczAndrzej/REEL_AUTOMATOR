@@ -33,3 +33,43 @@ export async function saveTextToPath({ defaultName, content, filters }) {
     return false;
   }
 }
+
+/**
+ * Ask the user to pick a destination folder once via the native directory
+ * dialog (S-07 multi-output / batch export). Honors the save-location rule —
+ * nothing is ever auto-dumped to ~/Downloads.
+ * @returns {Promise<string|null>} the chosen folder path, or null if cancelled.
+ */
+export async function pickFolder() {
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const picked = await open({ directory: true, multiple: false });
+    return typeof picked === 'string' ? picked : null;
+  } catch (e) {
+    toast('Nie udało się wybrać folderu: ' + e, 'error');
+    return null;
+  }
+}
+
+/**
+ * Write one text file into a previously chosen folder — no per-file dialog.
+ * Used by multi-output single-video export (S-07 Phase 3) and batch (Phase 4),
+ * which call `pickFolder()` once then `saveTextToFolder(...)` per file.
+ * @param {object} opts
+ * @param {string} opts.folder Destination folder path (from `pickFolder`).
+ * @param {string} opts.name File name (with extension) to write inside it.
+ * @param {string} opts.content Text to write.
+ * @returns {Promise<boolean>} true if written, false on error.
+ */
+export async function saveTextToFolder({ folder, name, content }) {
+  try {
+    const { join } = await import('@tauri-apps/api/path');
+    const path = await join(folder, name);
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('save_text_file', { path, content });
+    return true;
+  } catch (e) {
+    toast('Nie udało się zapisać pliku „' + name + '”: ' + e, 'error');
+    return false;
+  }
+}

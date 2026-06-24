@@ -588,9 +588,9 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Automated
 
-- [x] 2.1 Rust type-check passes
-- [x] 2.2 Regression suite passes
-- [x] 2.3 Prettier clean on touched files
+- [x] 2.1 Rust type-check passes — feab356
+- [x] 2.2 Regression suite passes — feab356
+- [x] 2.3 Prettier clean on touched files — feab356
 
 #### Manual
 
@@ -603,9 +603,9 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Automated
 
-- [ ] 3.1 Rust type-check passes
-- [ ] 3.2 Regression suite passes
-- [ ] 3.3 Prettier clean on touched files
+- [x] 3.1 Rust type-check passes
+- [x] 3.2 Regression suite passes
+- [x] 3.3 Prettier clean on touched files
 
 #### Manual
 

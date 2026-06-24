@@ -1297,6 +1297,58 @@ textarea::placeholder {
   background: var(--red);
 }
 
+/* S-07 Phase 3 — stage/output config form + launch footer. */
+.auto-panel-config {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+/* While a run is live the config is locked — dim it to signal read-only. */
+.auto-panel.running .auto-panel-config {
+  opacity: 0.5;
+}
+.auto-config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.auto-config-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.auto-config-sub {
+  font-size: var(--fs-xs);
+  color: var(--text3);
+  margin-top: 4px;
+}
+.auto-config-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+.auto-config-row input:disabled {
+  cursor: not-allowed;
+}
+.auto-config-row:has(input:disabled) {
+  color: var(--text3);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.auto-panel-foot {
+  padding: 12px;
+}
+.auto-panel-start {
+  width: 100%;
+}
+
 /* ── F3 — Drag-to-reorder + trim handles ──────────────────────── */
 
 .clip-row {

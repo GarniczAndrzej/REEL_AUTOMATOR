@@ -98,6 +98,31 @@ export function generateWordSRT(sentences, fps) {
 }
 
 /**
+ * Generate a word-level timing JSON from sentences — a machine-readable dump of
+ * each segment plus its per-word frame timings (when present). Pure function;
+ * stable shape for downstream tooling and the auto-mode "słowo-JSON" output.
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {number} fps
+ * @returns {string}
+ */
+export function generateWordJSON(sentences, fps) {
+  return JSON.stringify(
+    {
+      fps,
+      sentences: sentences.map((s) => ({
+        id: s.id,
+        text: s.text,
+        start_frame: s.start_frame,
+        end_frame: s.end_frame,
+        words: Array.isArray(s.words) ? s.words : [],
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+/**
  * Generate a `.vtt` transcript from sentences.
  * @param {import('../state.js').Sentence[]} sentences
  * @param {number} fps

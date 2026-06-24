@@ -1,30 +1,55 @@
-// Unified auto-mode progress panel (S-07, Phase 2). One in-app, non-blocking
+// Unified auto-mode progress panel (S-07, Phase 2+3). One in-app, non-blocking
 // floating overlay that replaces the two disconnected legacy surfaces (the
 // WhisperX `#whisperProgressBox` and the AI `#progressBox` bucket list) while an
 // auto run is live. It is a small corner panel — NOT a modal and NOT a Tauri
 // window: no backdrop, no focus trap, no blocked pointer events on the rest of
 // the app, and dismissible via its close button. Each cancellable stage row
-// carries a cancel button wired to `controller.cancelStage(stageId)`. The DOM is
-// built once in JS (like the toast container) so there is no stale empty node in
+// carries a cancel button wired to `controller.cancelStage(stageId)`. Phase 3
+// adds the stage/output config form (`config.js`) at the top and an "Uruchom"
+// launch button; the form is locked while a run is live. The DOM is built once
+// in JS (like the toast container) so there is no stale empty node in
 // index.html. All strings are Polish.
 
-// Fixed stage list. `Eksport` is added in Phase 3+; segmentation runs inside the
-// transcription unit, so its row is marked done right after transcription.
+import { state, subscribe } from '../../state.js';
+import { renderConfig, refreshConfig, setConfigEnabled } from './config.js';
+
+// Fixed stage list. Segmentation runs inside the transcription unit, so its row
+// is marked done right after transcription; `Eksport` runs last (Phase 3).
 /** @type {{id:string,name:string,cancellable:boolean}[]} */
 const STAGES = [
   { id: 'transcribe', name: 'Transkrypcja', cancellable: true },
   { id: 'segment', name: 'Segmentacja', cancellable: false },
   { id: 'analyze', name: 'Analiza AI', cancellable: true },
+  { id: 'export', name: 'Eksport', cancellable: false },
 ];
 
 // Status icon vocabulary reused from the S-25 bucket list ({pending,running,
-// done,error}). The CSS class is the status name (empty for pending).
-const ICON = { pending: '…', running: '⏳', done: '✓', error: '✗' };
+// done,error}); `skipped` (–) marks a deselected stage. The CSS class is the
+// status name (empty for pending).
+const ICON = {
+  pending: '…',
+  running: '⏳',
+  done: '✓',
+  error: '✗',
+  skipped: '–',
+};
 
 /** @type {HTMLElement|null} */
 let panelEl = null;
 /** @type {{cancelStage:(id:string)=>any}|null} */
 let activeController = null;
+/** @type {(()=>any)|null} */
+let startHandler = null;
+
+/**
+ * Register the launch handler invoked by the panel's "Uruchom" button. Wired by
+ * the auto-mode entry module (`index.js`) to its gated launch.
+ * @param {()=>any} fn
+ * @returns {void}
+ */
+export function setStartHandler(fn) {
+  startHandler = fn;
+}
 
 /**
  * Build the panel DOM once and append it to <body>. Idempotent — safe to call on
@@ -62,20 +87,65 @@ export function mountProgressPanel() {
       <span class="auto-panel-title">⚡ Tryb automatyczny</span>
       <button class="auto-panel-close" type="button" title="Zamknij" aria-label="Zamknij">×</button>
     </div>
-    <div class="auto-panel-stages">${rows}</div>`;
+    <div class="auto-panel-config"></div>
+    <div class="auto-panel-stages">${rows}</div>
+    <div class="auto-panel-foot">
+      <button class="auto-panel-start btn btn-primary" type="button">▶ Uruchom</button>
+    </div>`;
 
   document.body.appendChild(panelEl);
+
+  renderConfig(panelEl.querySelector('.auto-panel-config'));
 
   panelEl
     .querySelector('.auto-panel-close')
     .addEventListener('click', hidePanel);
+  panelEl.querySelector('.auto-panel-start').addEventListener('click', () => {
+    if (!state.autoMode.running && startHandler) startHandler();
+  });
   panelEl.querySelectorAll('.auto-stage-cancel').forEach((btn) => {
     btn.addEventListener('click', () => {
       const id = btn.closest('.auto-stage')?.dataset.stage;
       if (id && activeController) activeController.cancelStage(id);
     });
   });
+
+  // Keep the config form's enablement + dependency greying in sync with state
+  // (input/reels presence, run live/idle) on every change.
+  subscribe(syncRunState);
+  syncRunState();
   return panelEl;
+}
+
+/**
+ * Reflect run-live vs idle into the panel: lock the config form + disable the
+ * Uruchom button while a run is in flight, re-enable when idle. Also re-runs the
+ * dependency greying so the form tracks input/reels presence.
+ * @returns {void}
+ */
+function syncRunState() {
+  if (!panelEl) return;
+  const running = state.autoMode.running;
+  setConfigEnabled(!running);
+  const start = panelEl.querySelector('.auto-panel-start');
+  if (start) start.disabled = running;
+  panelEl.classList.toggle('running', running);
+}
+
+/**
+ * Open the panel in idle/config mode (no run bound): mount, reset the stage
+ * rows, refresh the config form, and reveal. The "Uruchom" button launches.
+ * @returns {void}
+ */
+export function openForConfig() {
+  mountProgressPanel();
+  activeController = null;
+  for (const s of STAGES) {
+    updateStage(s.id, { status: 'pending', percent: 0, label: '' });
+  }
+  refreshConfig();
+  syncRunState();
+  panelEl.classList.add('visible');
 }
 
 /**
@@ -90,6 +160,7 @@ export function showPanel({ controller } = {}) {
   for (const s of STAGES) {
     updateStage(s.id, { status: 'pending', percent: 0, label: '' });
   }
+  syncRunState();
   panelEl.classList.add('visible');
 }
 
@@ -103,7 +174,7 @@ export function hidePanel() {
  * provided fields change; a cancel button shows only while a cancellable stage is
  * `running`.
  * @param {string} stageId
- * @param {{ label?: string, percent?: number, status?: 'pending'|'running'|'done'|'error' }} [patch]
+ * @param {{ label?: string, percent?: number, status?: 'pending'|'running'|'done'|'error'|'skipped' }} [patch]
  * @returns {void}
  */
 export function updateStage(stageId, { label, percent, status } = {}) {

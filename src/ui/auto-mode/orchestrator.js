@@ -19,6 +19,20 @@ import {
 } from '../import/transcribe.js';
 import { loadSRTContent, renderSegments } from '../import/segments.js';
 import { showPanel, hidePanel, updateStage } from './progress-panel.js';
+import { generateEDL } from '../../exporters/edl.js';
+import { generateXML } from '../../exporters/xml.js';
+import { generateLua } from '../../exporters/lua.js';
+import {
+  generateTranscriptSRT,
+  generateTranscriptVTT,
+  generateWordJSON,
+} from '../../exporters/transcript.js';
+import { transcriptBase } from '../export-srt.js';
+import {
+  saveTextToPath,
+  pickFolder,
+  saveTextToFolder,
+} from '../../util/save-file.js';
 
 // Top-level run guard: only one auto-pipeline at a time. The individual stages
 // have their own guards, but a second LAUNCH must be rejected, not parallelised.
@@ -64,11 +78,13 @@ function setActiveStage(controller, stageId) {
 }
 
 /**
- * Drive the loaded document through the fixed Phase-1 pipeline. Branches on the
- * input: a loaded video transcribes (+segments); an imported SRT skips
- * transcription and aligns when a video is available, else goes straight to
- * analysis. Then runs the AI analysis stage. Auto-advance is free — each state
- * mutation + emit() reveals the next surface section.
+ * Drive the loaded document through the configured pipeline (S-07 Phase 3). Only
+ * the stages ticked in `state.autoMode.stages` run; deselected stages are marked
+ * "Pominięto". Branches on the input: a loaded video transcribes (+segments) when
+ * Transkrypcja is selected; otherwise the loaded transcript is used (aligning to
+ * audio when a video is available). When Eksport is selected, the chosen outputs
+ * are written at the end. Auto-advance is free — each state mutation + emit()
+ * reveals the next surface section.
  * @param {{ controller?: AutoRunController }} [opts]
  * @returns {Promise<void>}
  */
@@ -79,6 +95,7 @@ export async function runAutoPipeline(opts = {}) {
   }
   const controller = opts.controller || new AutoRunController();
   const apiKey = getApiKey('openrouter');
+  const stages = state.autoMode.stages;
 
   autoRunning = true;
   state.autoMode.running = true;
@@ -91,19 +108,19 @@ export async function runAutoPipeline(opts = {}) {
 
   try {
     const hasVideo = !!state._whisperVideoPath;
-    if (hasVideo) {
+    if (stages.transcription && hasVideo) {
       const ok = await runTranscriptionStage(controller);
       if (!ok) return; // cancelled / failed upstream — nothing to analyse
     } else if (state.srtContent || state.sentences.length) {
-      // Imported-SRT branch: transcription is skipped; align to audio when a
-      // video is available for word timings; otherwise proceed straight to
-      // analysis.
+      // Transcription skipped (deselected, or no video loaded): use the already
+      // loaded transcript. Align to audio when a video is available for word
+      // timings; otherwise proceed straight to the next selected stage.
       updateStage('transcribe', {
-        status: 'done',
-        percent: 100,
-        label: 'Pominięto (import SRT)',
+        status: 'skipped',
+        percent: 0,
+        label: stages.transcription ? 'Brak wideo' : 'Pominięto',
       });
-      if (state._whisperVideoPath || state.videoPath) {
+      if (stages.segmentation && (state._whisperVideoPath || state.videoPath)) {
         setActiveStage(controller, 'align');
         updateStage('segment', {
           status: 'running',
@@ -112,8 +129,10 @@ export async function runAutoPipeline(opts = {}) {
         await alignToWords();
       }
       updateStage('segment', {
-        status: 'done',
-        label: state.sentences.length + ' segmentów',
+        status: stages.segmentation ? 'done' : 'skipped',
+        label: stages.segmentation
+          ? state.sentences.length + ' segmentów'
+          : 'Pominięto',
       });
     } else {
       hidePanel();
@@ -122,28 +141,48 @@ export async function runAutoPipeline(opts = {}) {
     }
 
     // ── AI analysis stage ──────────────────────────────────────────────
-    setActiveStage(controller, 'analyze');
-    controller.aiController = new AbortController();
-    updateStage('analyze', {
-      status: 'running',
-      label: 'Analiza AI…',
-      percent: 0,
-    });
-    await runAnalysis({
-      apiKey,
-      signal: controller.aiController.signal,
-      onProgress: ({ label, percent }) =>
-        updateStage('analyze', { status: 'running', label, percent }),
-    });
-    // runAnalysis swallows an abort (S-25 keeps already-committed buckets), so
-    // success vs cancel is read from whether any reels landed.
-    updateStage('analyze', {
-      status: state.reelsData.length ? 'done' : 'error',
-      percent: 100,
-      label: state.reelsData.length
-        ? state.reelsData.length + ' reelsów'
-        : 'Brak reelsów',
-    });
+    if (stages.analysis) {
+      setActiveStage(controller, 'analyze');
+      controller.aiController = new AbortController();
+      updateStage('analyze', {
+        status: 'running',
+        label: 'Analiza AI…',
+        percent: 0,
+      });
+      await runAnalysis({
+        apiKey,
+        signal: controller.aiController.signal,
+        onProgress: ({ label, percent }) =>
+          updateStage('analyze', { status: 'running', label, percent }),
+      });
+      // A cancelled AI stage keeps already-committed buckets (S-25) but should
+      // not auto-export a partial run — stop here.
+      if (controller.aiController.signal.aborted) {
+        updateStage('analyze', {
+          status: 'error',
+          percent: 100,
+          label: 'Anulowano',
+        });
+        toast('Anulowano', 'info');
+        return;
+      }
+      updateStage('analyze', {
+        status: state.reelsData.length ? 'done' : 'error',
+        percent: 100,
+        label: state.reelsData.length
+          ? state.reelsData.length + ' reelsów'
+          : 'Brak reelsów',
+      });
+    } else {
+      updateStage('analyze', { status: 'skipped', label: 'Pominięto' });
+    }
+
+    // ── Export stage ────────────────────────────────────────────────────
+    if (stages.export) {
+      await runExportStage(controller);
+    } else {
+      updateStage('export', { status: 'skipped', label: 'Pominięto' });
+    }
   } finally {
     autoRunning = false;
     state.autoMode.running = false;
@@ -239,4 +278,180 @@ async function runTranscriptionStage(controller) {
     }
     return false;
   }
+}
+
+/**
+ * Export stage: build the selected outputs from the live document and write
+ * them. Write policy (avoids a dialog-per-file): a single selected output uses
+ * one native save dialog (`saveTextToPath`); two or more prompt once for a
+ * folder (`pickFolder`) then write each file via `saveTextToFolder`.
+ * @param {AutoRunController} controller
+ * @returns {Promise<void>}
+ */
+async function runExportStage(controller) {
+  setActiveStage(controller, 'export');
+  updateStage('export', {
+    status: 'running',
+    label: 'Przygotowanie plików…',
+    percent: 0,
+  });
+
+  const items = collectOutputs();
+  if (!items.length) {
+    updateStage('export', {
+      status: 'error',
+      label: 'Brak plików do zapisania',
+    });
+    toast('Brak plików do zapisania.', 'info');
+    return;
+  }
+
+  if (items.length === 1) {
+    const saved = await saveTextToPath({
+      defaultName: items[0].name,
+      content: items[0].content,
+    });
+    updateStage('export', {
+      status: saved ? 'done' : 'error',
+      percent: 100,
+      label: saved ? 'Zapisano 1 plik' : 'Anulowano',
+    });
+    if (saved) toast('Zapisano plik ✓', 'success');
+    return;
+  }
+
+  const folder = await pickFolder();
+  if (!folder) {
+    updateStage('export', { status: 'error', label: 'Anulowano' });
+    return;
+  }
+  let ok = 0;
+  for (let i = 0; i < items.length; i++) {
+    const done = await saveTextToFolder({
+      folder,
+      name: items[i].name,
+      content: items[i].content,
+    });
+    if (done) ok++;
+    updateStage('export', {
+      status: 'running',
+      percent: ((i + 1) / items.length) * 100,
+      label: `${i + 1}/${items.length}`,
+    });
+  }
+  updateStage('export', {
+    status: ok === items.length ? 'done' : 'error',
+    percent: 100,
+    label: `Zapisano ${ok} z ${items.length}`,
+  });
+  toast(
+    `Zapisano ${ok} z ${items.length} plików ✓`,
+    ok === items.length ? 'success' : 'info',
+  );
+}
+
+/**
+ * Build the `{name, content}` list for every selected output whose precondition
+ * is met (text outputs need segments; timeline outputs need reels). Pure read of
+ * the live document — used by single-video export this phase.
+ * @returns {{name:string, content:string}[]}
+ */
+function collectOutputs() {
+  const o = state.autoMode.outputs;
+  const items = [];
+  const tBase = transcriptBase();
+  const vBase = videoBase();
+  const haveSeg = state.sentences.length > 0;
+  const haveReels = state.reelsData.length > 0;
+
+  if (o.srt && haveSeg)
+    items.push({
+      name: tBase + '.srt',
+      content: generateTranscriptSRT(state.sentences, state.fps),
+    });
+  if (o.vtt && haveSeg)
+    items.push({
+      name: tBase + '.vtt',
+      content: generateTranscriptVTT(state.sentences, state.fps),
+    });
+  if (o.md && haveSeg)
+    items.push({ name: vBase + '_segmenty.md', content: buildSegmentsMd() });
+  if (o.wordJson && haveSeg)
+    items.push({
+      name: tBase + '.words.json',
+      content: generateWordJSON(state.sentences, state.fps),
+    });
+  if (o.edl && haveReels)
+    items.push({ name: vBase + '_timeline.edl', content: genEDL() });
+  if (o.xml && haveReels)
+    items.push({ name: vBase + '_timeline.xml', content: genXML() });
+  if (o.lua && haveReels) {
+    const lua = genLua();
+    if (lua != null) items.push({ name: vBase + '_davinci.lua', content: lua });
+  }
+  return items;
+}
+
+// ── per-format generators (mirror export-popover, fed from live `state`) ──────
+
+function genEDL() {
+  return generateEDL({
+    reelsData: state.reelsData,
+    sentences: state.sentences,
+    fps: state.fps,
+    gapFrames: state.gapFrames,
+    videoFilename: state.videoFilename || 'source_video.mp4',
+    mergeThreshold: state.mergeThreshold,
+  });
+}
+
+function genXML() {
+  const videoFile = state.videoFilename || 'source_video.mp4';
+  return generateXML({
+    reelsData: state.reelsData,
+    sentences: state.sentences,
+    fps: state.fps,
+    videoFilename: videoFile,
+    videoPath: state.videoPath || videoFile,
+    videoResolution: state.videoResolution,
+    projectName: state.projectName,
+    mergeThreshold: state.mergeThreshold,
+  });
+}
+
+function genLua() {
+  if (!state.videoPath) {
+    toast('Pomijam Lua: brak ścieżki wideo.', 'info');
+    return null;
+  }
+  return generateLua({
+    reelsData: state.reelsData,
+    sentences: state.sentences,
+    fps: state.fps,
+    gapFrames: state.gapFrames,
+    videoPath: state.videoPath,
+    projectName: state.projectName,
+    mergeThreshold: state.mergeThreshold,
+  });
+}
+
+/**
+ * Build the segment-listing `.md` (mirrors export-popover's inline builder).
+ * Phase 4 extracts this into a pure `generateSegmentsMd` with a regression case.
+ * @returns {string}
+ */
+function buildSegmentsMd() {
+  let md = `# Segmenty SRT\n\nPlik: ${state.srtName || 'nieznany'}\nFPS: ${state.fps}\nSegmentów: ${state.sentences.length}\n\n---\n\n`;
+  state.sentences.forEach((s) => {
+    md += `**#${s.id}** \`${s.start_tc} → ${s.end_tc}\` (${(s.duration_frame / state.fps).toFixed(1)}s)\n\n${s.text}\n\n---\n\n`;
+  });
+  return md;
+}
+
+/** Filename stem derived from the source video (matches export-popover). */
+function videoBase() {
+  const name = state.videoFilename || 'reels';
+  const lastDot = name.lastIndexOf('.');
+  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
+  return base || 'reels';
 }

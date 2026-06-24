@@ -39,13 +39,33 @@ import {
  */
 
 /**
- * Auto-mode (S-07) run + config state. Phase 1 carries only the transient run
- * flags the floating panel and the surface read-only gating read; stage-selection
- * / output fields (Phase 3) and the batch queue (Phase 4) extend this block.
+ * Auto-mode (S-07) stage-selection + output config (Phase 3). Transcription
+ * always carries its alignment + optional diarization + word settings from the
+ * Step-1 WhisperX box — it is one toggle, not separate align/diarize toggles.
+ * @typedef {Object} AutoStages
+ * @property {boolean} transcription - run WhisperX transcription (+align/+diarize)
+ * @property {boolean} segmentation - produce segments from the transcript
+ * @property {boolean} analysis - run the S-25 AI reel selection
+ * @property {boolean} export - write the selected outputs after the run
+ *
+ * @typedef {Object} AutoOutputs
+ * @property {boolean} srt - sentence-level `.srt` transcript
+ * @property {boolean} vtt - `.vtt` transcript
+ * @property {boolean} md - segment listing `.md`
+ * @property {boolean} wordJson - word-level timing JSON
+ * @property {boolean} edl - EDL timeline (requires reels)
+ * @property {boolean} xml - FCP7 XML timeline (requires reels)
+ * @property {boolean} lua - DaVinci Resolve Lua (requires reels)
+ *
+ * Auto-mode (S-07) run + config state. Phase 1 carries the transient run flags
+ * the floating panel and the surface read-only gating read; Phase 3 adds the
+ * `stages`/`outputs` selection; the batch queue (Phase 4) extends this block.
  * @typedef {Object} AutoMode
  * @property {boolean} running - true while an auto-pipeline run is in flight
  * @property {string|null} activeStage - id of the live stage ('transcribe' |
  *   'analyze' | …), or null when idle
+ * @property {AutoStages} stages - which pipeline stages the run executes
+ * @property {AutoOutputs} outputs - which files the export stage produces
  */
 
 /**
@@ -151,6 +171,24 @@ Zasady:
   autoMode: {
     running: false,
     activeStage: null,
+    // Defaults reproduce the Phase 1/2 full pipeline (transcribe → segment →
+    // analyze) with export opt-in: a freshly opened panel + "Uruchom" behaves
+    // like the original one-click run until the user toggles Eksport + formats.
+    stages: {
+      transcription: true,
+      segmentation: true,
+      analysis: true,
+      export: false,
+    },
+    outputs: {
+      srt: false,
+      vtt: false,
+      md: false,
+      wordJson: false,
+      edl: false,
+      xml: false,
+      lua: false,
+    },
   },
 };
 
