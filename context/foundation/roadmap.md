@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-22
+updated: 2026-06-24
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -39,7 +39,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-04  | segment-tuning-ops          | reorder, merge, delete segments (reorder/merge/delete ops need rework) | S-01      | FR-022                                        | done     |
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | proposed |
-| S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | proposed |
+| S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | done |
 | S-09  | resolve-plugin-handoff      | auto-collect timeline audio, transcribe in-panel, insert subtitles onto Subtitles track, and create reel timelines — all from inside Resolve | S-01, S-05, S-08, F-02 | FR-030, FR-031, US-02 | go-with-rework |
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | done     |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
@@ -51,6 +51,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-22  | segment-chunk-slider        | adjust a slider that splits the transcript into finer segments — from full sentences down to word-level chunks — so cuts pin to real word boundaries | S-05 | FR-006 (extends); cut-accuracy wedge          | proposed |
 | S-23  | stop-ai-analysis            | cancel an in-flight AI analysis with a Stop button when OpenRouter is slow/laggy (varies by model) | S-01 | — (UX/robustness on the selection action) | done     |
 | S-24  | windows-port                | run the whole app on Windows — WhisperX/FFmpeg sidecars rebuilt for Windows (CUDA + CPU configs), keys in Windows Credential Manager, MSI/NSIS installer | S-05, S-11 | — (cross-platform; PRD §Non-Goals "Windows later") | proposed |
+| S-25  | cost-optimized-ai-analysis  | cut AI-analysis cost via a two-stage (cluster → curate) pipeline with two selectable OpenRouter models + prompt caching | S-01, S-03, S-16 | — (NFR prompt-caching; promotes parked "two-stage long-form chunking") | done |
 
 ## Streams
 
@@ -58,7 +59,7 @@ Navigation aid — groups items that share a Prerequisites chain. Canonical orde
 
 | Stream | Theme                       | Chain                                                        | Note                                                                 |
 | ------ | --------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08`          | The north-star spine; quality goal fronts the scored-selection loop. |
+| A      | Selection & export deck     | `F-01` → `S-01` → `S-02` / `S-03` / `S-04` → `S-08` → `S-25` | The north-star spine; quality goal fronts the scored-selection loop. `S-25` re-architects the S-01 analysis call into a cheaper two-stage pipeline (and folds in S-03's per-stage prompts + S-16's settings pickers). |
 | B      | Local transcription         | `S-05` → `S-07` / `S-19` / `S-22`                          | Branches from `F-01`; word-level alignment unlocks the cut-accuracy criterion, (S-19) reels-ready word-by-word captions, and (S-22) slider-controlled word-level segment chunking. |
 | C      | Resolve integration         | `F-02` → `S-09`                                             | Spike-first (top blocker = decisions); `S-09` joins Stream A at `S-08`. |
 | D      | Security                    | `S-11`                                                      | `S-11` is standalone-ready. |
@@ -228,7 +229,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Unknowns:**
   - Does the `.fcpxml` (new, distinct format) need its own marker/timecode model vs the xmeml exporter? — Owner: team. Block: no.
 - **Risk:** XML and Lua are `preserved` exporters whose structure is fragile and import-tested in real NLEs — adding markers must not break import. FCPXML is net-new. Extend the regression suite with a case per format in the same change.
-- **Status:** proposed
+- **Status:** done
 
 ### S-09: DaVinci Resolve embedded plugin — full integration
 
@@ -424,6 +425,43 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **Risk:** Largest surface outside the feature set — it is a *configuration + packaging* slice, not a logic change, but it spans the whole native bottom layer (two sidecars, the credential store, the bundler, signing) and can only be validated on real Windows hardware. The CUDA-vs-CPU decision dominates: get it wrong and the sidecar is either multi-GB-unshippable or unusably slow. The frontend JS, parser, exporters and frame-math are platform-agnostic and should need **no** changes — keep it that way (run `node --experimental-vm-modules test/regression.js` on Windows to confirm the pipeline is byte-identical). All user-facing strings stay Polish. Reuse the macOS sidecar contract verbatim where possible so the two platforms don't diverge into separate codepaths.
 - **Status:** proposed
 
+### S-25: Cost-optimized multi-stage AI analysis — two models, prompt caching
+
+- **Outcome:** Editor cuts the cost (and avoids the output-token truncation) of analysing a long transcript by running AI selection as a **two-stage — optionally three-stage — pipeline driven by two separately-chosen OpenRouter models**, instead of one expensive single-shot call over all segments:
+
+  **Stage 1 — Cluster / filter (cheap, big-context model).** The full numbered-segment list (`[SEG-001]…`) goes to a high-context, low-cost model that returns only **N candidate themes, each as a catchy title + a list of candidate segment IDs** — no segment text echoed back, so the *output* stays tiny even when the *input* is the whole transcript. This is the "swallow 700 segments and sort them into piles" step from `idea.md`.
+
+  **Stage 2 — Curate (premium creative model).** Each theme bucket (~N candidate IDs, a small input) is passed to a second, higher-quality model that picks the best segments, orders them into a high-retention flow, and emits the **existing S-01 scored schema unchanged** (`virality_score` Hook/Flow/Value/Trend + `reason` + `hook/body/punchline` markers) so every downstream consumer — step-2 reel list, EDL/XML/Lua exporters — stays byte-compatible. Buckets run independently, so no single call can hit the output ceiling.
+
+  **Stage 3 — Optional final polish (off by default).** A cheap global pass de-duplicates segments reused across reels and fixes cross-reel ordering; skipped unless enabled.
+
+  For short transcripts (below a segment-count threshold) the pipeline auto-collapses to the **legacy single-shot call** so small jobs don't pay the two-call overhead; the editor can override the auto choice.
+
+  **Cost levers layered in (research-backed):**
+  - **Prompt caching** (`cache_control: { type: "ephemeral" }` on the large, stable transcript prefix) so the full segment list is billed at the cached rate (~10% of input on supporting providers) across the Stage-1 re-runs *and* every Stage-2 bucket call, instead of re-sending the whole transcript at full price each time. OpenRouter passes `cache_control` through to Anthropic/Gemini/Qwen-class providers and reports `usage.prompt_tokens_details.cached_tokens`; it is silently ignored by providers that don't support it (no error).
+  - **Per-stage disk cache** — the existing `withLlmCache` (exact-match) is keyed **per stage and per bucket**, so re-running only Stage 2 (e.g. after editing the curate prompt) doesn't re-pay Stage 1, and a re-analyse of an untouched bucket is free.
+  - **Usage / cost readout** — surface OpenRouter usage accounting (cached vs. fresh input tokens, completion tokens, and est. cost per stage) in the UI after a run, so the saving is visible and the model choice is decidable rather than blind.
+
+- **Change ID:** cost-optimized-ai-analysis
+- **PRD refs:** — (no single FR; serves the **NFR prompt-caching** + repeatability requirements behind S-01, and **promotes** the parked "Two-stage long-form chunking" deferred item — see Parked). Validate-before-use (FR-018) extends to the new Stage-1 cluster schema.
+- **All UI changes (this slice is mostly a UI + orchestration reshape over S-01's call):**
+  - **Settings window (S-16):** **two OpenRouter model pickers** instead of one — a Stage-1 *"Model klastrowania (tani, długi kontekst)"* and a Stage-2 *"Model kuracji (jakość)"*, each a reuse of `src/ai/openrouter-picker.js`, both persisted across sessions alongside the merge-gap. A single OpenRouter key in the keychain backs both (see Unknowns). A toggle for the optional Stage 3 and the auto-single-shot threshold also live here.
+  - **Prompt presets (S-03):** the editable system/user prompt splits into a **cluster prompt** and a **curate prompt**, each with its own preset library + Polish starters; the cluster prompt must elicit the `{ themes: [{ title, candidate_ids[] }] }` shape, the curate prompt the existing scored schema.
+  - **Analyze action:** *"Analizuj z OpenRouter"* now drives the staged run with a **continuous staged-progress indicator** — Stage 1 → "found K themes" → Stage 2 per-bucket ticks — reusing S-07's staged-progress pattern. The **Stop** button (S-23) cancels the whole pipeline (both stages) via the shared `AbortController`.
+  - **Cost/usage panel:** a compact post-run readout (cached tokens, fresh tokens, est. cost, per stage), in Polish.
+- **Prerequisites:** S-01 (the scored-selection call + schema this re-architects), S-03 (per-stage editable prompts + presets), S-16 (the settings window the two model pickers live in)
+- **Parallel with:** S-08 (export set — untouched; Stage-2 schema is byte-identical), S-22 (chunk slider — orthogonal; finer chunks *raise* segment count, which is exactly the case this slice makes cheap)
+- **Coordinate with:** S-07 (one-click auto mode must drive both stages, not the legacy single call), S-23 (Stop must abort mid-stage)
+- **Blockers:** —
+- **Unknowns:**
+  - **One key or two?** — "two OpenRouter inputs" = two **model** pickers backed by one account key, or two **separate** keys (e.g. split billing / two accounts)? — Owner: user. Block: no (default: two model pickers, single keychain key; add a second keychain account only if separate billing is wanted).
+  - **`cache_control` reach** — the prompt-cache discount only lands on providers that honour it (Anthropic, Gemini 2.5, Qwen); a cheap clustering model without caching gets the two-stage *architecture* win but not the cache win. Confirm the recommended Stage-1 models support both long context and caching. — Owner: team. Block: no (apply `cache_control` opportunistically; it's a no-op elsewhere).
+  - **Theme/bucket sizing** — fixed (`idea.md`: ~10 themes × ~25 candidate IDs) or user-tunable in settings? — Owner: user. Block: no (default: sensible fixed defaults, exposed as advanced settings later).
+  - **Auto single-shot threshold** — at what segment count does two-stage start paying off vs. the legacy one call? — Owner: team. Block: no (default: a tunable segment-count threshold with manual override; measure on a real transcript).
+  - **ID integrity across stages** — Stage 1 returns candidate IDs the model could hallucinate; Stage 2 must only see real `[SEG-nnn]` IDs. — Owner: team. Block: no (validate Stage-1 IDs against the actual segment set, drop unknowns, before building buckets).
+- **Risk:** Re-architects the S-01 analysis call — the highest-value path in the app. `callOpenRouter` must grow from a fixed single-message/single-model call into a per-call (model, message-blocks-with-`cache_control`, usage-returning) call; keep the **Stage-2 output schema identical to S-01** so no exporter/`.reelproj` consumer changes (grep the field names per the CLAUDE.md rule). **Validate both** the new Stage-1 cluster schema and the reused Stage-2 scored schema before use (FR-018) — an unvalidated cluster object must never build buckets. No parser/exporter/frame-math change is intended; if any exporter input shifts, run `node --experimental-vm-modules test/regression.js` and add a case. The two-stage path adds orchestration surface (partial failure mid-bucket, cache-key fan-out, abort across stages) — make a Stage-2 bucket failure recoverable (retry that bucket, keep the rest) rather than failing the whole run. Keep all new user-facing strings Polish.
+- **Status:** done
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID                      | Suggested issue title                                   | Ready for `/10x-plan` | Notes                                            |
@@ -450,6 +488,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 | S-22       | segment-chunk-slider           | Segment chunk-size slider — word-level segmentation granularity | yes            | Needs S-05 (shipped); upstream chunk size, distinct from the merge-gap; `/10x-plan segment-chunk-slider` |
 | S-23       | stop-ai-analysis               | Stop button to cancel in-flight AI analysis (OpenRouter lag) | yes            | Needs S-01 (shipped); thread `AbortController` through `callOpenRouter`; share cancel primitive with S-07; `/10x-plan stop-ai-analysis` |
 | S-24       | windows-port                   | Windows port — sidecars (CUDA/CPU), Credential Manager, MSI/NSIS installer | yes | Needs S-05 + S-11 (shipped); continued on Windows machine; resolve CUDA-vs-CPU WhisperX config first; `keyring` `windows-native` feature; port the bash build scripts; `/10x-plan windows-port` |
+| S-25       | cost-optimized-ai-analysis     | Cost-optimized two-stage AI analysis (cluster → curate), two models, prompt caching | yes | Needs S-01 + S-03 + S-16 (shipped); two OpenRouter model pickers in settings; `cache_control` on transcript prefix + per-stage `withLlmCache`; keep Stage-2 schema = S-01; promotes parked "two-stage long-form chunking"; `/10x-plan cost-optimized-ai-analysis` |
 
 ## Open Roadmap Questions
 
@@ -469,7 +508,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **CapCut draft export** — Why parked: PRD §Non-Goals deferred set.
 - **A/B provider comparison + merge** — Why parked: PRD §Non-Goals deferred set.
 - **Batch API** — Why parked: PRD §Non-Goals deferred set.
-- **Two-stage long-form chunking** — Why parked: PRD §Non-Goals deferred set.
+- **Two-stage long-form chunking** — ~~Why parked: PRD §Non-Goals deferred set.~~ **Promoted 2026-06-23 to slice S-25 (`cost-optimized-ai-analysis`)** — the cluster → curate two-stage pipeline (with two selectable OpenRouter models + prompt caching) is now the cost-optimization path for AI analysis, no longer deferred.
 - **"Private AI" prompt-export / paste-back mode** — Why parked: PRD §Non-Goals deferred set.
 - **Per-reel metadata generation (title/desc/hashtags/SEO)** — Why parked: PRD FR-019 DEFERRED; social/SEO repurposing, not timeline delivery.
 - **Per-reel `.md` export** — Why parked: PRD FR-032 DEFERRED; social/SEO artifact, deferred with FR-019.
@@ -494,8 +533,10 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-03: edit the system prompt and manage reusable prompt presets** — Archived 2026-06-18 → `context/archive/2026-06-16-s-03/`. Editable (no-longer-hardcoded) system prompt split from the user prompt + reusable preset library (save-as/duplicate/rename/delete, JSON import/export, built-in Polish starters); empty system prompt is meaningful (omits scoring guidance). Lesson: synchronous JS dialogs (`window.prompt/confirm/alert`) hard-crash Tauri's macOS WKWebView — use an in-app modal + async `@tauri-apps/plugin-dialog` `ask()` + `toast()` instead.
 - **S-02: Scoring-first reel list UI** — Archived 2026-06-18 → `context/archive/2026-06-18-scoring-first-reel-list/`. Lesson: —.
 - **S-04: reorder, merge, delete segments (reorder/merge/delete ops need rework)** — Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`. Diagnosis showed delete/merge already worked; only drag-reorder was broken because Tauri's webview intercepted HTML5 drag events — fixed with one config flip (`dragDropEnabled: false`), `moveClip()` untouched. Lesson: Tauri's webview swallows HTML5 drag-and-drop by default; set `dragDropEnabled: false` on the window to hand DnD to the frontend (and it governs the HTML5 file-drop import too — no native `onDragDropEvent` listener to lose).
+- **S-25: cut AI-analysis cost via a two-stage (cluster → curate) pipeline with two selectable OpenRouter models + prompt caching** — Archived 2026-06-24 → `context/archive/2026-06-23-cost-optimized-ai-analysis/`. Phase-2 evidence gate ran OPEN (two strong single-shot models both plateaued on long mixed-topic input), so built instrumentation + model tiering + cluster→curate pipeline + Stage-1 minification (Phases 1,3,4,5); Phase 2a skipped. Lesson: a `cache_control` provider-cache lever is inert when an exact-match disk cache sits in front of the call and the marker isn't isolating a stable prefix — the disk cache serves prompt-identical re-runs before the network, so the provider cache never fires (impl-review F1).
 - **S-11: store API keys in the OS keychain, never plaintext** — Archived 2026-06-18 → `context/archive/2026-06-18-keychain-credentials/`. `keyring`-crate `keychain.rs` get/set/delete commands + hydrated `src/ai/api-key.js` cache (sync `getApiKey`, async write-through `setApiKey`, boot `hydrateKeys()` with one-time localStorage→Keychain migration); R2 accessor folded in. Lesson: the `keyring` 3.x crate ships NO credential store by default (silent in-memory mock) — enable `apple-native` in Cargo.toml or Keychain writes don't persist.
 - **S-19: export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions** — Archived 2026-06-18 → `context/archive/2026-06-18-word-level-srt-export/`. Lesson: —.
 - **S-21: The app no longer randomly closes mid-session during `npm run tauri dev`. Root cause is identified (Rust panic, unhandled JS exception, Tauri IPC crash, sidecar OOM, or OS-level signal) and fixed — with a reproducibility note and a regression guard where possible.** — Archived 2026-06-22 → `context/archive/2026-06-19-app-crash-fix/`. No single smoking gun; hardened the most plausible silent-exit mechanisms — bounded the unbounded WhisperX `stderr_buf` (top OOM amplifier), closed the cancel/completion orphan race so a cancelled run is always reaped (single atomic reaper), switched release `panic = unwind`, and added a Rust `[PANIC]` hook + JS global error/rejection handlers so the next crash is no longer silent. Lesson: `drop(CommandChild)` does NOT kill the OS process — a cancelled sidecar must be explicitly reaped (SIGTERM→SIGKILL) by a single deterministic owner, or orphaned torch workers accumulate into cumulative OOM.
 - **S-20: The word-by-word SRT export (S-19) actually works in the app: the "Eksport słowo-po-słowie" checkbox in the WhisperX advanced modal triggers per-word cues when clicked, the auto-align fallback runs when word data is missing, and the saved `.srt` opens cleanly in a caption viewer.** — Archived 2026-06-22 → `context/archive/2026-06-19-word-srt-fix/`. Lesson: —.
 - **S-23: cancel an in-flight AI analysis with a Stop button when OpenRouter is slow/laggy (varies by model)** — Archived 2026-06-22 → `context/archive/2026-06-22-stop-ai-analysis/`. Lesson: —.
+- **S-08: Editor exports FCP7 xmeml `.xml` (Premiere), `.fcpxml` (Final Cut Pro X, generated separately from xmeml), and a DaVinci Resolve `.lua` console script — all carrying the new markers and importing cleanly.** — Archived 2026-06-24 → `context/archive/2026-06-22-timeline-export-set/`. Lesson: —.
