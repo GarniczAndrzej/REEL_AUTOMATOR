@@ -1,10 +1,10 @@
 ---
 change_id: timeline-export-set
 title: Timeline export set
-status: implementing
+status: archived
 created: 2026-06-22
-updated: 2026-06-22
-archived_at: null
+updated: 2026-06-24
+archived_at: 2026-06-24T15:42:27Z
 last_phase: 4
 ---
 
