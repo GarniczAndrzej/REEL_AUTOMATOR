@@ -578,11 +578,11 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Manual
 
-- [ ] 1.5 One click drives transcribe → segment → analyze and reveals reels
-- [ ] 1.6 Imported-SRT branch runs analysis (with align) without transcription
-- [ ] 1.7 Second launch during a run is rejected with a toast
-- [ ] 1.8 Overwrite `ask()` appears when reels already exist; cancel aborts launch
-- [ ] 1.9 Earlier-stage inputs disabled while the run is live
+- [x] 1.5 One click drives transcribe → segment → analyze and reveals reels
+- [x] 1.6 Imported-SRT branch runs analysis (with align) without transcription
+- [x] 1.7 Second launch during a run is rejected with a toast
+- [x] 1.8 Overwrite `ask()` appears when reels already exist; cancel aborts launch
+- [x] 1.9 Earlier-stage inputs disabled while the run is live
 
 ### Phase 2: Unified non-blocking floating progress panel + per-stage cancel
 
@@ -594,10 +594,10 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Manual
 
-- [ ] 2.4 One continuous panel shows per-stage % across stages
-- [ ] 2.5 App stays interactive behind the panel; panel dismissible
-- [ ] 2.6 Transcription-row cancel aborts run; AI-row cancel keeps completed buckets
-- [ ] 2.7 Manual (non-auto) runs still show their original surfaces
+- [x] 2.4 One continuous panel shows per-stage % across stages
+- [x] 2.5 App stays interactive behind the panel; panel dismissible
+- [x] 2.6 Transcription-row cancel aborts run; AI-row cancel keeps completed buckets
+- [x] 2.7 Manual (non-auto) runs still show their original surfaces
 
 ### Phase 3: Configurable stage selection + output picker
 
@@ -609,24 +609,24 @@ shared save/export helpers — run the regression suite before and after.
 
 #### Manual
 
-- [ ] 3.4 Transkrypcja + SRT only produces just an SRT, no analysis
-- [ ] 3.5 Timeline outputs disabled until Analiza AI selected
-- [ ] 3.6 Dependency enforcement greys out invalid combos
-- [ ] 3.7 Full selection behaves like full run plus export
+- [x] 3.4 Transkrypcja + SRT only produces just an SRT, no analysis
+- [x] 3.5 Timeline outputs disabled until Analiza AI selected
+- [x] 3.6 Dependency enforcement greys out invalid combos
+- [x] 3.7 Full selection behaves like full run plus export
 
 ### Phase 4: Batch mode (headless → chosen folder)
 
 #### Automated
 
-- [x] 4.1 Rust type-check passes
-- [x] 4.2 Regression suite passes (output formats unchanged)
-- [x] 4.3 New `generateSegmentsMd` regression case added and passing
-- [x] 4.4 Prettier clean on touched files
+- [x] 4.1 Rust type-check passes — 4f8a243
+- [x] 4.2 Regression suite passes (output formats unchanged) — 4f8a243
+- [x] 4.3 New `generateSegmentsMd` regression case added and passing — 4f8a243
+- [x] 4.4 Prettier clean on touched files — 4f8a243
 
 #### Manual
 
-- [ ] 4.5 3 videos + SRT writes 3 SRT files to the chosen folder sequentially
-- [ ] 4.6 Full-pipeline batch writes selected timeline + text outputs per video
-- [ ] 4.7 Single-document surface untouched after a batch run
-- [ ] 4.8 Per-stage cancel during batch stops per defined semantics; written files remain
-- [ ] 4.9 Diarization-on-without-token degrades gracefully per video
+- [x] 4.5 3 videos + SRT writes 3 SRT files to the chosen folder sequentially
+- [x] 4.6 Full-pipeline batch writes selected timeline + text outputs per video
+- [x] 4.7 Single-document surface untouched after a batch run
+- [x] 4.8 Per-stage cancel during batch stops per defined semantics; written files remain
+- [x] 4.9 Diarization-on-without-token degrades gracefully per video

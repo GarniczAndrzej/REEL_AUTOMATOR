@@ -1,7 +1,7 @@
 ---
 change_id: auto-mode-pipeline
 title: Auto mode pipeline
-status: implementing
+status: implemented
 created: 2026-06-22
 updated: 2026-06-24
 archived_at: null
