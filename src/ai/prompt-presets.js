@@ -4,6 +4,11 @@
 
 const LS_KEY = 'edl_prompt_presets';
 
+// S-26: version flag gating the one-time builtin migration (see
+// `migrateBuiltinPresets`). Bumping the version re-runs the merge once.
+const MIGRATION_FLAG = 'edl_presets_builtin_migration';
+const MIGRATION_VERSION = 's26-v1';
+
 /** @typedef {import('../state.js').PromptPreset} PromptPreset */
 
 /**
@@ -179,6 +184,104 @@ export function seedPresetsIfEmpty() {
   try {
     if (localStorage.getItem(LS_KEY) === null) {
       savePresets(BUILTIN_PRESETS);
+      // A fresh install already holds the current builtins, so stamp the
+      // migration flag (S-26) — `migrateBuiltinPresets()` is then a no-op.
+      localStorage.setItem(MIGRATION_FLAG, MIGRATION_VERSION);
+    }
+  } catch {}
+}
+
+/**
+ * Snapshot of the 4 generic starters retired in S-26 (Phase 2). Frozen here
+ * verbatim from the pre-S-26 `BUILTIN_PRESETS` so `migrateBuiltinPresets()` can
+ * detect a *pristine* old starter (id + name + userPrompt all unchanged) and
+ * remove only those — a renamed or edited starter is user work and is kept.
+ * @type {PromptPreset[]}
+ */
+const RETIRED_BUILTINS = [
+  {
+    id: 'builtin-sprzedazowy',
+    name: 'Sprzedażowy (webinar)',
+    userPrompt: `Stwórz viralowe reelsy sprzedażowe z tego webinaru.
+
+Zasady:
+- Każdy Reel: HOOK (mocny wstęp) → BODY (rozwinięcie) → CTA (wezwanie do działania)
+- Długość: 30–90 sekund
+- Możesz zmieniać kolejność segmentów zachowując logiczny sens
+- Szukaj emocjonalnych momentów, konkretnych liczb, historii i CTA
+- Stwórz tyle Reelsów ile możesz z wartościowego materiału`,
+  },
+  {
+    id: 'builtin-edukacyjny',
+    name: 'Edukacyjny',
+    userPrompt: `Wytnij z nagrania najcenniejsze fragmenty edukacyjne jako krótkie reelsy.
+
+Zasady:
+- Każdy Reel: jeden konkretny insight lub lekcja do zapamiętania
+- Długość: 20–60 sekund
+- Priorytetyzuj momenty „aha", definicje, porady krok po kroku
+- Każdy Reel musi mieć jasny tytuł tematyczny
+- Unikaj fragmentów, gdzie prowadzący pyta o pytania lub robi przerwy`,
+  },
+  {
+    id: 'builtin-storytelling',
+    name: 'Storytelling / historia',
+    userPrompt: `Znajdź w nagraniu najmocniejsze fragmenty narracyjne i ułóż z nich emocjonalne reelsy.
+
+Zasady:
+- Każdy Reel: problem → zwrot akcji → rozwiązanie lub refleksja
+- Długość: 45–90 sekund
+- Szukaj anegdot, metafor, osobistych doświadczeń mówcy
+- Hook musi wciągnąć widza w pierwszych 3 sekundach
+- Zachowaj naturalny rytm narracji — nie urywaj w połowie zdania`,
+  },
+  {
+    id: 'builtin-highlights',
+    name: 'Najlepsze chwile (highlights)',
+    userPrompt: `Wybierz absolutne perełki z nagrania — momenty, które warto obejrzeć niezależnie od kontekstu.
+
+Zasady:
+- Każdy Reel to jeden wyrazisty, samodzielny fragment
+- Długość: 15–45 sekund
+- Szukaj śmiesznych, zaskakujących lub bardzo konkretnych momentów
+- Każdy Reel powinien działać bez znajomości reszty nagrania
+- Im krótszy i bardziej treściwy — tym lepiej`,
+  },
+];
+
+/**
+ * One-time, flag-guarded migration of existing users to the S-26 builtins.
+ * Runs at most once per `MIGRATION_VERSION`: removes pristine retired starters,
+ * merges in any missing new `builtin-*` presets, and preserves every other
+ * preset (user-created, or a retired starter the user renamed/edited). Never
+ * throws on boot (mirrors `seedPresetsIfEmpty`); never re-adds a builtin the
+ * user later deleted, because the flag stops it from running again.
+ */
+export function migrateBuiltinPresets() {
+  try {
+    if (localStorage.getItem(MIGRATION_FLAG) === MIGRATION_VERSION) return;
+
+    const current = loadPresets();
+
+    // Drop only *pristine* retired starters (id + name + userPrompt all match
+    // the frozen original). A renamed/edited one differs and is kept.
+    const kept = current.filter((p) => {
+      const retired = RETIRED_BUILTINS.find((r) => r.id === p.id);
+      if (!retired) return true; // user-created or already a new builtin
+      const pristine =
+        p.name === retired.name && p.userPrompt === retired.userPrompt;
+      return !pristine;
+    });
+
+    // Append any new builtin not already present (by id).
+    const presentIds = new Set(kept.map((p) => p.id));
+    const merged = [
+      ...kept,
+      ...BUILTIN_PRESETS.filter((b) => !presentIds.has(b.id)),
+    ];
+
+    if (savePresets(merged)) {
+      localStorage.setItem(MIGRATION_FLAG, MIGRATION_VERSION);
     }
   } catch {}
 }

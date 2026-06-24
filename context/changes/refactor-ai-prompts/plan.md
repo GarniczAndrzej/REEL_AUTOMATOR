@@ -451,9 +451,9 @@ human to walk the five migration scenarios above before closing the change.
 
 #### Automated
 
-- [x] 2.1 Regression suite green
-- [x] 2.2 `BUILTIN_PRESETS` has 11 entries, ids unique and `builtin-` prefixed
-- [x] 2.3 Prettier clean on `src/ai/prompt-presets.js`
+- [x] 2.1 Regression suite green — 79c22da
+- [x] 2.2 `BUILTIN_PRESETS` has 11 entries, ids unique and `builtin-` prefixed — 79c22da
+- [x] 2.3 Prettier clean on `src/ai/prompt-presets.js` — 79c22da
 
 > Deviation (user-directed): preset `userPrompt` bodies ship in **English**
 > (labeled AUDIENCE → LOOK FOR → HOOK → LENGTH → CTA + a Polish-output anchor),
@@ -463,21 +463,21 @@ human to walk the five migration scenarios above before closing the change.
 
 #### Manual
 
-- [x] 2.4 Fresh profile picker lists all 11 presets with correct Polish names
-- [x] 2.5 Selecting The5 and Copilot fills the textarea with drafted text (now English bodies)
-- [x] 2.6 A cohort preset + new curate guidance produces a cohort-framed selection
+- [x] 2.4 Fresh profile picker lists all 11 presets with correct Polish names — 79c22da
+- [x] 2.5 Selecting The5 and Copilot fills the textarea with drafted text (now English bodies) — 79c22da
+- [x] 2.6 A cohort preset + new curate guidance produces a cohort-framed selection — 79c22da
 
 ### Phase 3: One-time preset migration
 
 #### Automated
 
-- [ ] 3.1 Regression suite green
-- [ ] 3.2 Prettier clean on `src/ai/prompt-presets.js` and `src/main.js`
+- [x] 3.1 Regression suite green
+- [x] 3.2 Prettier clean on `src/ai/prompt-presets.js` and `src/main.js`
 
 #### Manual
 
-- [ ] 3.3 Existing-user upgrade: pristine starters removed, 11 builtins added, flag set
-- [ ] 3.4 Edited/renamed old starter preserved; other pristine ones removed
-- [ ] 3.5 User-created preset survives migration unchanged
-- [ ] 3.6 Idempotency: deleted cohort preset is not resurrected on reload
-- [ ] 3.7 Fresh install seeds 11 builtins, sets flag, migration is a no-op
+- [x] 3.3 Existing-user upgrade: pristine starters removed, 11 builtins added, flag set
+- [x] 3.4 Edited/renamed old starter preserved; other pristine ones removed
+- [x] 3.5 User-created preset survives migration unchanged
+- [x] 3.6 Idempotency: deleted cohort preset is not resurrected on reload
+- [x] 3.7 Fresh install seeds 11 builtins, sets flag, migration is a no-op

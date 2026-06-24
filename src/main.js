@@ -4,7 +4,11 @@ import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/export-popover.js';
 import { init as initOrPicker } from './ai/openrouter-picker.js';
 import { loadSettings } from './settings.js';
-import { seedPresetsIfEmpty, loadPresets } from './ai/prompt-presets.js';
+import {
+  seedPresetsIfEmpty,
+  migrateBuiltinPresets,
+  loadPresets,
+} from './ai/prompt-presets.js';
 import { initSurface } from './ui/surface.js';
 import { initSettingsModal } from './ui/settings-modal.js';
 import { initAutoMode } from './ui/auto-mode/index.js';
@@ -32,8 +36,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (settings.mergeThreshold != null)
     state.mergeThreshold = settings.mergeThreshold;
 
-  // FR-016: seed built-in presets on first run then load the library (S-03 Phase 2).
+  // FR-016: seed built-in presets on first run, then run the one-time S-26
+  // builtin migration for existing users (flag-guarded, idempotent), then load
+  // the library (S-03 Phase 2).
   seedPresetsIfEmpty();
+  migrateBuiltinPresets();
   state.promptPresets = loadPresets();
 
   // S-11/FR-035: hydrate API keys from the macOS Keychain (and run the one-time
