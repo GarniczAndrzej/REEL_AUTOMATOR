@@ -11,6 +11,7 @@
 import { state, emit } from '../../state.js';
 import { toast } from '../toast.js';
 import { getApiKey } from '../../ai/api-key.js';
+import { stripExt } from '../../util/filename.js';
 import { runAnalysis } from '../step2-analyze.js';
 import {
   transcribeDocument,
@@ -453,8 +454,5 @@ function buildSegmentsMd() {
 
 /** Filename stem derived from the source video (matches export-popover). */
 function videoBase() {
-  const name = state.videoFilename || 'reels';
-  const lastDot = name.lastIndexOf('.');
-  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
-  return base || 'reels';
+  return stripExt(state.videoFilename || 'reels');
 }

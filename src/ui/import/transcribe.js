@@ -601,8 +601,13 @@ export async function alignToWords(opts = {}) {
     );
     if (!proceed) return false;
   }
-  document.getElementById('whisperProgressBox').style.display = 'block';
-  setWhisperProgress('Dopasowanie do audio…', 0);
+  // Suppress the legacy inline progress box during an auto run — the unified
+  // floating panel owns progress there (otherwise both surfaces show on the
+  // imported-SRT + video align path).
+  if (!state.autoMode.running) {
+    document.getElementById('whisperProgressBox').style.display = 'block';
+    setWhisperProgress('Dopasowanie do audio…', 0);
+  }
 
   let unlisten;
   try {

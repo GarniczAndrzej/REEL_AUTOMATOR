@@ -552,6 +552,18 @@ shared save/export helpers — run the regression suite before and after.
   migration. Single-video auto mode mutates the same `state` fields manual flow
   already uses.
 
+## Addenda (post-implementation)
+
+- **`open_path` Tauri command (accepted scope, impl-review F2).** A new
+  `open_path(path)` command (`src-tauri/src/project.rs`, registered in `lib.rs`)
+  was added during implementation but not described above. It shells out to the
+  macOS `open` to reveal the export destination folder, backing the "📂 Otwórz
+  folder docelowy" button shown in the progress panel after export completes.
+  Safe as written: the path is passed as a single `argv` entry (no shell
+  interpolation) and originates from the native folder picker (`pickFolder()`),
+  so there is no injection vector. Accepted as in-scope; recorded here so the
+  plan stays the source of truth.
+
 ## References
 
 - Research: `context/changes/auto-mode-pipeline/research.md`

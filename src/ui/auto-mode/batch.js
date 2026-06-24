@@ -11,6 +11,7 @@
 import { state, emit } from '../../state.js';
 import { toast } from '../toast.js';
 import { getApiKey } from '../../ai/api-key.js';
+import { stripExt } from '../../util/filename.js';
 import {
   transcribeDocument,
   whisperAdvancedArgs,
@@ -288,44 +289,55 @@ export async function runBatch() {
       }
 
       // ── Export: write the selected outputs into the chosen folder ───────
+      // Guarded per-video (like the transcription stage above): a thrown
+      // exporter or a failed save on one video must not abandon the rest of
+      // the queue — mark it error, toast, and continue.
       controller.stage = 'export';
       state.autoMode.activeStage = 'export';
-      const items = buildBatchItems({
-        sentences,
-        reels,
-        videoPath: video.path,
-        videoName: video.name,
-        fps: state.fps,
-      });
-      updateStage('export', {
-        status: 'running',
-        label: 'Zapis plików…',
-        percent: 0,
-      });
-      let ok = 0;
-      for (let j = 0; j < items.length; j++) {
-        const done = await saveTextToFolder({
-          folder,
-          name: items[j].name,
-          content: items[j].content,
+      try {
+        const items = buildBatchItems({
+          sentences,
+          reels,
+          videoPath: video.path,
+          videoName: video.name,
+          fps: state.fps,
         });
-        if (done) {
-          ok++;
-          written++;
-        }
         updateStage('export', {
           status: 'running',
-          percent: items.length ? ((j + 1) / items.length) * 100 : 100,
-          label: `${ok}/${items.length}`,
+          label: 'Zapis plików…',
+          percent: 0,
         });
+        let ok = 0;
+        for (let j = 0; j < items.length; j++) {
+          const done = await saveTextToFolder({
+            folder,
+            name: items[j].name,
+            content: items[j].content,
+          });
+          if (done) {
+            ok++;
+            written++;
+          }
+          updateStage('export', {
+            status: 'running',
+            percent: items.length ? ((j + 1) / items.length) * 100 : 100,
+            label: `${ok}/${items.length}`,
+          });
+        }
+        updateStage('export', {
+          status: ok === items.length ? 'done' : 'error',
+          percent: 100,
+          label: `Zapisano ${ok} z ${items.length}`,
+        });
+        video.status = 'done';
+        emit();
+      } catch (e) {
+        video.status = 'error';
+        updateStage('export', { status: 'error', label: 'Błąd: ' + e });
+        toast(`Eksport „${video.name}” nieudany: ${e}`, 'error');
+        emit();
+        continue; // skip this video, keep going with the rest of the queue
       }
-      updateStage('export', {
-        status: ok === items.length ? 'done' : 'error',
-        percent: 100,
-        label: `Zapisano ${ok} z ${items.length}`,
-      });
-      video.status = 'done';
-      emit();
     }
   } finally {
     batchRunning = false;
@@ -430,11 +442,4 @@ function buildBatchItems({ sentences, reels, videoPath, videoName, fps }) {
       }),
     });
   return items;
-}
-
-/** @param {string} name @returns {string} filename stem (extension stripped). */
-function stripExt(name) {
-  const dot = name.lastIndexOf('.');
-  const base = dot > 0 ? name.slice(0, dot) : name;
-  return base || 'reels';
 }

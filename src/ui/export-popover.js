@@ -16,6 +16,7 @@ import {
 } from '../exporters/transcript.js';
 import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
+import { stripExt } from '../util/filename.js';
 import { toast } from './toast.js';
 import { exportTranscriptSrt, transcriptBase } from './export-srt.js';
 
@@ -264,10 +265,7 @@ async function copyPrompt() {
 // ── utilities ──────────────────────────────────────────────────────
 
 function videoBase() {
-  const name = state.videoFilename || 'reels';
-  const lastDot = name.lastIndexOf('.');
-  const base = lastDot > 0 ? name.slice(0, lastDot) : name;
-  return base || 'reels';
+  return stripExt(state.videoFilename || 'reels');
 }
 
 async function copyText(content, okMsg = 'Skopiowano ✓') {
