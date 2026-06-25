@@ -397,7 +397,10 @@ pub async fn transcribe_video(
     let model = match model_id.filter(|s| !s.is_empty()) {
         Some(id) => {
             let dir = crate::models::model_dir(&app, &id)?;
-            if !crate::models::is_downloaded(&dir) {
+            // Phase 3 threads the selected model's registry sentinel here; until
+            // then use the CT2 default so existing faster-whisper models gate as
+            // before (a Cohere model passes this only once Phase 3 wires it).
+            if !crate::models::is_downloaded(&dir, crate::models::MODEL_SENTINEL) {
                 return Err("Wybrany model nie został pobrany. Pobierz go w menedżerze modeli.".to_string());
             }
             dir.to_string_lossy().to_string()

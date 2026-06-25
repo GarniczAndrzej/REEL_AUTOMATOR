@@ -205,7 +205,10 @@ async function refreshModelStatus() {
       await import('../../transcription/model-registry.js');
     const { invoke } = await import('@tauri-apps/api/core');
     const list = await invoke('list_models', {
-      modelIds: MODEL_REGISTRY.map((m) => m.id),
+      // Pass each model's readiness sentinel so non-CT2 models (Cohere →
+      // model.safetensors) report "downloaded" correctly; CT2 omits it (Rust
+      // defaults to model.bin).
+      models: MODEL_REGISTRY.map((m) => ({ id: m.id, sentinel: m.sentinel })),
     });
     _modelStatus = {};
     for (const s of list) _modelStatus[s.id] = s;
@@ -347,11 +350,15 @@ async function downloadModel(id) {
       }
     });
     const { invoke } = await import('@tauri-apps/api/core');
+    // Gated repos (Cohere) need a Bearer HF token; reuse the diarization HF-token
+    // value. Public CT2 models pass null → no Authorization header (unchanged).
+    const hfToken = model.gated ? getApiKey('huggingface') || null : null;
     await invoke('download_model', {
       modelId: id,
       repo: model.repo,
       files: model.files,
       totalBytes: model.sizeBytes || null,
+      hfToken,
     });
     if (progEl) progEl.textContent = '✓ Pobrano i zweryfikowano';
     await refreshModelStatus();

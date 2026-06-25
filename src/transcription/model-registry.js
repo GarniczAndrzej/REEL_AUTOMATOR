@@ -23,7 +23,13 @@
  * @property {string} label       - display name
  * @property {string} repo        - HuggingFace repo (resolve/main/<file>)
  * @property {number} sizeBytes   - approximate total download size
- * @property {ModelFile[]} files  - files comprising the CT2 model directory
+ * @property {ModelFile[]} files  - files comprising the model directory
+ * @property {('whisperx-ct2'|'cohere-transformers')} [kind] - engine that loads
+ *   this model; defaults to 'whisperx-ct2' (faster-whisper CT2) when omitted.
+ * @property {string} [sentinel]  - file whose presence marks the model "ready"
+ *   ('model.bin' for CT2, 'model.safetensors' for Cohere); defaults to 'model.bin'.
+ * @property {boolean} [gated]    - true for HF gated repos that require an accepted
+ *   license + a Bearer HF token at download time (Cohere). Public CT2 repos omit it.
  */
 
 /** @type {TranscriptionModel[]} */
@@ -100,6 +106,41 @@ export const MODEL_REGISTRY = [
       { name: 'preprocessor_config.json', sizeBytes: 340, sha256: '' },
       { name: 'tokenizer.json', sizeBytes: 2_710_337, sha256: '' },
       { name: 'vocabulary.json', sizeBytes: 1_068_114, sha256: '' },
+    ],
+  },
+  {
+    // Cohere `cohere-transcribe-03-2026` (2B Conformer ASR, Apache-2.0) run
+    // OFFLINE inside the whisperx-engine sidecar via NATIVE transformers ≥5.4.0
+    // (no trust_remote_code). Unlike the CT2 entries above this is a
+    // transformers model dir, so its readiness sentinel is `model.safetensors`,
+    // not `model.bin`. The manifest is the NATIVE set — the four `*_cohere_asr.py`
+    // remote-code modules are deliberately NOT listed (transformers resolves
+    // `cohere_asr` internally). The repo is GATED (`gated: auto`): the user must
+    // accept the license once on the HF page and the download must send a Bearer
+    // HF token (models.rs `download_model` hf_token param). Sizes + the
+    // model.safetensors sha256 (its LFS oid) come from the HF tree API.
+    id: 'cohere-pl',
+    label: 'Cohere (Polski, offline)',
+    repo: 'CohereLabs/cohere-transcribe-03-2026',
+    kind: 'cohere-transformers',
+    sentinel: 'model.safetensors',
+    gated: true,
+    sizeBytes: 4_134_229_509,
+    files: [
+      { name: 'config.json', sizeBytes: 3_998, sha256: '' },
+      { name: 'generation_config.json', sizeBytes: 234, sha256: '' },
+      {
+        name: 'model.safetensors',
+        sizeBytes: 4_131_862_976,
+        sha256:
+          '987bd3e141c7bfdb5a78f5db11397ee7737308357e6cc0a3f36a4979b158137a',
+      },
+      { name: 'preprocessor_config.json', sizeBytes: 420, sha256: '' },
+      { name: 'processor_config.json', sizeBytes: 131, sha256: '' },
+      { name: 'special_tokens_map.json', sizeBytes: 4_091, sha256: '' },
+      { name: 'tokenizer.json', sizeBytes: 1_816_694, sha256: '' },
+      { name: 'tokenizer.model', sizeBytes: 492_827, sha256: '' },
+      { name: 'tokenizer_config.json', sizeBytes: 48_138, sha256: '' },
     ],
   },
 ];

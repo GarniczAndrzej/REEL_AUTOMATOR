@@ -604,28 +604,28 @@ archiving via `/10x-archive`.
 
 #### Automated
 
-- [x] 0.1 Native 5.x load+transcribe prints non-empty Polish text (no trust_remote_code)
+- [x] 0.1 Native 5.x load+transcribe prints non-empty Polish text (no trust_remote_code) — dd72867
 
 #### Manual
 
-- [x] 0.2 spike-notes records transformers 5.x version, native load, language/punctuation honored
-- [x] 0.3 spike-notes records long-audio auto-chunk + audio_chunk_index reassembly + per-chunk span exposure
-- [x] 0.4 spike-notes records one-line Polish-quality read (feeds Phase 5)
-- [x] 0.5 HARD GATE: existing WhisperX selftest + transcribe + align + diarize pass on transformers 5.x
+- [x] 0.2 spike-notes records transformers 5.x version, native load, language/punctuation honored — dd72867
+- [x] 0.3 spike-notes records long-audio auto-chunk + audio_chunk_index reassembly + per-chunk span exposure — dd72867
+- [x] 0.4 spike-notes records one-line Polish-quality read (feeds Phase 5) — dd72867
+- [x] 0.5 HARD GATE: existing WhisperX selftest + transcribe + align + diarize pass on transformers 5.x — dd72867
 
 ### Phase 1: Model registry & gated download-on-demand for Cohere weights
 
 #### Automated
 
-- [ ] 1.1 Rust type-checks (`cargo check`)
-- [ ] 1.2 Regression suite passes
+- [x] 1.1 Rust type-checks (`cargo check`)
+- [x] 1.2 Regression suite passes
 
 #### Manual
 
-- [ ] 1.3 Cohere entry appears in Step-1 list with correct label/size
-- [ ] 1.4 Cohere download streams + verifies + reports ready via its sentinel
-- [ ] 1.5 Existing WhisperX models still download/report readiness unchanged
-- [ ] 1.6 Gated download sends `Authorization: Bearer` HF token; 401/403 yields a Polish license-accept error
+- [x] 1.3 Cohere entry appears in Step-1 list with correct label/size
+- [x] 1.4 Cohere download streams + verifies + reports ready via its sentinel
+- [x] 1.5 Existing WhisperX models still download/report readiness unchanged
+- [x] 1.6 Gated download sends `Authorization: Bearer` HF token; 401/403 yields a Polish license-accept error
 
 ### Phase 2: Engine — native Cohere producer + transformers 5.x build
 

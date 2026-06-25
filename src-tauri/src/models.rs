@@ -16,8 +16,12 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 
-/// `model.bin` is the CT2 weights file; its presence marks a model as ready.
-const MODEL_SENTINEL: &str = "model.bin";
+/// Default readiness sentinel: `model.bin` is the CT2 weights file; its presence
+/// marks a faster-whisper model as ready. Non-CT2 models (e.g. the Cohere
+/// transformers model) declare their own sentinel in the frontend registry
+/// (`model.safetensors`) and thread it through the command params. Public so
+/// `whisper.rs` can pass the CT2 default until Phase 3 wires the per-model value.
+pub const MODEL_SENTINEL: &str = "model.bin";
 
 /// One file of a model's directory, as curated in the frontend registry.
 /// `sha256` is hex (lowercase); empty skips verification (only the big LFS
@@ -48,9 +52,12 @@ pub fn model_dir(app: &AppHandle, model_id: &str) -> Result<PathBuf, String> {
     Ok(models_root(app)?.join(sanitize(model_id)))
 }
 
-/// True when a model dir exists and holds the CT2 weights (`model.bin`).
-pub fn is_downloaded(dir: &Path) -> bool {
-    dir.join(MODEL_SENTINEL).is_file()
+/// True when a model dir exists and holds its readiness sentinel. `sentinel` is
+/// the per-model file whose presence means "ready" (CT2: `model.bin`; Cohere:
+/// `model.safetensors`); an empty sentinel falls back to the CT2 default.
+pub fn is_downloaded(dir: &Path, sentinel: &str) -> bool {
+    let sentinel = if sentinel.trim().is_empty() { MODEL_SENTINEL } else { sentinel };
+    dir.join(sentinel).is_file()
 }
 
 fn sanitize(id: &str) -> String {
@@ -70,6 +77,16 @@ fn is_safe_filename(name: &str) -> bool {
         (comps.next(), comps.next()),
         (Some(std::path::Component::Normal(_)), None)
     )
+}
+
+/// A model id paired with its readiness sentinel, as sent from the frontend
+/// registry. `sentinel` is omitted for CT2 models (defaults to `model.bin`).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelQuery {
+    pub id: String,
+    #[serde(default)]
+    pub sentinel: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -93,15 +110,18 @@ fn dir_size(dir: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-/// Report downloaded/missing status (and on-disk size) for each requested id.
+/// Report downloaded/missing status (and on-disk size) for each requested model,
+/// using each model's declared readiness sentinel (CT2 `model.bin` by default,
+/// Cohere `model.safetensors`).
 #[tauri::command]
-pub async fn list_models(app: AppHandle, model_ids: Vec<String>) -> Result<Vec<ModelStatus>, String> {
+pub async fn list_models(app: AppHandle, models: Vec<ModelQuery>) -> Result<Vec<ModelStatus>, String> {
     let mut out = Vec::new();
-    for id in model_ids {
-        let dir = model_dir(&app, &id)?;
-        let downloaded = is_downloaded(&dir);
+    for m in models {
+        let dir = model_dir(&app, &m.id)?;
+        let sentinel = m.sentinel.as_deref().unwrap_or(MODEL_SENTINEL);
+        let downloaded = is_downloaded(&dir, sentinel);
         out.push(ModelStatus {
-            id,
+            id: m.id,
             downloaded,
             path: if downloaded { Some(dir.to_string_lossy().to_string()) } else { None },
             size_bytes: if downloaded { dir_size(&dir) } else { 0 },
@@ -144,6 +164,7 @@ pub async fn download_model(
     repo: String,
     files: Vec<FileSpec>,
     total_bytes: Option<u64>,
+    hf_token: Option<String>,
 ) -> Result<String, String> {
     if files.is_empty() {
         return Err("Brak listy plików modelu w rejestrze (uzupełnij repo/files).".into());
@@ -159,6 +180,14 @@ pub async fn download_model(
     let total = total_bytes
         .filter(|n| *n > 0)
         .unwrap_or_else(|| files.iter().map(|f| f.size_bytes).sum());
+
+    // Gated repos (e.g. the Cohere model) require a Bearer HF token; public CT2
+    // repos pass None and are byte-for-byte unchanged (no Authorization header).
+    let bearer = hf_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(|t| format!("Bearer {t}"));
 
     let client = reqwest::Client::new();
     let start = std::time::Instant::now();
@@ -179,11 +208,25 @@ pub async fn download_model(
                 "https://huggingface.co/{}/resolve/main/{}",
                 repo, spec.name
             );
-            let resp = client
-                .get(&url)
+            let mut req = client.get(&url);
+            if let Some(ref auth) = bearer {
+                req = req.header(reqwest::header::AUTHORIZATION, auth);
+            }
+            let resp = req
                 .send()
                 .await
                 .map_err(|e| format!("Pobieranie modelu nie powiodło się: {e}"))?;
+            // A gated repo returns 401 (no token) / 403 (license not accepted);
+            // surface the two prerequisites in Polish rather than a bare code.
+            if matches!(resp.status().as_u16(), 401 | 403) {
+                return Err(format!(
+                    "Brak dostępu do bramkowanego repozytorium „{repo}” (HTTP {}). \
+                     Aby pobrać ten model: 1) zaakceptuj licencję modelu jednorazowo na stronie \
+                     https://huggingface.co/{repo}, oraz 2) podaj prawidłowy token HuggingFace \
+                     (pole tokenu HF przy opcji diaryzacji).",
+                    resp.status().as_u16()
+                ));
+            }
             if !resp.status().is_success() {
                 return Err(format!(
                     "Serwer zwrócił błąd {} przy pobieraniu pliku {}.",
