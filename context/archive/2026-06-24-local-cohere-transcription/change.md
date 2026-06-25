@@ -1,10 +1,10 @@
 ---
 change_id: local-cohere-transcription
 title: Local Cohere transcription
-status: implemented
+status: archived
 created: 2026-06-24
 updated: 2026-06-25
-archived_at: null
+archived_at: 2026-06-25T19:38:23Z
 ---
 
 ## Notes

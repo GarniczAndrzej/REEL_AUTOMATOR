@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-24
+updated: 2026-06-25
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -53,7 +53,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-24  | windows-port                | run the whole app on Windows — WhisperX/FFmpeg sidecars rebuilt for Windows (CUDA + CPU configs), keys in Windows Credential Manager, MSI/NSIS installer | S-05, S-11 | — (cross-platform; PRD §Non-Goals "Windows later") | proposed |
 | S-25  | cost-optimized-ai-analysis  | cut AI-analysis cost via a two-stage (cluster → curate) pipeline with two selectable OpenRouter models + prompt caching | S-01, S-03, S-16 | — (NFR prompt-caching; promotes parked "two-stage long-form chunking") | done |
 | S-26  | refactor-ai-prompts         | get noticeably better reels — each AI-analysis phase ships a re-engineered rubric prompt, plus a built-in prompt preset per BRAVE Education cohort | S-01, S-03, S-25 | FR-015, FR-016 (extends) | done |
-| S-27  | local-cohere-transcription  | transcribe locally with the Cohere Transcribe model (higher accuracy) and keep WhisperX word-level timestamps via a VAD → Cohere → Wav2Vec2 pipeline | S-05 | FR-001, FR-002, FR-006 (extends) | proposed |
+| S-27  | local-cohere-transcription  | transcribe locally with the Cohere Transcribe model (higher accuracy) and keep WhisperX word-level timestamps via a VAD → Cohere → Wav2Vec2 pipeline | S-05 | FR-001, FR-002, FR-006 (extends) | done |
 
 ## Streams
 
@@ -499,7 +499,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - **Language handling** — Cohere has no auto-detect (must be told the language up front), unlike Whisper. Surface an explicit language selector (default Polish) that this engine *requires* and Whisper treats as optional. — Owner: user. Block: no (default: explicit selector, Polish default).
   - **Licensing/model distribution** — Apache 2.0 is permissive, but confirm the weights are redistributable through the model manager (download-on-demand from Hugging Face vs. bundling). — Owner: user. Block: no (default: download-on-demand via the existing model manager, like the WhisperX models).
 - **Risk:** Heaviest slice on the transcription path since S-05, and it touches **regression-sensitive territory by adjacency** — the goal is that the export pipeline sees a byte-identical `sentences[]` + word-JSON regardless of engine, so the wins land without any parser/exporter/frame-math change. Keep the engine swap **behind the alignment seam**: VAD → Cohere produces text, the **unchanged** Wav2Vec2 `align_transcript` produces the integer-frame word timings, and segmentation downstream is untouched (`Math.round(s * fps)`, no mid-pipeline seconds rounding). Sharp edges: (1) every sidecar spawn pays the cold-start cost ([[whisperx-cold-spawn-cost]]) — never put the new engine's readiness check on the launch path (honor the S-18 cache-read-only badge); (2) the cache key must encode the engine so the two engines never cross-serve; (3) Cohere's silence-hallucination means the VAD gate is **correctness-critical**, not optional. Run `node --experimental-vm-modules test/regression.js` before/after to prove the selection→export pipeline is unchanged; the transcription engine itself isn't exercised by the suite, so the real gate is a manual A/B (WhisperX vs. Cohere+align) on a real Polish BRAVE recording, judged on WER and word-boundary accuracy. All new user-facing strings stay Polish. The bundled engine sidecar(s) + model dir remain git-ignored — restore via the S-05 build scripts ([[whisperx-sidecar-build]]).
-- **Status:** proposed
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -583,3 +583,4 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-23: cancel an in-flight AI analysis with a Stop button when OpenRouter is slow/laggy (varies by model)** — Archived 2026-06-22 → `context/archive/2026-06-22-stop-ai-analysis/`. Lesson: —.
 - **S-08: Editor exports FCP7 xmeml `.xml` (Premiere), `.fcpxml` (Final Cut Pro X, generated separately from xmeml), and a DaVinci Resolve `.lua` console script — all carrying the new markers and importing cleanly.** — Archived 2026-06-24 → `context/archive/2026-06-22-timeline-export-set/`. Lesson: —.
 - **S-26: get noticeably better reels — each AI-analysis phase ships a re-engineered rubric prompt, plus a built-in prompt preset per BRAVE Education cohort** — Archived 2026-06-24 → `context/archive/2026-06-24-refactor-ai-prompts/`. Rewrote the three `DEFAULT_*_GUIDANCE` blocks (ROLE→TASK→RUBRIC→CONSTRAINTS→OUTPUT, English instructions / Polish output) and replaced `BUILTIN_PRESETS` with 11 entries incl. 9 BRAVE-cohort presets (English bodies, Polish picker names + output — user-directed deviation from the all-Polish design); one-time idempotent preset migration that preserves user-edited/created presets. No schema change. Lesson: changing any `DEFAULT_*_GUIDANCE` text stales the hard-coded string markers in `test/regression.js` — grep the old marker and update both the negative and positive assertions when you edit guidance defaults.
+- **S-27: transcribe locally with the Cohere Transcribe model (higher accuracy) and keep WhisperX word-level timestamps via a VAD → Cohere → Wav2Vec2 pipeline** — Archived 2026-06-25 → `context/archive/2026-06-24-local-cohere-transcription/`. Lesson: —.
