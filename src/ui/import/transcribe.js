@@ -410,6 +410,7 @@ function defaultWhisperAdvanced() {
     minSpeakers: null,
     maxSpeakers: null,
     wordLevelSrtExport: false,
+    punctuation: true,
   };
 }
 
@@ -458,8 +459,9 @@ function initWhisperAdvanced() {
   const close = () => {
     modal.style.display = 'none';
   };
-  openBtn.addEventListener('click', () => {
+  openBtn.addEventListener('click', async () => {
     fillWhisperAdvancedForm();
+    await applyAdvancedPanelGating();
     modal.style.display = 'flex';
   });
   closeBtn.addEventListener('click', close);
@@ -494,6 +496,34 @@ function initWhisperAdvanced() {
 }
 
 /**
+ * Swap the advanced-settings modal between WhisperX and Cohere knob sets based
+ * on the selected model's engine `kind` (local-cohere-transcription Phase 4).
+ * WhisperX kind → the full CT2 knob set (compute precision, beam/initial-prompt,
+ * VAD, diarization, word-SRT). Cohere kind → only the align `device` override
+ * (in the shared "Wydajność" block) plus the `punctuation` toggle; the
+ * WhisperX-only sections (marked `[data-engine="whisperx"]`) are hidden and the
+ * Cohere-only sections (`[data-engine="cohere"]`) are shown.
+ * @returns {Promise<void>}
+ */
+async function applyAdvancedPanelGating() {
+  const modal = document.getElementById('whisperAdvancedModal');
+  if (!modal) return;
+  const { getModel } = await import('../../transcription/model-registry.js');
+  const isCohere = getModel(state.modelId)?.kind === 'cohere-transformers';
+  modal
+    .querySelectorAll('[data-engine="whisperx"]')
+    .forEach((el) => (el.style.display = isCohere ? 'none' : ''));
+  modal
+    .querySelectorAll('[data-engine="cohere"]')
+    .forEach((el) => (el.style.display = isCohere ? '' : 'none'));
+  const title = document.getElementById('whisperAdvancedTitle');
+  if (title)
+    title.textContent = isCohere
+      ? 'Ustawienia zaawansowane (Cohere)'
+      : 'Ustawienia zaawansowane WhisperX';
+}
+
+/**
  * Populate the advanced-settings modal inputs from state.whisperAdvanced.
  * @returns {void}
  */
@@ -508,6 +538,8 @@ function fillWhisperAdvancedForm() {
   document.getElementById('advMinSpeakers').value = a.minSpeakers ?? '';
   document.getElementById('advMaxSpeakers').value = a.maxSpeakers ?? '';
   document.getElementById('advWordLevelSrt').checked = !!a.wordLevelSrtExport;
+  // Cohere-only knob (default-on). Older state shapes omit it → treat as on.
+  document.getElementById('advPunctuation').checked = a.punctuation !== false;
 }
 
 /**
@@ -531,6 +563,7 @@ function applyWhisperAdvancedForm() {
   a.minSpeakers = numOrNull('advMinSpeakers');
   a.maxSpeakers = numOrNull('advMaxSpeakers');
   a.wordLevelSrtExport = document.getElementById('advWordLevelSrt').checked;
+  a.punctuation = document.getElementById('advPunctuation').checked;
 }
 
 // Map the advanced settings to the engine invoke params (Tauri snake_cases the
@@ -548,6 +581,10 @@ export function whisperAdvancedArgs() {
     vadOffset: a.vadOffset ?? null,
     minSpeakers: a.minSpeakers ?? null,
     maxSpeakers: a.maxSpeakers ?? null,
+    // Cohere-only honored knob; rides this bag → invoke('transcribe_video') →
+    // Rust forwards `--punctuation`/`--no-punctuation` to the Cohere engine.
+    // The CT2/WhisperX path ignores it (Rust only reads it when engine=cohere).
+    punctuation: a.punctuation !== false,
   };
 }
 
@@ -747,6 +784,19 @@ export async function transcribeDocument(
   if (!videoPath || !modelId)
     throw new Error('Brak pliku wideo lub modelu do transkrypcji.');
 
+  // Model-aware routing (Phase 4): derive the selected model's engine `kind` and
+  // readiness `sentinel` from the registry so the Rust readiness gate
+  // (whisper.rs:400) checks the right file (Cohere → model.safetensors) and the
+  // engine dispatches to `--engine cohere` when applicable. Placed in this shared
+  // unit so manual Step-1 AND both auto-mode paths inherit Cohere-awareness.
+  const { getModel } = await import('../../transcription/model-registry.js');
+  const selected = getModel(modelId);
+  const kind = selected?.kind || 'whisperx-ct2';
+  const sentinel = selected?.sentinel || 'model.bin';
+  // Cohere has no language auto-detect — resolve `auto` to Polish before the call.
+  const resolvedLanguage =
+    kind === 'cohere-transformers' && language === 'auto' ? 'pl' : language;
+
   const { invoke } = await import('@tauri-apps/api/core');
   // Route an external abort to the global single-reaper cancel (there is no
   // AbortSignal threaded through the Rust invoke — cancellation is a side-channel
@@ -772,9 +822,14 @@ export async function transcribeDocument(
     const result = await invoke('transcribe_video', {
       videoPath,
       modelId,
-      language,
+      language: resolvedLanguage,
       diarize,
       hfToken: diarize ? hfToken : '',
+      // Engine kind + readiness sentinel drive Rust's sentinel-aware download
+      // gate and `--engine cohere` dispatch (Phase 3). `...advanced` carries the
+      // `punctuation` flag (Cohere-only; ignored on the CT2 path).
+      kind,
+      sentinel,
       ...advanced,
     });
 

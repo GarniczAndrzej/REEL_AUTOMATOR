@@ -520,13 +520,21 @@ def cmd_transcribe_cohere(args):
         )
         chunk_index = inputs.pop("audio_chunk_index", None)
         _emit_progress("transcribe", 50)
+        # Greedy by default. A user-set --beam-size > 1 switches the decode to
+        # beam search (real quality lever, paid for in CPU/memory on this 2B
+        # float32 path — Cohere is a quality trade, never a speed path).
+        gen_kwargs = dict(
+            decoder_input_ids=inputs["decoder_input_ids"],
+            attention_mask=inputs.get("attention_mask"),
+            max_new_tokens=445,
+        )
+        beam = getattr(args, "beam_size", None)
+        if beam is not None and int(beam) > 1:
+            gen_kwargs["num_beams"] = int(beam)
+            gen_kwargs["do_sample"] = False
+            gen_kwargs["early_stopping"] = True
         with torch.no_grad():
-            gen = model.generate(
-                inputs["input_features"],
-                decoder_input_ids=inputs["decoder_input_ids"],
-                attention_mask=inputs.get("attention_mask"),
-                max_new_tokens=445,
-            )
+            gen = model.generate(inputs["input_features"], **gen_kwargs)
         # Slice off the decoder prompt prefix, decode each chunk, reassemble.
         gen_only = gen[:, inputs["decoder_input_ids"].shape[1] :]
         per_chunk = proc.batch_decode(gen_only, skip_special_tokens=True)

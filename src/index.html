@@ -548,6 +548,7 @@
       <div class="modal-box" style="width: 560px">
         <div class="modal-header">
           <span
+            id="whisperAdvancedTitle"
             style="
               font-family: var(--display);
               font-weight: 700;
@@ -593,7 +594,7 @@
                 Pomija GPU/Metal (etap dopasowania słów na CPU).
               </div>
             </div>
-            <div class="setting-item">
+            <div class="setting-item" data-engine="whisperx">
               <label>Precyzja obliczeń</label>
               <select id="advComputeType">
                 <option value="">Domyślna (auto)</option>
@@ -605,6 +606,43 @@
             </div>
           </div>
 
+          <!-- Cohere-only: the single Phase-0-confirmed honored knob. Shown only
+               when the selected model is the Cohere kind (gated in transcribe.js
+               applyAdvancedPanelGating); the WhisperX ASR knobs below are hidden. -->
+          <div
+            data-engine="cohere"
+            style="
+              font-size: 11px;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
+              color: var(--text3);
+              margin: 18px 0 10px;
+            "
+          >
+            Interpunkcja
+          </div>
+          <div class="settings-grid" data-engine="cohere">
+            <div class="setting-item" style="grid-column: 1 / -1">
+              <label style="display: flex; align-items: center; gap: 8px">
+                <input
+                  type="checkbox"
+                  id="advPunctuation"
+                  style="width: auto"
+                />
+                Interpunkcja i wielkie litery
+              </label>
+              <div
+                style="font-size: 11px; color: var(--text3); margin-top: 4px"
+              >
+                Wstawia znaki interpunkcyjne i wielkie litery w transkrypcji
+                Cohere. Wyłącz, aby uzyskać surowy tekst małymi literami.
+              </div>
+            </div>
+          </div>
+
+          <!-- Engine-agnostic: word-by-word SRT export operates on the aligned
+               words, which BOTH WhisperX and Cohere produce (WhisperX owns the
+               alignment stage on either path). Shown for both engines. -->
           <div
             style="
               font-size: 11px;
@@ -634,6 +672,10 @@
             </div>
           </div>
 
+          <!-- Header is shared: "Beam size" drives decoding quality on BOTH
+               engines (faster-whisper beam search / Cohere num_beams). The
+               initial-prompt field below is WhisperX-only (Cohere's processor
+               does not accept a decoding prompt). -->
           <div
             style="
               font-size: 11px;
@@ -654,10 +696,14 @@
                 min="1"
                 max="10"
                 step="1"
-                placeholder="domyślny (5)"
+                placeholder="domyślny (zachłanny / 5)"
               />
             </div>
-            <div class="setting-item" style="grid-column: 1 / -1">
+            <div
+              class="setting-item"
+              data-engine="whisperx"
+              style="grid-column: 1 / -1"
+            >
               <label>Wstępny prompt (initial prompt)</label>
               <input
                 type="text"
@@ -668,6 +714,7 @@
           </div>
 
           <div
+            data-engine="whisperx"
             style="
               font-size: 11px;
               text-transform: uppercase;
@@ -678,7 +725,7 @@
           >
             Detekcja mowy (VAD)
           </div>
-          <div class="settings-grid">
+          <div class="settings-grid" data-engine="whisperx">
             <div class="setting-item">
               <label>VAD onset</label>
               <input
@@ -704,6 +751,7 @@
           </div>
 
           <div
+            data-engine="whisperx"
             style="
               font-size: 11px;
               text-transform: uppercase;
@@ -714,7 +762,7 @@
           >
             Diaryzacja (rozpoznawanie mówców)
           </div>
-          <div class="settings-grid">
+          <div class="settings-grid" data-engine="whisperx">
             <div class="setting-item" style="grid-column: 1 / -1">
               <label style="display: flex; align-items: center; gap: 8px">
                 <input type="checkbox" id="diarizeToggle" style="width: auto" />

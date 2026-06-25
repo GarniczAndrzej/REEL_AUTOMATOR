@@ -646,8 +646,8 @@ archiving via `/10x-archive`.
 
 #### Automated
 
-- [x] 3.1 Rust type-checks (`cargo check`)
-- [x] 3.2 Rust builds (`cargo build`)
+- [x] 3.1 Rust type-checks (`cargo check`) — 2687a96
+- [x] 3.2 Rust builds (`cargo build`) — 2687a96
 
 #### Manual
 
@@ -659,8 +659,8 @@ archiving via `/10x-archive`.
 
 #### Automated
 
-- [ ] 4.1 Prettier clean
-- [ ] 4.2 Regression suite passes
+- [x] 4.1 Prettier clean
+- [x] 4.2 Regression suite passes
 
 #### Manual
 
