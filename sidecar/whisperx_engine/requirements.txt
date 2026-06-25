@@ -1,14 +1,33 @@
-# WhisperX engine sidecar — Python build-time dependencies.
+# WhisperX engine sidecar — Python dependency INTENT (human-readable).
 #
-# Versions are pinned loosely; the build script (sidecar/build.sh) installs the
-# correct platform wheel for torch/CTranslate2 (CPU vs CUDA vs Metal) before
-# resolving the rest. Regenerate the freeze with PyInstaller after any bump.
-
-whisperx>=3.1.1
+# ⚠️ This file is NOT the actual build input on macOS. whisperx 3.8.6 declares
+# `huggingface-hub<1.0.0` while transformers 5.x requires `huggingface-hub>=1.5.0`,
+# so this set is NOT cross-resolvable by pip — a plain `pip install -r` backtracks
+# to whisperx 3.7.4 / pyannote.audio 3.4.0 (a DIFFERENT, ungated diarization stack).
+# The Phase 0 gate certified whisperx 3.8.6 + pyannote.audio 4.0.4 + transformers
+# 5.12.1 working at RUNTIME despite that declarative cap. To ship exactly that,
+# `sidecar/build.sh` installs the pinned `requirements.lock.txt` with `--no-deps`
+# (which tolerates the cap). This file documents the intent + regeneration recipe.
+#
+# Regenerate the lock after any bump:
+#   1) build a clean venv, `pip install` torch + this set, then force the gate
+#      versions: `pip install --no-deps --upgrade whisperx==3.8.6 pyannote.audio==4.0.4`
+#   2) `pip freeze > requirements.lock.txt` (re-validate the Phase 0 hard gate).
+whisperx==3.8.6
 faster-whisper>=1.0.0
 ctranslate2>=4.0.0
 torch>=2.1.0
 torchaudio>=2.1.0
-transformers>=4.36.0
-pyannote.audio>=3.1.0
+# transformers >=5.4.0 carries the NATIVE `cohere_asr` integration (no
+# trust_remote_code) the Cohere engine depends on. Pinned to the 5.12.1 proven by
+# the Phase 0 coexistence gate. whisperx 3.8.6 allows transformers>=4.48.0 (no cap).
+transformers==5.12.1
+pyannote.audio==4.0.4
 pyinstaller>=6.3.0
+# ── Cohere ASR (native transformers 5.x) runtime deps ──
+# Required by the native CohereAsr processor/model; absent from the WhisperX path.
+librosa
+sentencepiece
+soundfile
+protobuf
+accelerate

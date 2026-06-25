@@ -431,6 +431,125 @@ def cmd_transcribe(args):
     return EXIT_OK
 
 
+def _sentence_pseudo_cues(text, audio_dur):
+    """Spread a flat Cohere transcript across [0, audio_dur] as sentence pseudo-cues.
+
+    Cohere's native processor reassembles a *flat* string and does NOT expose
+    per-chunk time spans (Phase 0 finding), so we cannot build real per-chunk
+    align windows. Instead we split the transcript on sentence-ending punctuation
+    and assign each sentence a window proportional to its character length across
+    the audio duration. WhisperX `align()` then re-times every word *within* each
+    pseudo-cue — keeping the forced-align search bounded per sentence instead of
+    one unbounded full-audio segment (research §F option 2), which is what keeps
+    long (>13-min) webinars fast and memory-stable.
+    """
+    import re
+
+    text = (text or "").strip()
+    if not text:
+        return []
+    parts = re.findall(r"[^.!?…]+[.!?…]*", text)
+    parts = [p.strip() for p in parts if p.strip()]
+    if not parts:
+        parts = [text]
+    total_chars = sum(len(p) for p in parts) or 1
+    cues = []
+    cursor = 0.0
+    acc = 0
+    last = len(parts) - 1
+    for i, p in enumerate(parts):
+        acc += len(p)
+        start = cursor
+        end = audio_dur if i == last else audio_dur * (acc / total_chars)
+        if end <= start:
+            end = min(audio_dur, start + 0.01)
+        cues.append({"start": start, "end": end, "text": p})
+        cursor = end
+    return cues
+
+
+def cmd_transcribe_cohere(args):
+    """Native (no trust_remote_code) Cohere ASR producer.
+
+    Mirrors cmd_transcribe's contract (audio in → aligned, normalized payload out)
+    but swaps only the ASR stage: native transformers >=5.4.0 `CohereAsr`
+    transcribes the audio offline, its processor auto-chunks long audio
+    (max_audio_clip_s=35, 5 s overlap) and reassembles one flat transcript via
+    `audio_chunk_index`. WhisperX still owns ALL word timing — the flat transcript
+    is split into sentence pseudo-cues and fed to the unchanged _align → _normalize,
+    so the downstream frame-math / exporter pipeline is untouched.
+    """
+    import whisperx
+    import torch
+    from transformers import AutoProcessor, CohereAsrForConditionalGeneration
+
+    # Concrete language is required (Cohere has no auto-detect), mirroring the
+    # cmd_align_only contract.
+    language = None if args.language in (None, "", "auto") else args.language
+    if not language:
+        _log("cohere engine requires an explicit --language")
+        sys.exit(EXIT_USAGE)
+
+    device, _, _ = _resolve_device_compute(args)
+    audio = _load_audio(whisperx, args.audio)  # float32 16 kHz mono np array
+    audio_dur = float(len(audio)) / 16000.0
+
+    _emit_progress("transcribe", 0)
+    try:
+        proc = AutoProcessor.from_pretrained(args.model, local_files_only=True)
+        # Phase 0 dtype gotcha: the safetensors weights are bf16 but the processor
+        # emits float32 features, and CPU has no usable bf16 conv. Load float32 and
+        # keep generation on CPU (Cohere is a quality trade, never a speed path).
+        model = CohereAsrForConditionalGeneration.from_pretrained(
+            args.model, local_files_only=True, dtype=torch.float32
+        ).eval()
+    except Exception as e:
+        msg = str(e).lower()
+        if "not found" in msg or "no such file" in msg or "does not exist" in msg:
+            _log("cohere model not found: %s" % e)
+            sys.exit(EXIT_MODEL_NOT_FOUND)
+        _log("cohere model load failed: %s" % e)
+        sys.exit(EXIT_MODEL_NOT_FOUND)
+
+    try:
+        inputs = proc(
+            audio,
+            language=language,
+            punctuation=bool(args.punctuation),
+            sampling_rate=16000,
+        )
+        chunk_index = inputs.pop("audio_chunk_index", None)
+        _emit_progress("transcribe", 50)
+        with torch.no_grad():
+            gen = model.generate(
+                inputs["input_features"],
+                decoder_input_ids=inputs["decoder_input_ids"],
+                attention_mask=inputs.get("attention_mask"),
+                max_new_tokens=445,
+            )
+        # Slice off the decoder prompt prefix, decode each chunk, reassemble.
+        gen_only = gen[:, inputs["decoder_input_ids"].shape[1] :]
+        per_chunk = proc.batch_decode(gen_only, skip_special_tokens=True)
+        if chunk_index is not None:
+            text = proc._reassemble_chunk_texts(per_chunk, chunk_index, " ")[0]
+        else:
+            text = " ".join(t.strip() for t in per_chunk if t.strip())
+    except Exception as e:
+        _log("cohere transcription failed: %s" % e)
+        sys.exit(EXIT_TRANSCRIBE_FAIL)
+    _emit_progress("transcribe", 100)
+
+    segments = _sentence_pseudo_cues(text, audio_dur)
+    if not segments:
+        _log("cohere produced an empty transcript")
+        sys.exit(EXIT_TRANSCRIBE_FAIL)
+
+    aligned = _align(whisperx, segments, audio, language, device)
+    out = _normalize(language, aligned)
+    _write_result(json.dumps(out, ensure_ascii=False))
+    return EXIT_OK
+
+
 def _read_transcript_segments(path, language):
     """Parse a .srt/.vtt transcript into whisperx-style segments for alignment."""
     import re
@@ -488,6 +607,24 @@ def build_parser():
     p.add_argument("--model", help="faster-whisper CT2 model id or local path")
     p.add_argument("--language", default="auto", help="language code, or 'auto'")
     p.add_argument("--batch-size", type=int, default=8)
+    # ── Engine selection ──────────────────────────────────────────────────────
+    # `whisperx` = the default faster-whisper CT2 transcribe+align path.
+    # `cohere`   = native transformers (>=5.4.0) CohereAsr producer; WhisperX
+    #              still owns word-level alignment (cmd_transcribe_cohere).
+    p.add_argument(
+        "--engine",
+        choices=["whisperx", "cohere"],
+        default="whisperx",
+        help="transcription engine (default: whisperx)",
+    )
+    # Cohere-only: emit punctuation/casing. `--no-punctuation` disables it. Carrier
+    # for the Phase 4 advanced-panel toggle; ignored on the whisperx path.
+    p.add_argument(
+        "--punctuation",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Cohere: emit punctuation/casing (use --no-punctuation to disable)",
+    )
     # ── Phase 7 advanced settings (all optional; omitted = engine default) ──
     # Exposed, user-tunable knobs. Each maps to a real whisperx/faster-whisper
     # option, verified against the pinned versions. Anything not passed here keeps
@@ -550,6 +687,8 @@ def main(argv=None):
         if not args.audio or not args.model:
             _log("transcription requires --audio and --model")
             return EXIT_USAGE
+        if args.engine == "cohere":
+            return cmd_transcribe_cohere(args)
         return cmd_transcribe(args)
     except SystemExit:
         raise

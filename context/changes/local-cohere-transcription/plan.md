@@ -617,30 +617,30 @@ archiving via `/10x-archive`.
 
 #### Automated
 
-- [x] 1.1 Rust type-checks (`cargo check`)
-- [x] 1.2 Regression suite passes
+- [x] 1.1 Rust type-checks (`cargo check`) — 66316d4
+- [x] 1.2 Regression suite passes — 66316d4
 
 #### Manual
 
-- [x] 1.3 Cohere entry appears in Step-1 list with correct label/size
-- [x] 1.4 Cohere download streams + verifies + reports ready via its sentinel
-- [x] 1.5 Existing WhisperX models still download/report readiness unchanged
-- [x] 1.6 Gated download sends `Authorization: Bearer` HF token; 401/403 yields a Polish license-accept error
+- [x] 1.3 Cohere entry appears in Step-1 list with correct label/size — 66316d4
+- [x] 1.4 Cohere download streams + verifies + reports ready via its sentinel — 66316d4
+- [x] 1.5 Existing WhisperX models still download/report readiness unchanged — 66316d4
+- [x] 1.6 Gated download sends `Authorization: Bearer` HF token; 401/403 yields a Polish license-accept error — 66316d4
 
 ### Phase 2: Engine — native Cohere producer + transformers 5.x build
 
 #### Automated
 
-- [ ] 2.1 Sidecar builds (`sidecar/build.sh`)
-- [ ] 2.2 Engine self-check (`--selftest`) passes with rebuilt 5.x binary
-- [ ] 2.3 `--engine` (and `--punctuation`) listed in engine help
+- [x] 2.1 Sidecar builds (`sidecar/build.sh`)
+- [x] 2.2 Engine self-check (`--selftest`) passes with rebuilt 5.x binary
+- [x] 2.3 `--engine` (and `--punctuation`) listed in engine help
 
 #### Manual
 
-- [ ] 2.4 Cohere run on short pl clip returns sane normalized payload
-- [ ] 2.5 >13-min webinar transcribes via native chunking without OOM; per-chunk align windows
-- [ ] 2.6 `--punctuation` toggles punctuation/casing in Cohere output
-- [ ] 2.7 Default `--engine whisperx` (transcribe+align+diarize) unchanged on the 5.x build
+- [x] 2.4 Cohere run on short pl clip returns sane normalized payload
+- [x] 2.5 >13-min webinar transcribes via native chunking without OOM; per-chunk align windows
+- [x] 2.6 `--punctuation` toggles punctuation/casing in Cohere output
+- [x] 2.7 Default `--engine whisperx` (transcribe+align+diarize) unchanged on the 5.x build
 
 ### Phase 3: Rust routing — `transcribe_video` drives the Cohere engine
 

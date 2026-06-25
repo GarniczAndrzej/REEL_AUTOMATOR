@@ -65,17 +65,29 @@ fi
 source "$VENV/bin/activate" 2>/dev/null || source "$VENV/Scripts/activate"
 python -m pip install --upgrade pip wheel >/dev/null
 
-# ── Platform torch / CTranslate2 ────────────────────────────────────────────
-if [ "$uname_s" = "Darwin" ]; then
-  # macOS: torch ships with Metal (MPS); CTranslate2 transcription stays CPU.
-  python -m pip install torch torchaudio
-elif [ "$GPU" = "1" ]; then
-  # CUDA build (Linux/Windows).
-  python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+# ── Dependency install ──────────────────────────────────────────────────────
+# macOS arm64 (the shipping target) installs the Phase-0-certified locked stack
+# with --no-deps: whisperx 3.8.6 declares `huggingface-hub<1.0.0` but transformers
+# 5.x needs `>=1.5.0`, so the gate-validated combo is NOT pip cross-resolvable. The
+# lock pins every package (incl. the mac MPS torch wheel) at the runtime-proven
+# versions; --no-deps tolerates whisperx's stale cap. Other platforms fall back to
+# best-effort resolution from requirements.txt.
+LOCK="$ENGINE_PKG/requirements.lock.txt"
+if [ "$uname_s" = "Darwin" ] && [ -f "$LOCK" ]; then
+  echo "==> Installing locked sidecar stack (--no-deps) from requirements.lock.txt"
+  python -m pip install --no-deps -r "$LOCK"
 else
-  python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+  if [ "$uname_s" = "Darwin" ]; then
+    # macOS without a lock: torch ships with Metal (MPS); CTranslate2 stays CPU.
+    python -m pip install torch torchaudio
+  elif [ "$GPU" = "1" ]; then
+    # CUDA build (Linux/Windows).
+    python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+  else
+    python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+  fi
+  python -m pip install -r "$ENGINE_PKG/requirements.txt"
 fi
-python -m pip install -r "$ENGINE_PKG/requirements.txt"
 
 # ── Stage alignment model(s) ────────────────────────────────────────────────
 # Pre-download the per-language wav2vec2 alignment model into align_models/<lang>.

@@ -30,8 +30,20 @@ datas += collect_data_files("whisperx")
 datas += collect_data_files("faster_whisper")
 datas += collect_data_files("pyannote", include_py_files=False)
 datas += collect_data_files("lightning_fabric", include_py_files=False)
-datas += collect_data_files("speechbrain", include_py_files=False)
+# speechbrain 1.1.0's __init__ calls lazy_export_all(__file__, export_subpackages=
+# True), which `os.listdir`s its own package + subpackage dirs at import time. In a
+# PyInstaller onefile the .py modules live in the PYZ archive, NOT on disk, so that
+# listdir hits a missing dir (e.g. _MEI…/speechbrain/utils → ENOENT) and the whole
+# whisperx→pyannote→speechbrain import chain dies. Materialize speechbrain's .py on
+# disk (include_py_files=True) so the runtime directory walk resolves.
+datas += collect_data_files("speechbrain", include_py_files=True)
 datas += collect_data_files("transformers")
+
+# Cohere ASR (native transformers 5.x) runtime deps. librosa lazily imports numba
+# and ships small data files; sentencepiece/soundfile carry native libs. Collect
+# their data so the frozen Cohere branch resolves offline.
+datas += collect_data_files("librosa", include_py_files=False)
+datas += collect_data_files("soundfile", include_py_files=False)
 
 # transformers uses lazy `_LazyModule` loading PyInstaller can't follow, and
 # checks each backend via importlib.metadata.version(...). Without the wav2vec2
@@ -60,6 +72,15 @@ for _pkg in (
     "filelock",
     "pyyaml",
     "requests",
+    # Cohere ASR (native transformers 5.x) deps — transformers reads several of
+    # these via importlib.metadata.version(...) at import time on the Cohere path.
+    "librosa",
+    "soundfile",
+    "sentencepiece",
+    "accelerate",
+    "protobuf",
+    "numba",
+    "llvmlite",
 ):
     try:
         datas += copy_metadata(_pkg)
@@ -74,6 +95,17 @@ for pkg in (
     "speechbrain",
     "torchaudio",
     "transformers",
+    # Native Cohere ASR import chain. transformers' collect_submodules already
+    # pulls models.cohere_asr; librosa/soundfile/sentencepiece/accelerate and
+    # librosa's lazy numba/soxr/audioread backends need explicit collection since
+    # PyInstaller's static analysis can't follow their deferred imports.
+    "librosa",
+    "soundfile",
+    "sentencepiece",
+    "accelerate",
+    "numba",
+    "soxr",
+    "audioread",
 ):
     try:
         hiddenimports += collect_submodules(pkg)
