@@ -631,23 +631,23 @@ archiving via `/10x-archive`.
 
 #### Automated
 
-- [x] 2.1 Sidecar builds (`sidecar/build.sh`)
-- [x] 2.2 Engine self-check (`--selftest`) passes with rebuilt 5.x binary
-- [x] 2.3 `--engine` (and `--punctuation`) listed in engine help
+- [x] 2.1 Sidecar builds (`sidecar/build.sh`) — 5121c7c
+- [x] 2.2 Engine self-check (`--selftest`) passes with rebuilt 5.x binary — 5121c7c
+- [x] 2.3 `--engine` (and `--punctuation`) listed in engine help — 5121c7c
 
 #### Manual
 
-- [x] 2.4 Cohere run on short pl clip returns sane normalized payload
-- [x] 2.5 >13-min webinar transcribes via native chunking without OOM; per-chunk align windows
-- [x] 2.6 `--punctuation` toggles punctuation/casing in Cohere output
-- [x] 2.7 Default `--engine whisperx` (transcribe+align+diarize) unchanged on the 5.x build
+- [x] 2.4 Cohere run on short pl clip returns sane normalized payload — 5121c7c
+- [x] 2.5 >13-min webinar transcribes via native chunking without OOM; per-chunk align windows — 5121c7c
+- [x] 2.6 `--punctuation` toggles punctuation/casing in Cohere output — 5121c7c
+- [x] 2.7 Default `--engine whisperx` (transcribe+align+diarize) unchanged on the 5.x build — 5121c7c
 
 ### Phase 3: Rust routing — `transcribe_video` drives the Cohere engine
 
 #### Automated
 
-- [ ] 3.1 Rust type-checks (`cargo check`)
-- [ ] 3.2 Rust builds (`cargo build`)
+- [x] 3.1 Rust type-checks (`cargo check`)
+- [x] 3.2 Rust builds (`cargo build`)
 
 #### Manual
 

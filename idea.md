@@ -26,3 +26,29 @@ Nie podmienisz modelu Cohere bezpośrednio w CLI WhisperX za pomocą jednej kome
 1. Krok 1: Przepuszczasz audio przez model cohere-transcribe-03-2026 (dostępny np. na Hugging Face lub przez API). Otrzymujesz bardzo dokładny tekst bez podziału na sekundy.
 2. Krok 2: Wykorzystujesz sam moduł wyrównywania (alignment pipeline) z biblioteki WhisperX. Ładujesz model Wav2Vec 2.0 dopasowany do języka polskiego (np. jonatasgrosman/wav2vec2-large-xlsr-53-polish), a następnie przekazujesz mu audio oraz tekst uzyskany z Cohere.
 W ten sposób otrzymujesz to, co najlepsze z obu światów: niesamowitą dokładność tekstu z Cohere oraz chirurgiczną precyzję znaczników czasu (co do milisekundy) z technologii WhisperX.
+
+Wybór między chmurowym API a lokalnym uruchomieniem modelu cohere-transcribe-03-2026 to klasyczny pojedynek: wygoda kontra pełna kontrola. Ponieważ model ma rozmiar 2 miliardów parametrów (2B), jest to już "waga średnia" – nie jest to gigant, ale na starym laptopie biurowym też nie ruszy.
+Przeanalizujmy to przez pryzmat Twoich czterech kryteriów.
+1. Mniej bólu głowy (Wdrożenie)
+• API: Zdecydowany zwycięzca. Rejestrujesz się, pobierasz klucz API, wysyłasz plik audio za pomocą prostego skryptu w Pythonie i po sekundzie masz tekst. Zero przejmowania się wersjami PyTocha, sterownikami CUDA, bibliotekami Pythona czy chłodzeniem komputera. • Jedyny minus: Oficjalne API Cohere ma zazwyczaj limit rozmiaru jednego pliku (ok. 25 MB), więc dłuższe nagrania musisz najpierw automatycznie pociąć na mniejsze kawałki.
+• Lokalnie: Może wywołać lekką migrenę, jeśli nie robisz tego na co dzień. Musisz skonfigurować środowisko, zainstalować odpowiednie biblioteki (np. transformers, vLLM lub mlx-audio dla Maców). Dodatkowo model Cohere jest bardzo czuły na ciszę – lokalnie musisz sam wpiąć przed nim algorytm VAD (Voice Activity Detection, np. Silero VAD), inaczej w momentach ciszy model zacznie "halucynować" losowe słowa.
+2. Szybkość
+• API: Czas przetwarzania w chmurze (na potężnych kartach typu Nvidia A100/H100) jest absurdalnie krótki. Wąskim gardłem staje się jednak Twoje łącze internetowe – jeśli masz do wysłania 2-godzinne nagranie w formacie .wav (duży plik), sam upload potrwa dłużej niż właściwa transkrypcja.
+• Lokalnie: Cohere Transcribe słynie z oszałamiającej prędkości (potrafi przetwarzać audio kilkaset razy szybciej niż trwa ono w rzeczywistości), ale wszystko zależy od Twojego sprzętu: • Masz mocne GPU (np. Nvidia RTX 3090/4080/4090 z min. 12-16 GB VRAM) lub nowego Maca (Apple Silicon M2/M3 Pro/Max)? Lokalne przetwarzanie będzie błyskawiczne i prawdopodobnie szybsze niż zabawa w wysyłanie plików przez internet. • Masz zwykły procesor (CPU) lub słabą grafikę? Model zwolni do prędkości ślimaka i utkniesz na amen.
+3. Koszty (Co jest tańsze?)
+• API: Płacisz w modelu pay-as-you-go (za minutę przetworzonego audio). Jeśli transkrybujesz kilka godzin nagrań w miesiącu, będą to dosłownie grosze. Jeśli jednak planujesz przepuścić przez system tysiące godzin podcastów czy wywiadów, faktura od Cohere zacznie zauważalnie boleć.
+• Lokalnie: Model wydany jest na licencji Apache 2.0, co oznacza, że jest w 100% darmowy do celów prywatnych i komercyjnych. Płacisz tylko rachunkiem za prąd. Jeśli masz już w domu/firmie komputer z dobrym GPU, lokalne uruchomienie przy dużej skali jest bezkonkurencyjnie najtańsze.
+Szybkie podsumowanie (Tabela decyzji)
+Kryterium	API Chmurowe	Lokalny komputer
+Ból głowy	🟢 Minimalny (kilka linijek kodu)	🟡 Średni (konfiguracja VAD, sterowników, Pythona)
+Szybkość	🟡 Zależna od internetu (upload pliku)	🟢/🔴 Ekstremalna na dobrym GPU / Tragiczna na CPU
+Koszty	🟡 Tanie na małą skalę, drogie przy masie danych	🟢 Całkowicie darmowe (płacisz tylko za prąd)
+Prywatność	🔴 Dane lecą na zewnętrzne serwery	🟢 100% bezpieczeństwa (dane nie opuszczają dysku)
+Ostateczny werdykt (Biorąc pod uwagę WhisperX)
+W poprzednim pytaniu wspomniałeś o łączeniu transkrypcji z modelem wyrównywania (Wav2Vec / WhisperX).
+Jeśli chcesz zbudować ten potrójny potok (VAD ➡️ Cohere Transcribe ➡️ Wav2Vec do znaczników czasu), pobranie modelu na komputer i spięcie tego lokalnie w Pythonie da Ci najwięcej satysfakcji i najlepsze efekty. Przekazywanie audio do API chmurowego, odbieranie tekstu, a potem ponowne ładowanie tego samego audio lokalnie do modelu Wav2Vec, żeby dorobić milisekundy, to programistyczna ekwilibrystyka.
+Moja rekomendacja:
+1. Jeśli robisz to hobbystycznie/jednorazowo lub na słabym komputerze ➡️ Wybierz API.
+2. Jeśli masz dobrą kartę graficzną (Nvidia RTX) lub Maca z serii M i chcesz budować zaawansowany system (np. z WhisperX) ➡️ Pobierz model na komputer (najlepiej przy użyciu biblioteki vLLM lub zoptymalizowanych paczek, np. nano-cohere-transcribe, które wyciskają z tego modelu maksimum wydajności).
+
+IDZ LOKALNIE!!!

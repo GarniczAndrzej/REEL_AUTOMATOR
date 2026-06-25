@@ -388,19 +388,31 @@ pub async fn transcribe_video(
     vad_offset: Option<f64>,
     min_speakers: Option<i64>,
     max_speakers: Option<i64>,
+    // Phase 3 — Cohere routing. The frontend passes the selected model's engine
+    // `kind` and readiness `sentinel` (both from the registry) plus the
+    // Cohere-only `punctuation` toggle. All optional: a WhisperX/CT2 selection
+    // omits them, so the sentinel gate falls back to `model.bin` and the engine
+    // runs its default path — behaviorally unchanged from before.
+    kind: Option<String>,
+    sentinel: Option<String>,
+    punctuation: Option<bool>,
 ) -> Result<serde_json::Value, String> {
     // Engine model: a managed model_id resolves to its downloaded local dir
     // (whisper-models/<id>/) that the engine loads offline via --model; a raw
     // model_path is a dev fallback passed through verbatim. Guard against a
     // not-yet-downloaded managed model with a distinct Polish message.
     ensure_engine_free()?;
+    // The Cohere model loads via native transformers and is gated by its own
+    // readiness sentinel (`model.safetensors`), not the CT2 `model.bin`.
+    let is_cohere = kind.as_deref() == Some("cohere-transformers");
     let model = match model_id.filter(|s| !s.is_empty()) {
         Some(id) => {
             let dir = crate::models::model_dir(&app, &id)?;
-            // Phase 3 threads the selected model's registry sentinel here; until
-            // then use the CT2 default so existing faster-whisper models gate as
-            // before (a Cohere model passes this only once Phase 3 wires it).
-            if !crate::models::is_downloaded(&dir, crate::models::MODEL_SENTINEL) {
+            // Gate on the selected model's registry sentinel (CT2 → `model.bin`;
+            // Cohere → `model.safetensors`). An absent sentinel defaults to the
+            // CT2 file inside `is_downloaded`, so existing models gate as before.
+            let sentinel = sentinel.as_deref().unwrap_or(crate::models::MODEL_SENTINEL);
+            if !crate::models::is_downloaded(&dir, sentinel) {
                 return Err("Wybrany model nie został pobrany. Pobierz go w menedżerze modeli.".to_string());
             }
             dir.to_string_lossy().to_string()
@@ -412,7 +424,9 @@ pub async fn transcribe_video(
 
     // Opt-in diarization needs an HF token; fail early with a distinct message
     // so the core (toggle-off) path is never blocked by diarization setup.
-    let diarize = diarize.unwrap_or(false);
+    // Cohere does not diarize in this change (WhisperX stays the only diarize
+    // path), so force it off — the Cohere branch never requires an HF token.
+    let diarize = diarize.unwrap_or(false) && !is_cohere;
     let hf_token = hf_token.unwrap_or_default();
     if diarize && hf_token.trim().is_empty() {
         return Err("Diaryzacja jest włączona, ale brak tokenu Hugging Face. Wprowadź token lub wyłącz diaryzację.".into());
@@ -424,7 +438,7 @@ pub async fn transcribe_video(
     // The entry is keyed by the video AND the full run signature, so re-running
     // the same clip with a different model/language/settings does a fresh
     // transcription instead of returning the previous run's result.
-    let run_sig = serde_json::json!({
+    let mut run_sig_obj = serde_json::json!({
         "model": model.as_str(),
         "language": language.as_str(),
         "diarize": diarize,
@@ -436,8 +450,16 @@ pub async fn transcribe_video(
         "device": device.as_deref(),
         "min_speakers": min_speakers,
         "max_speakers": max_speakers,
-    })
-    .to_string();
+    });
+    // Cohere changes the transcript source AND honors a punctuation toggle, both
+    // of which alter the output — fold them into the key so a Cohere run (and a
+    // punctuation flip) maps to a distinct cache entry. CT2 runs add nothing
+    // here, so their existing cache keys stay byte-for-byte the same.
+    if is_cohere {
+        run_sig_obj["engine"] = serde_json::json!("cohere");
+        run_sig_obj["punctuation"] = serde_json::json!(punctuation.unwrap_or(true));
+    }
+    let run_sig = run_sig_obj.to_string();
 
     // (dir, v2_hash = model/settings-aware, legacy_hash = plain video hash)
     let cache_key: Option<(std::path::PathBuf, String, String)> = (|| {
@@ -499,6 +521,18 @@ pub async fn transcribe_video(
         "--model".into(), model.clone(),
         "--language".into(), lang_arg,
     ];
+    if is_cohere {
+        // Native transformers Cohere producer; WhisperX still owns alignment.
+        args.push("--engine".into());
+        args.push("cohere".into());
+        // BooleanOptionalAction in the engine: pass the explicit on/off form so
+        // the panel toggle (Phase 4) round-trips. Default-on when unset.
+        args.push(if punctuation.unwrap_or(true) {
+            "--punctuation".into()
+        } else {
+            "--no-punctuation".into()
+        });
+    }
     if diarize {
         args.push("--diarize".into());
         // Token is passed via the HF_TOKEN env var (below), not argv, so it is
