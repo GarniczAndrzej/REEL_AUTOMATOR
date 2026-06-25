@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
 
 *,
 *::before,
@@ -9,22 +9,29 @@
 }
 
 :root {
-  --bg: #0d0d10;
-  --surface: #16161b;
-  --surface2: #1e1e26;
-  --surface3: #252530;
-  --border: rgba(255, 255, 255, 0.08);
-  --border2: rgba(255, 255, 255, 0.15);
-  --accent: #7c6dfa;
-  --accent2: #a695ff;
-  --green: #3dd68c;
-  --amber: #f5a623;
-  --red: #ff4d4f;
-  --text: #f0eff8;
-  --text2: #8b8a9e;
-  --text3: #555468;
-  --mono: 'DM Mono', monospace;
-  --display: 'Syne', sans-serif;
+  /* BRAVE re-theme — token *values* remapped to the BRAVE palette while the
+     token *names* are kept, so all 381 existing var(--…) call sites re-theme
+     from this single block. See DesignNotes/design-system.md. */
+  --bg: #141313; /* brand black — warm near-black canvas */
+  --surface: #1c1b1b; /* bg-elevated — cards, panels, modals */
+  --surface2: #222121; /* surface — inputs, secondary surfaces */
+  --surface3: #2e2d2d; /* third elevation ≈ border-strong tier */
+  --border: #2e2d2d; /* hairline borders, dividers */
+  --border2: #3d3c3c; /* focused / hovered borders */
+  --accent: #ffffff; /* monochrome interaction — white */
+  --accent2: #eaeaea; /* light-hover */
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --info: #60a5fa;
+  --text: #dddddd; /* brand grey — soft off-white, not pure white */
+  --text2: #9b9b9b;
+  --text3: #6e6e6e;
+  --text-on-light: #141313; /* type on white/light surfaces (buttons, logo chip) */
+  --block: #1e1d1d; /* decorative puzzle-block (motif deferred) */
+  --mono: 'DM Sans', sans-serif; /* body workhorse → DM Sans */
+  --code: 'DM Mono', monospace; /* technical surfaces (timecode / EDL / XML / Lua) */
+  --display: 'DM Sans', sans-serif;
 
   /* S-16 Phase 4 — spacing / radius / type scale (4px base).
      Values map 1:1 onto the previously hard-coded literals: the restyle
