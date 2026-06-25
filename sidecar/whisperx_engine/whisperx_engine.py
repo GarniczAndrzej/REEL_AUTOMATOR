@@ -508,8 +508,10 @@ def cmd_transcribe_cohere(args):
         if "not found" in msg or "no such file" in msg or "does not exist" in msg:
             _log("cohere model not found: %s" % e)
             sys.exit(EXIT_MODEL_NOT_FOUND)
+        # A downloaded-but-failing load (OOM, corrupt weights, dtype/version
+        # mismatch) is NOT a missing model — don't tell the user to re-download.
         _log("cohere model load failed: %s" % e)
-        sys.exit(EXIT_MODEL_NOT_FOUND)
+        sys.exit(EXIT_TRANSCRIBE_FAIL)
 
     try:
         inputs = proc(
@@ -539,6 +541,10 @@ def cmd_transcribe_cohere(args):
         gen_only = gen[:, inputs["decoder_input_ids"].shape[1] :]
         per_chunk = proc.batch_decode(gen_only, skip_special_tokens=True)
         if chunk_index is not None:
+            # `_reassemble_chunk_texts` is a private processor API — depends on the
+            # transformers==5.12.1 pin (requirements.lock.txt). Re-verify it still
+            # exists on any transformers bump; if it vanishes this throws and the
+            # run fails cleanly (EXIT_TRANSCRIBE_FAIL), no silent corruption.
             text = proc._reassemble_chunk_texts(per_chunk, chunk_index, " ")[0]
         else:
             text = " ".join(t.strip() for t in per_chunk if t.strip())

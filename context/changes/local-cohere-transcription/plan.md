@@ -477,6 +477,12 @@ knob); hide the rest. Carry `punctuation` end-to-end: it rides the `whisperAdvan
 (`transcribe.js:533`) → `invoke('transcribe_video')` → Rust forwards `--punctuation` (Phase 3 §1)
 → `cmd_transcribe_cohere` (Phase 2 §2). All new strings Polish. No exporter/state shape change.
 
+> **Addendum (impl, 8c14b82):** the Cohere panel intentionally also keeps **beam size** and the
+> **word-by-word SRT** toggle visible (not strictly "device + punctuation"). Beam size was wired to
+> Cohere `num_beams` (whisperx_engine.py:531–537) as a real quality lever, and word-SRT operates on
+> the aligned words both engines produce. Only the WhisperX-specific knobs (compute precision, VAD,
+> initial prompt, diarization) are hidden on the Cohere path.
+
 ### Success Criteria:
 
 #### Automated Verification:
@@ -651,33 +657,33 @@ archiving via `/10x-archive`.
 
 #### Manual
 
-- [ ] 3.3 Cohere model selection runs the Cohere engine path end-to-end
-- [ ] 3.4 Re-run hits `whisper-cache/v2` (no second spawn)
-- [ ] 3.5 WhisperX model still routes to the CT2 path
+- [x] 3.3 Cohere model selection runs the Cohere engine path end-to-end — verified by operator (manual)
+- [x] 3.4 Re-run hits `whisper-cache/v2` (no second spawn) — verified by operator (manual)
+- [x] 3.5 WhisperX model still routes to the CT2 path — verified by operator (manual)
 
 ### Phase 4: Frontend — model-aware routing & advanced-settings swap
 
 #### Automated
 
-- [x] 4.1 Prettier clean
-- [x] 4.2 Regression suite passes
+- [x] 4.1 Prettier clean — 8c14b82
+- [x] 4.2 Regression suite passes — 8c14b82
 
 #### Manual
 
-- [ ] 4.3 Advanced panel swaps Cohere↔WhisperX by selected model (device + punctuation)
-- [ ] 4.4 Full Step-1 Cohere transcription populates sentences + exports valid
-- [ ] 4.5 `auto` language with Cohere resolves to `pl`; punctuation toggle changes output
-- [ ] 4.6 Auto-mode (single + batch) with Cohere runs end-to-end (gate passes, auto→pl applied)
+- [x] 4.3 Advanced panel swaps Cohere↔WhisperX by selected model (device + punctuation) — verified by operator (manual)
+- [x] 4.4 Full Step-1 Cohere transcription populates sentences + exports valid — verified by operator (manual)
+- [x] 4.5 `auto` language with Cohere resolves to `pl`; punctuation toggle changes output — verified by operator (manual)
+- [x] 4.6 Auto-mode (single + batch) with Cohere runs end-to-end (gate passes, auto→pl applied) — verified by operator (manual)
 
 ### Phase 5: Quality validation & regression
 
 #### Automated
 
-- [ ] 5.1 Full regression suite green
-- [ ] 5.2 Rust builds clean
+- [x] 5.1 Full regression suite green
+- [x] 5.2 Rust builds clean
 
 #### Manual
 
-- [ ] 5.3 `quality-comparison.md` records transcripts, WER, read, and default decision
-- [ ] 5.4 Chosen default reflects the measurement (no "faster" claim)
-- [ ] 5.5 End-to-end Cohere transcribe→align→segment→export on a real webinar
+- [x] 5.3 `quality-comparison.md` records read + default decision (formal WER deferred per operator) — verified by operator (manual)
+- [x] 5.4 Chosen default reflects the decision: WhisperX `large-v3` stays default, Cohere optional (no "faster" claim) — verified by operator (manual)
+- [x] 5.5 End-to-end Cohere transcribe→align→segment→export on a real webinar — verified by operator (manual)
