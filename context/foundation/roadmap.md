@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-25
+updated: 2026-06-26
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -54,7 +54,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-25  | cost-optimized-ai-analysis  | cut AI-analysis cost via a two-stage (cluster → curate) pipeline with two selectable OpenRouter models + prompt caching | S-01, S-03, S-16 | — (NFR prompt-caching; promotes parked "two-stage long-form chunking") | done |
 | S-26  | refactor-ai-prompts         | get noticeably better reels — each AI-analysis phase ships a re-engineered rubric prompt, plus a built-in prompt preset per BRAVE Education cohort | S-01, S-03, S-25 | FR-015, FR-016 (extends) | done |
 | S-27  | local-cohere-transcription  | transcribe locally with the Cohere Transcribe model (higher accuracy) and keep WhisperX word-level timestamps via a VAD → Cohere → Wav2Vec2 pipeline | S-05 | FR-001, FR-002, FR-006 (extends) | done |
-| S-28  | brave-design-system         | use the app re-skinned to the BRAVE brand — monochrome `#141313`/`#DDDDDD` palette, DM Sans type, BRAVE logo (replacing the REEL AUTOMATOR wordmark), tokenized via CSS custom properties | S-16 | — (visual rebrand; supports US-01 review-speed via a cleaner surface) | proposed |
+| S-28  | brave-design-system         | use the app re-skinned to the BRAVE brand — monochrome `#141313`/`#DDDDDD` palette, DM Sans type, BRAVE logo (replacing the REEL AUTOMATOR wordmark), tokenized via CSS custom properties | S-16 | — (visual rebrand; supports US-01 review-speed via a cleaner surface) | done |
 
 ## Streams
 
@@ -518,7 +518,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - **BRAVE logo asset format** — ship the logo as SVG (preferred — crisp at any size, recolorable black/white per the "on dark / white chip" rule) or the supplied PNG? `BRAVE-LOGO.png` is raster. — Owner: user. Block: no (default: trace/obtain an SVG for the in-app mark; fall back to the PNG at 2x if no vector is available).
   - **Puzzle-block motif** — implement the subtle tetromino background texture now, or defer it as decoration? — Owner: user. Block: no (default: ship the palette/type/logo/components first; the motif is optional atmosphere, add only if it doesn't harm legibility behind controls).
 - **Risk:** Low logic risk, broad surface-area risk — it touches nearly every stylesheet and the app header/branding, but **no** parser/exporter/selection/transcription/frame-math code, so the regression suite stays green by construction (run `node --experimental-vm-modules test/regression.js` before/after to confirm nothing leaked into logic). The real verification is **manual visual QA** across every surface (import → scored-reel review → export popover → settings modal → engine/model states → toasts/errors) since the suite only fences parser/exporters. Sharp edges: (1) contrast/accessibility — `#DDDDDD` on `#141313` is the intended pairing, but verify muted/secondary text and disabled states stay legible (don't let `--text-muted` drop below readable on the warm-black); (2) keep functional state colors (validation, transcription status, "anulowano"/error toasts) clearly distinguishable — don't monochrome away meaningful feedback; (3) replace the wordmark *everywhere* — grep for "REEL AUTOMATOR" / the old logo asset so no stale mark survives (Do/Don't rule). Keep all user-facing strings Polish.
-- **Status:** proposed
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -593,6 +593,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-18: start transcribing without a long wait — the WhisperX engine check is fast (cached/async)** — Archived 2026-06-16 → `context/archive/2026-06-16-s-18/`. Cheap `--capability` sidecar probe + content-addressed verdict cache + bounded timeout; launch badge is cache-read-only (never spawns), green earned only by the manual full self-test. Lesson: every `whisperx-engine` sidecar spawn pays a 37–67s cold cost (onefile extraction + torch import) regardless of the probe's own work — never put a sidecar spawn on the launch/critical path.
 - **S-03: edit the system prompt and manage reusable prompt presets** — Archived 2026-06-18 → `context/archive/2026-06-16-s-03/`. Editable (no-longer-hardcoded) system prompt split from the user prompt + reusable preset library (save-as/duplicate/rename/delete, JSON import/export, built-in Polish starters); empty system prompt is meaningful (omits scoring guidance). Lesson: synchronous JS dialogs (`window.prompt/confirm/alert`) hard-crash Tauri's macOS WKWebView — use an in-app modal + async `@tauri-apps/plugin-dialog` `ask()` + `toast()` instead.
 - **S-02: Scoring-first reel list UI** — Archived 2026-06-18 → `context/archive/2026-06-18-scoring-first-reel-list/`. Lesson: —.
+- **S-28: app re-skinned to the BRAVE brand — monochrome palette, DM Sans, BRAVE logo** — Archived 2026-06-26 → `context/archive/2026-06-25-brave-design-system/`. Lesson: —.
 - **S-04: reorder, merge, delete segments (reorder/merge/delete ops need rework)** — Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`. Diagnosis showed delete/merge already worked; only drag-reorder was broken because Tauri's webview intercepted HTML5 drag events — fixed with one config flip (`dragDropEnabled: false`), `moveClip()` untouched. Lesson: Tauri's webview swallows HTML5 drag-and-drop by default; set `dragDropEnabled: false` on the window to hand DnD to the frontend (and it governs the HTML5 file-drop import too — no native `onDragDropEvent` listener to lose).
 - **S-25: cut AI-analysis cost via a two-stage (cluster → curate) pipeline with two selectable OpenRouter models + prompt caching** — Archived 2026-06-24 → `context/archive/2026-06-23-cost-optimized-ai-analysis/`. Phase-2 evidence gate ran OPEN (two strong single-shot models both plateaued on long mixed-topic input), so built instrumentation + model tiering + cluster→curate pipeline + Stage-1 minification (Phases 1,3,4,5); Phase 2a skipped. Lesson: a `cache_control` provider-cache lever is inert when an exact-match disk cache sits in front of the call and the marker isn't isolating a stable prefix — the disk cache serves prompt-identical re-runs before the network, so the provider cache never fires (impl-review F1).
 - **S-11: store API keys in the OS keychain, never plaintext** — Archived 2026-06-18 → `context/archive/2026-06-18-keychain-credentials/`. `keyring`-crate `keychain.rs` get/set/delete commands + hydrated `src/ai/api-key.js` cache (sync `getApiKey`, async write-through `setApiKey`, boot `hydrateKeys()` with one-time localStorage→Keychain migration); R2 accessor folded in. Lesson: the `keyring` 3.x crate ships NO credential store by default (silent in-memory mock) — enable `apple-native` in Cargo.toml or Keychain writes don't persist.
