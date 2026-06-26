@@ -101,7 +101,7 @@ function shouldUsePipeline(sentences) {
 function setAnalyzeBtnMode(mode) {
   const btn = document.getElementById('analyzeBtn');
   if (mode === 'running') {
-    btn.textContent = '⏹ Zatrzymaj';
+    btn.textContent = 'Zatrzymaj';
     btn.classList.remove('btn-primary');
     btn.classList.add('btn-danger');
   } else {
@@ -136,7 +136,7 @@ async function runAIAnalysis() {
 export async function runAnalysis({ apiKey, signal, onProgress } = {}) {
   const key = (apiKey || getApiKey('openrouter') || '').trim();
   if (!key) {
-    toast('Otwórz „⚙ Ustawienia" i wklej API key OpenRouter!', 'error');
+    toast('Otwórz „Ustawienia" i wklej API key OpenRouter!', 'error');
     return;
   }
   if (!state.sentences.length) {
@@ -153,7 +153,7 @@ export async function runAnalysis({ apiKey, signal, onProgress } = {}) {
     const curateModel = state.aiModels.curate || state.orSelectedModel;
     if (!clusterModel || !curateModel) {
       toast(
-        'Wybierz modele klastrowania i kuracji w „⚙ Ustawienia" (lub model legacy).',
+        'Wybierz modele klastrowania i kuracji w „Ustawienia" (lub model legacy).',
         'error',
       );
       return;
@@ -274,7 +274,7 @@ async function runSingleShot(sentences, apiKey, signal, onProgress) {
 
     rawResponse = responseText;
     if (fromCache) {
-      log(`Odpowiedź z pamięci podręcznej (hash: ${hashShort}) ⚡`, 'ok');
+      log(`Odpowiedź z pamięci podręcznej (hash: ${hashShort})`, 'ok');
     } else {
       log(
         'Odpowiedź AI otrzymana (' + responseText.length + ' znaków)',
@@ -376,7 +376,7 @@ async function runPipeline(sentences, apiKey, signal, onProgress) {
     const { content, usage, finishReason } = result;
     clusterRaw = content;
     if (fromCache) {
-      log(`Klastrowanie z pamięci podręcznej (hash: ${hashShort}) ⚡`, 'ok');
+      log(`Klastrowanie z pamięci podręcznej (hash: ${hashShort})`, 'ok');
     } else {
       log(
         'Odpowiedź klastrowania otrzymana (' + content.length + ' znaków)',
@@ -428,7 +428,7 @@ async function runPipeline(sentences, apiKey, signal, onProgress) {
   );
   if (total && covered / total < CLUSTER_COVERAGE_WARN) {
     log(
-      `⚠ Niskie pokrycie (${Math.round((covered / total) * 100)}%) — część materiału może zostać pominięta.`,
+      `Niskie pokrycie (${Math.round((covered / total) * 100)}%) — część materiału może zostać pominięta.`,
       'err',
     );
   }
@@ -577,7 +577,7 @@ async function runBucket(bucket, sentences, apiKey, curateModel, signal) {
     bucket.reels = reels;
     bucket.status = 'done';
     log(
-      `Temat „${bucket.title}": ${reels.length} reelsów${fromCache ? ' (z pamięci podręcznej ⚡)' : ''}`,
+      `Temat „${bucket.title}": ${reels.length} reelsów${fromCache ? ' (z pamięci podręcznej)' : ''}`,
       'ok',
     );
   } catch (e) {
@@ -663,7 +663,7 @@ function renderBucketList(buckets) {
   }
 }
 
-const BUCKET_ICON = { pending: '…', running: '⏳', done: '✓', error: '✗' };
+const BUCKET_ICON = { pending: '·', running: '…', done: '✓', error: '✗' };
 const BUCKET_CLASS = {
   pending: '',
   running: 'running',
@@ -729,7 +729,7 @@ function applyPastedJSON() {
     document.getElementById('reelsCard').style.display = 'block';
     document.getElementById('step2Next').style.display = 'flex';
     status.style.color = 'var(--green)';
-    status.textContent = `✓ Wczytano ${state.reelsData.length} reelsów`;
+    status.textContent = `Wczytano ${state.reelsData.length} reelsów`;
     emit();
   } catch (e) {
     status.style.color = 'var(--red)';
@@ -773,7 +773,7 @@ async function copyPromptMD() {
   );
   try {
     await navigator.clipboard.writeText(content);
-    toast('Prompt skopiowany do schowka ✓', 'success');
+    toast('Prompt skopiowany do schowka', 'success');
   } catch {
     toast('Nie udało się skopiować — użyj „Eksportuj prompt .txt".', 'error');
   }
@@ -841,7 +841,7 @@ function renderUsage(usage, model, fromCache) {
  */
 function reportStepUsage(label, usage, model, fromCache) {
   if (fromCache || !usage) {
-    log(`${label}: z pamięci podręcznej (bez kosztu) ⚡`, 'info');
+    log(`${label}: z pamięci podręcznej (bez kosztu)`, 'info');
   } else {
     const u = computeUsage(usage, model);
     const costStr = u.hasPricing ? '$' + u.cost.toFixed(4) : 'brak cennika';

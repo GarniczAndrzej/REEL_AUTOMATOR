@@ -103,7 +103,7 @@ export function initSettingsModal() {
         const noteEl = document.getElementById('fpsNote');
         if (noteEl) {
           noteEl.textContent =
-            '⚠ FPS zmieniony — kliknij „Analizuj SRT →" aby odświeżyć timekody.';
+            'FPS zmieniony — kliknij „Analizuj SRT →" aby odświeżyć timekody.';
           noteEl.style.color = 'var(--amber)';
         }
       }
@@ -226,7 +226,7 @@ function saveApiKey() {
     return;
   }
   setApiKey('openrouter', key);
-  showStatus('Zapisano ✓', 'ok');
+  showStatus('Zapisano', 'ok');
 }
 
 function loadApiKey() {

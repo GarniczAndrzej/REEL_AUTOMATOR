@@ -203,7 +203,7 @@ async function saveFormat(key) {
     defaultName: videoBase() + f.suffix,
     content,
   });
-  if (saved) toast('Zapisano plik ✓', 'success');
+  if (saved) toast('Zapisano plik', 'success');
 }
 
 async function copyFormat(key) {
@@ -232,7 +232,7 @@ async function exportVTT() {
     defaultName: transcriptBase() + '.vtt',
     content: generateTranscriptVTT(state.sentences, state.fps),
   });
-  if (saved) toast('Zapisano transkrypcję ✓', 'success');
+  if (saved) toast('Zapisano transkrypcję', 'success');
 }
 
 async function exportMD() {
@@ -244,7 +244,7 @@ async function exportMD() {
     defaultName: 'segmenty.md',
     content: generateSegmentsMd(state.sentences, state.fps, state.srtName),
   });
-  if (saved) toast('Zapisano .md ✓', 'success');
+  if (saved) toast('Zapisano .md', 'success');
 }
 
 async function copyPrompt() {
@@ -259,7 +259,7 @@ async function copyPrompt() {
     null,
     state.videoFilename || '',
   );
-  await copyText(content, 'Prompt skopiowany ✓');
+  await copyText(content, 'Prompt skopiowany');
 }
 
 // ── utilities ──────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ function videoBase() {
   return stripExt(state.videoFilename || 'reels');
 }
 
-async function copyText(content, okMsg = 'Skopiowano ✓') {
+async function copyText(content, okMsg = 'Skopiowano') {
   try {
     await navigator.clipboard.writeText(content);
     toast(okMsg, 'success');

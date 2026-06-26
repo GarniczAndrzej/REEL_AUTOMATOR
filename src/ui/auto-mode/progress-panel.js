@@ -29,7 +29,7 @@ const STAGES = [
 // status name (empty for pending).
 const ICON = {
   pending: '…',
-  running: '⏳',
+  running: '…',
   done: '✓',
   error: '✗',
   skipped: '–',
@@ -88,7 +88,7 @@ export function mountProgressPanel() {
         <span class="auto-stage-pct"></span>
         ${
           s.cancellable
-            ? `<button class="auto-stage-cancel" type="button" title="Anuluj etap" aria-label="Anuluj etap" style="display:none">✕</button>`
+            ? `<button class="auto-stage-cancel" type="button" title="Anuluj etap" aria-label="Anuluj etap" style="display:none">×</button>`
             : ''
         }
       </div>
@@ -99,15 +99,15 @@ export function mountProgressPanel() {
 
   panelEl.innerHTML = `
     <div class="auto-panel-head">
-      <span class="auto-panel-title">⚡ Tryb automatyczny</span>
+      <span class="auto-panel-title">Tryb automatyczny</span>
       <button class="auto-panel-close" type="button" title="Zamknij" aria-label="Zamknij">×</button>
     </div>
     <div class="auto-panel-config"></div>
     <div class="auto-panel-stages">${rows}</div>
     <div class="auto-panel-foot">
-      <button class="auto-panel-start btn btn-primary" type="button">▶ Uruchom</button>
-      <button class="auto-panel-batch btn btn-primary" type="button" style="display:none">▶ Uruchom wsadowo</button>
-      <button class="auto-panel-openfolder btn btn-secondary" type="button" style="display:none">📂 Otwórz folder docelowy</button>
+      <button class="auto-panel-start btn btn-primary" type="button">Uruchom</button>
+      <button class="auto-panel-batch btn btn-primary" type="button" style="display:none">Uruchom wsadowo</button>
+      <button class="auto-panel-openfolder btn btn-secondary" type="button" style="display:none">Otwórz folder docelowy</button>
     </div>`;
 
   document.body.appendChild(panelEl);
@@ -161,7 +161,7 @@ function syncRunState() {
   if (batch) {
     batch.style.display = n ? '' : 'none';
     batch.disabled = running;
-    batch.textContent = `▶ Uruchom wsadowo (${n})`;
+    batch.textContent = `Uruchom wsadowo (${n})`;
   }
   panelEl.classList.toggle('running', running);
 }

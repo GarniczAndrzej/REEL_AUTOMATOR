@@ -38,7 +38,7 @@ export function drawTimeline(canvas, reel, sentences, fps, playheadFrame) {
   for (const s of clips) {
     const x1 = ((s.start_frame - minFrame) / totalSpan) * w;
     const x2 = ((s.end_frame - minFrame) / totalSpan) * w;
-    ctx.fillStyle = 'rgba(124,109,250,0.75)';
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
     ctx.fillRect(x1, 2, Math.max(2, x2 - x1), h - 4);
   }
 

@@ -118,8 +118,8 @@ export function renderConfig(container) {
 const BATCH_STATUS = {
   pending: '—',
   running: 'W toku…',
-  done: '✓ Gotowe',
-  error: '✗ Błąd',
+  done: 'Gotowe',
+  error: 'Błąd',
 };
 
 /**
@@ -145,7 +145,7 @@ function renderBatchQueue() {
         <span class="auto-batch-status">${BATCH_STATUS[v.status] || ''}</span>
         <button class="auto-batch-remove" type="button" data-idx="${i}"
           title="Usuń z kolejki" aria-label="Usuń z kolejki"
-          ${configLocked ? 'disabled' : ''}>✕</button>
+          ${configLocked ? 'disabled' : ''}>×</button>
       </div>`,
     )
     .join('');

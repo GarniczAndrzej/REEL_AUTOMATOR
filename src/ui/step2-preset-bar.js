@@ -338,7 +338,7 @@ function openModal({
     const box = document.createElement('div');
     box.style.cssText =
       'background:var(--bg2,#1e1e24);color:var(--text,#fff);' +
-      'border:1px solid var(--border,#3a3a44);border-radius:8px;padding:18px;' +
+      'border:1px solid var(--border,#3a3a44);border-radius:0;padding:18px;' +
       'width:min(420px,90vw);box-shadow:0 12px 40px rgba(0,0,0,0.4);';
 
     const label = document.createElement('div');
@@ -355,7 +355,7 @@ function openModal({
       input.style.cssText =
         'width:100%;box-sizing:border-box;padding:8px;font-size:13px;' +
         'margin-bottom:14px;background:var(--bg,#111);color:var(--text,#fff);' +
-        'border:1px solid var(--border,#3a3a44);border-radius:6px;';
+        'border:1px solid var(--border,#3a3a44);border-radius:0;';
       box.appendChild(input);
     }
 

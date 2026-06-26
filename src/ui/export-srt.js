@@ -55,7 +55,7 @@ export async function exportTranscriptSrt() {
       defaultName: transcriptBase() + '.srt',
       content: generateTranscriptSRT(state.sentences, state.fps),
     });
-    if (saved) toast('Zapisano transkrypcję ✓', 'success');
+    if (saved) toast('Zapisano transkrypcję', 'success');
     return;
   }
   // Mode ON → word-by-word .srt. Needs frame-based words[]; auto-align when
@@ -86,5 +86,5 @@ export async function exportTranscriptSrt() {
     defaultName: transcriptBase() + '.srt',
     content: generateWordSRT(state.sentences, state.fps),
   });
-  if (saved) toast('Zapisano napisy słowo-po-słowie ✓', 'success');
+  if (saved) toast('Zapisano napisy słowo-po-słowie', 'success');
 }

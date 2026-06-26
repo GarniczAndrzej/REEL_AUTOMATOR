@@ -55,8 +55,8 @@ export function drawWaveform(
     const frac = i / w;
     const inTrim = frac >= trimStartFrac && frac < trimEndFrac;
     ctx.fillStyle = inTrim
-      ? 'rgba(138,124,255,0.85)'
-      : 'rgba(120,120,150,0.30)';
+      ? 'rgba(255,255,255,0.85)'
+      : 'rgba(120,120,120,0.30)';
     ctx.fillRect(i, midY - barH / 2, 1, barH);
   }
 }

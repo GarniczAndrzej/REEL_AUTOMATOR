@@ -363,25 +363,25 @@ None — purely presentational. No `.reelproj` schema, state, or stored-data cha
 
 #### Automated
 
-- [x] 1.1 Regression suite passes
-- [x] 1.2 App builds without errors
-- [x] 1.3 No `Syne` reference remains in `src/styles.css`
+- [x] 1.1 Regression suite passes — 5f36a97
+- [x] 1.2 App builds without errors — 5f36a97
+- [x] 1.3 No `Syne` reference remains in `src/styles.css` — 5f36a97
 
 #### Manual
 
-- [x] 1.4 Canvas `#141313`, body type `#DDDDDD` in DM Sans
-- [x] 1.5 No purple on any tokenized surface
-- [x] 1.6 Status colors render in BRAVE hexes
-- [x] 1.7 Headings render in DM Sans, not Syne
+- [x] 1.4 Canvas `#141313`, body type `#DDDDDD` in DM Sans — 5f36a97
+- [x] 1.5 No purple on any tokenized surface — 5f36a97
+- [x] 1.6 Status colors render in BRAVE hexes — 5f36a97
+- [x] 1.7 Headings render in DM Sans, not Syne — 5f36a97
 
 ### Phase 2: De-purple the Leaks & Repoint Code Surfaces
 
 #### Automated
 
-- [ ] 2.1 Regression suite passes
-- [ ] 2.2 No purple literals remain in CSS
-- [ ] 2.3 No purple literals remain in JS
-- [ ] 2.4 No `#c0392b` remains
+- [x] 2.1 Regression suite passes
+- [x] 2.2 No purple literals remain in CSS
+- [x] 2.3 No purple literals remain in JS
+- [x] 2.4 No `#c0392b` remains
 
 #### Manual
 
@@ -395,8 +395,8 @@ None — purely presentational. No `.reelproj` schema, state, or stored-data cha
 
 #### Automated
 
-- [ ] 3.1 App builds without errors
-- [ ] 3.2 No text-logo string remains in the header `.logo` block
+- [x] 3.1 App builds without errors
+- [x] 3.2 No text-logo string remains in the header `.logo` block
 
 #### Manual
 

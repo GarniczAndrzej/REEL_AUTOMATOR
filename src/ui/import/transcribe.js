@@ -138,15 +138,15 @@ function renderEngineBadge(el, status, { authoritative }) {
   if (status.ok) {
     const dev = `${status.device || 'cpu'}${status.gpu ? ', GPU' : ''}`;
     if (authoritative) {
-      el.textContent = `✓ Silnik gotowy (${dev})${status.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
+      el.textContent = `Silnik gotowy (${dev})${status.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
       el.style.color = 'var(--green)';
     } else {
-      el.textContent = `✓ Silnik wykryty (${dev}) — pełna weryfikacja zalecana`;
+      el.textContent = `Silnik wykryty (${dev}) — pełna weryfikacja zalecana`;
       el.style.color = 'var(--amber)';
     }
   } else {
     el.textContent =
-      '⚠ Silnik WhisperX nie jest jeszcze zbudowany. Uruchom sidecar/build.sh.';
+      'Silnik WhisperX nie jest jeszcze zbudowany. Uruchom sidecar/build.sh.';
     el.style.color = 'var(--amber)';
   }
 }
@@ -169,7 +169,7 @@ async function refreshEngineReadiness() {
       el.style.color = 'var(--text3)';
     }
   } catch (e) {
-    el.textContent = '⚠ Nie można sprawdzić silnika: ' + e;
+    el.textContent = 'Nie można sprawdzić silnika: ' + e;
     el.style.color = 'var(--amber)';
   }
 }
@@ -191,7 +191,7 @@ async function fullEngineVerify() {
     renderEngineBadge(el, s, { authoritative: true });
   } catch (e) {
     if (el) {
-      el.textContent = '⚠ Nie można sprawdzić silnika: ' + e;
+      el.textContent = 'Nie można sprawdzić silnika: ' + e;
       el.style.color = 'var(--amber)';
     }
   } finally {
@@ -246,12 +246,12 @@ export async function renderModelManager() {
   </select>
   ${
     showDownload
-      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-download-model="${selModel.id}" ${disabledAttr}>⬇ Pobierz</button>`
+      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-download-model="${selModel.id}" ${disabledAttr}>Pobierz</button>`
       : ''
   }
   ${
     selDownloaded
-      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-delete-model="${selModel.id}" ${disabledAttr}>🗑 Usuń</button>`
+      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" data-delete-model="${selModel.id}" ${disabledAttr}>Usuń</button>`
       : ''
   }
 </div>
@@ -360,7 +360,7 @@ async function downloadModel(id) {
       totalBytes: model.sizeBytes || null,
       hfToken,
     });
-    if (progEl) progEl.textContent = '✓ Pobrano i zweryfikowano';
+    if (progEl) progEl.textContent = 'Pobrano i zweryfikowano';
     await refreshModelStatus();
     selectModel(id);
   } catch (e) {

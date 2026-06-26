@@ -147,7 +147,7 @@ export function renderReels() {
     <div class="clip-txt">${renderClipText(s)}</div>
   </div>
   <div class="clip-dur">${dur}s</div>
-  <button class="clip-del-btn" data-reel-idx="${ri}" data-clip-idx="${ci}" title="Usuń z reela">✕</button>
+  <button class="clip-del-btn" data-reel-idx="${ri}" data-clip-idx="${ci}" title="Usuń z reela">×</button>
 </div>`;
 
               if (ci < r.clip_ids.length - 1) {
@@ -170,7 +170,7 @@ export function renderReels() {
                       : '';
                   return (
                     clipHtml +
-                    `\n<div class="clip-gap ${gapClass}" data-reel-idx="${ri}" data-clip-idx="${ci}" data-gap-frames="${gapFrames}"><span class="clip-gap-icon">⬡</span> <span class="clip-gap-label">${gapText}</span>${mergeBtn}</div>`
+                    `\n<div class="clip-gap ${gapClass}" data-reel-idx="${ri}" data-clip-idx="${ci}" data-gap-frames="${gapFrames}"><span class="clip-gap-label">${gapText}</span>${mergeBtn}</div>`
                   );
                 }
               }

@@ -323,7 +323,7 @@ async function runExportStage(controller) {
       percent: 100,
       label: saved ? 'Zapisano 1 plik' : 'Anulowano',
     });
-    if (saved) toast('Zapisano plik ✓', 'success');
+    if (saved) toast('Zapisano plik', 'success');
     return;
   }
 
@@ -353,7 +353,7 @@ async function runExportStage(controller) {
   });
   if (ok) showOpenFolder(folder);
   toast(
-    `Zapisano ${ok} z ${items.length} plików ✓`,
+    `Zapisano ${ok} z ${items.length} plików`,
     ok === items.length ? 'success' : 'info',
   );
 }

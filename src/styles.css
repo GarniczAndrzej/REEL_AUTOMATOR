@@ -44,20 +44,29 @@
   --sp-6: 24px;
   --sp-8: 32px;
 
-  --radius-xs: 3px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 10px;
-  --radius-2xl: 12px;
+  /* Sharp edges — BRAVE language is squared. Radius tokens collapse to 0 so
+     every tokenized corner is crisp; genuine circles use border-radius: 50%
+     directly (a circle has no corner to sharpen). */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
 
-  --fs-2xs: 10px;
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-md: 13px;
-  --fs-lg: 14px;
-  --fs-xl: 18px;
-  --fs-2xl: 22px;
+  /* Type scale — Major Third (ratio 1.25), modular anchor = 16px.
+     base→display are pure 16·1.25ⁿ rungs (16, 20, 25, 31, 39); the small UI
+     ramp (2xs–lg) stays compact for this dense desktop tool. */
+  --fs-2xs: 10px; /* micro labels, badges (≈16 / 1.25²) */
+  --fs-xs: 11px; /* uppercase eyebrow labels */
+  --fs-sm: 12px; /* secondary / meta */
+  --fs-md: 13px; /* dense UI body, buttons, inputs */
+  --fs-lg: 14px; /* emphasized UI body */
+  --fs-base: 16px; /* modular anchor — lead body */
+  --fs-xl: 20px; /* 16 · 1.25  — h3 / subsection */
+  --fs-2xl: 25px; /* 16 · 1.25² — h2 / section title */
+  --fs-3xl: 31px; /* 16 · 1.25³ — h1 / page title */
+  --fs-display: 39px; /* 16 · 1.25⁴ — hero display */
 }
 
 body {
@@ -79,25 +88,17 @@ header {
 }
 
 .logo {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: var(--fs-xl);
-  letter-spacing: -0.5px;
-  color: var(--text);
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
-.logo-icon {
-  width: 28px;
+/* BRAVE wordmark — self-framing SVG (black wordmark on its own white chip).
+   Height-constrained; aspect ratio preserved via width:auto. Never recolor,
+   stretch, or rotate the mark. */
+.logo svg {
+  display: block;
   height: 28px;
-  background: var(--accent);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-lg);
+  width: auto;
 }
 
 .api-bar {
@@ -249,7 +250,7 @@ header {
   margin-top: 2px;
 }
 .or-model-item.selected {
-  background: rgba(124, 109, 250, 0.15);
+  background: rgba(255, 255, 255, 0.1);
 }
 .or-model-item .or-model-price {
   font-size: var(--fs-2xs);
@@ -262,7 +263,7 @@ header {
 }
 
 .or-selected-badge {
-  background: rgba(124, 109, 250, 0.2);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--accent2);
   font-size: var(--fs-xs);
   padding: 4px 10px;
@@ -272,7 +273,7 @@ header {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  border: 1px solid rgba(124, 109, 250, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   transition: border-color 0.2s;
 }
 .or-selected-badge:hover {
@@ -335,7 +336,7 @@ main {
 }
 .step-item.done .step-num {
   background: var(--green);
-  color: #000;
+  color: var(--text-on-light);
 }
 .step-item.done .step-title {
   color: var(--text2);
@@ -360,7 +361,7 @@ main {
 .step-item.active .step-num {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-light);
 }
 
 .step-info {
@@ -474,7 +475,7 @@ main {
 .drop-zone:hover,
 .drop-zone.drag-over {
   border-color: var(--accent);
-  background: rgba(124, 109, 250, 0.05);
+  background: rgba(255, 255, 255, 0.05);
 }
 .drop-zone input[type='file'] {
   position: absolute;
@@ -632,7 +633,7 @@ textarea::placeholder {
 }
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-light);
 }
 .btn-primary:hover {
   background: var(--accent2);
@@ -665,7 +666,7 @@ textarea::placeholder {
 
 .btn-danger {
   background: var(--red);
-  color: #fff;
+  color: var(--text-on-light);
 }
 .btn-danger:hover {
   background: var(--red);
@@ -786,7 +787,7 @@ textarea::placeholder {
   color: var(--text3);
   max-height: 120px;
   overflow-y: auto;
-  font-family: var(--mono);
+  font-family: var(--code);
   line-height: 1.7;
 }
 .log-line {
@@ -825,7 +826,7 @@ textarea::placeholder {
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   background: var(--accent2);
-  color: #fff;
+  color: var(--text-on-light);
   font-size: var(--fs-xs);
 }
 .usage-model {
@@ -980,7 +981,7 @@ textarea::placeholder {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 14px;
-  font-family: var(--mono);
+  font-family: var(--code);
   font-size: var(--fs-sm);
   color: var(--text);
   width: 100%;
@@ -999,7 +1000,7 @@ textarea::placeholder {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px;
-  font-family: var(--mono);
+  font-family: var(--code);
   font-size: var(--fs-xs);
   color: var(--green);
   max-height: 320px;
@@ -1020,7 +1021,7 @@ textarea::placeholder {
   font-weight: 500;
 }
 .badge-purple {
-  background: rgba(124, 109, 250, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--accent2);
 }
 .badge-green {
@@ -1033,8 +1034,8 @@ textarea::placeholder {
 }
 
 .info-box {
-  background: rgba(124, 109, 250, 0.08);
-  border: 1px solid rgba(124, 109, 250, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
   font-size: var(--fs-sm);
@@ -1101,7 +1102,7 @@ textarea::placeholder {
 }
 .export-tab.active {
   border-color: var(--accent);
-  background: rgba(124, 109, 250, 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 .tab-icon {
   font-size: 20px;
@@ -1294,7 +1295,7 @@ textarea::placeholder {
 .auto-stage-bar {
   height: 4px;
   background: var(--surface3);
-  border-radius: 2px;
+  border-radius: 0;
   overflow: hidden;
 }
 .auto-stage-fill {
@@ -1468,14 +1469,14 @@ textarea::placeholder {
 }
 .clip-row.drag-over {
   border-color: var(--accent);
-  background: rgba(124, 109, 250, 0.12);
-  box-shadow: 0 0 0 2px rgba(124, 109, 250, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
 }
 .reel-clips.drop-target {
-  background: rgba(124, 109, 250, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   outline: 1px dashed var(--accent);
   outline-offset: -3px;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0;
 }
 
 .clip-grip {
@@ -1586,7 +1587,7 @@ textarea::placeholder {
 /* ── F14 — focused clip ───────────────────────────────────────────── */
 .clip-row.focused {
   border-color: var(--accent2);
-  box-shadow: 0 0 0 2px rgba(124, 109, 250, 0.25);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
 }
 
 /* ── F8 — comparison modal ───────────────────────────────────────── */
@@ -1632,7 +1633,7 @@ textarea::placeholder {
   background: rgba(61, 214, 140, 0.07);
 }
 .diff-a-only {
-  background: rgba(124, 109, 250, 0.08);
+  background: rgba(255, 255, 255, 0.08);
 }
 .diff-b-only {
   background: rgba(245, 166, 35, 0.08);

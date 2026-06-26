@@ -65,8 +65,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (review)
       review.insertAdjacentHTML(
         'afterbegin',
-        `<div style="background:#c0392b;color:#fff;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;">
-        ⚠ Błąd inicjalizacji analizy: ${e.message}<br>
+        `<div style="background:var(--red);color:var(--text-on-light);padding:10px 14px;border-radius:0;margin-bottom:12px;font-size:13px;">
+        Błąd inicjalizacji analizy: ${e.message}<br>
         <small>Otwórz DevTools (Cmd+Option+I) aby zobaczyć szczegóły.</small>
       </div>`,
       );
