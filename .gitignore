@@ -14,3 +14,7 @@ src-tauri/binaries/align_models/
 # FFmpeg sidecar — ~52 MB static binary, fetched by sidecar/fetch-ffmpeg.sh
 src-tauri/binaries/ffmpeg-*
 __pycache__/
+
+# DaVinci Resolve WI plugin (S-09) — build output + git-ignored native bridge
+resolve-plugin/renderer/
+resolve-plugin/WorkflowIntegration.node

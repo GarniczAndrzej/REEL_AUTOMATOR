@@ -18,6 +18,7 @@ import {
 } from '../ai/openrouter-picker.js';
 import { populateVideoMeta } from '../util/video-meta.js';
 import { toast } from './toast.js';
+import { dialogOpen } from '../platform/adapter.js';
 
 /**
  * Wire the settings modal: open/close, API key load/save, model-picker
@@ -201,8 +202,7 @@ function bindPromptTextarea(id, key) {
 // the populated fields afterwards. Mirrors the old export-card browse button.
 async function browseVideoMeta() {
   try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({
+    const path = await dialogOpen({
       filters: [
         {
           name: 'Wideo',

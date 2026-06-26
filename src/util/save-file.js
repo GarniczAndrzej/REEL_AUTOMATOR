@@ -5,6 +5,12 @@
 // a freshly chosen path).
 
 import { toast } from '../ui/toast.js';
+import {
+  invoke,
+  dialogOpen,
+  dialogSave,
+  pathJoin,
+} from '../platform/adapter.js';
 
 /**
  * @param {object} opts
@@ -16,16 +22,14 @@ import { toast } from '../ui/toast.js';
  */
 export async function saveTextToPath({ defaultName, content, filters }) {
   try {
-    const { save } = await import('@tauri-apps/plugin-dialog');
     const ext = (defaultName.split('.').pop() || '').toLowerCase();
-    const path = await save({
+    const path = await dialogSave({
       defaultPath: defaultName,
       filters:
         filters ||
         (ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : undefined),
     });
     if (!path) return false; // user cancelled the dialog
-    const { invoke } = await import('@tauri-apps/api/core');
     await invoke('save_text_file', { path, content });
     return true;
   } catch (e) {
@@ -42,8 +46,7 @@ export async function saveTextToPath({ defaultName, content, filters }) {
  */
 export async function pickFolder() {
   try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const picked = await open({ directory: true, multiple: false });
+    const picked = await dialogOpen({ directory: true, multiple: false });
     return typeof picked === 'string' ? picked : null;
   } catch (e) {
     toast('Nie udało się wybrać folderu: ' + e, 'error');
@@ -59,7 +62,6 @@ export async function pickFolder() {
  */
 export async function openPath(path) {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     await invoke('open_path', { path });
   } catch (e) {
     toast('Nie udało się otworzyć folderu: ' + e, 'error');
@@ -78,9 +80,7 @@ export async function openPath(path) {
  */
 export async function saveTextToFolder({ folder, name, content }) {
   try {
-    const { join } = await import('@tauri-apps/api/path');
-    const path = await join(folder, name);
-    const { invoke } = await import('@tauri-apps/api/core');
+    const path = await pathJoin(folder, name);
     await invoke('save_text_file', { path, content });
     return true;
   } catch (e) {

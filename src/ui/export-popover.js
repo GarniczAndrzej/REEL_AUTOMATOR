@@ -19,6 +19,7 @@ import { saveTextToPath } from '../util/save-file.js';
 import { stripExt } from '../util/filename.js';
 import { toast } from './toast.js';
 import { exportTranscriptSrt, transcriptBase } from './export-srt.js';
+import { isElectron, resolveCapability } from '../platform/adapter.js';
 
 export function init() {
   // Export trigger now lives in the header (next to Settings) and the sidebar
@@ -77,8 +78,36 @@ export function openPopover() {
   // Open at any stage — transcript/.md/prompt export is useful before reels
   // exist; the EDL/XML/Lua buttons each guard on `reelsData` themselves.
   updateSummary();
+  applyResolveFallbackNotice();
   const modal = document.getElementById('exportModal');
   if (modal) modal.style.display = 'flex';
+}
+
+// S-09: inside the DaVinci Resolve WI panel (Electron), when the Resolve
+// scripting API is unavailable (Resolve Free / non-Studio / no open project /
+// missing bridge) the panel falls back to the S-08 file-export set. Surface a
+// one-time Polish notice so the editor knows why the one-click Resolve hand-off
+// isn't offered. No-op under Tauri/browser (no Resolve host → no notice). The
+// Resolve-drive export mode itself lands in Phase 2.
+async function applyResolveFallbackNotice() {
+  if (!isElectron()) return;
+  const body = document.querySelector('#exportModal .modal-body');
+  if (!body || document.getElementById('resolveFallbackNotice')) return;
+  let cap;
+  try {
+    cap = await resolveCapability();
+  } catch {
+    cap = { available: false };
+  }
+  if (cap.available) return; // Studio: API drive available (wired in Phase 2)
+  const note = document.createElement('div');
+  note.id = 'resolveFallbackNotice';
+  note.className = 'info-box';
+  note.style.marginBottom = '16px';
+  note.style.fontSize = '12px';
+  note.textContent =
+    'Brak dostępu do API DaVinci Resolve (Resolve Free lub brak otwartego projektu) — eksport do plików.';
+  body.insertBefore(note, body.firstChild);
 }
 
 function closePopover() {

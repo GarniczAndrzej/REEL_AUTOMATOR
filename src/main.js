@@ -1,4 +1,5 @@
-import { state, subscribe } from './state.js';
+import { state, subscribe, emit } from './state.js';
+import { resolveCapability } from './platform/adapter.js';
 import * as step1 from './ui/step1-import.js';
 import * as step2 from './ui/step2-analyze.js';
 import * as step3 from './ui/export-popover.js';
@@ -50,6 +51,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     await hydrateKeys();
   } catch (e) {
     console.error('[hydrateKeys]', e);
+  }
+
+  // S-09: inside the DaVinci Resolve WI panel (Electron), seed state.fps from the
+  // live Resolve timeline so Modes C/D have the authoritative frame rate before
+  // any export — not the default 25 (state.js). No-op under Tauri/browser (no
+  // Resolve host → capability reports unavailable).
+  try {
+    const cap = await resolveCapability();
+    if (cap.available && cap.fps > 0) {
+      state.fps = cap.fps;
+      emit();
+    }
+  } catch (e) {
+    console.error('[resolveCapability]', e);
   }
 
   try {

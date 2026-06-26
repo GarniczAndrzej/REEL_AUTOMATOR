@@ -9,15 +9,21 @@ import { segmentFromWords } from '../../parser/word-segments.js';
 import { generateTranscriptVTT } from '../../exporters/transcript.js';
 import { getApiKey, setApiKey } from '../../ai/api-key.js';
 import { saveTextToPath } from '../../util/save-file.js';
+import {
+  invoke,
+  dialogOpen,
+  dialogAsk,
+  listen,
+} from '../../platform/adapter.js';
 import { exportTranscriptSrt } from '../export-srt.js';
 import { populateVideoMeta } from '../../util/video-meta.js';
 import {
-  MIN_CHARS,
   renderSegments,
   mergeWordsIntoSentences,
   loadSRTContent,
   escHtml,
 } from './segments.js';
+import { MIN_CHARS } from './constants.js';
 
 // S-07: re-export so the auto-mode orchestrator + batch segment with the same
 // minimum-sentence-length constant the manual transcribe path uses.
@@ -155,7 +161,6 @@ async function refreshEngineReadiness() {
   const el = document.getElementById('engineReadyIndicator');
   if (!el) return;
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     // Pure cache read — never spawns the sidecar (see initModelManager). `null`
     // = no prior verification on this machine for the current engine version.
     const s = await invoke('whisperx_engine_cached');
@@ -186,7 +191,6 @@ async function fullEngineVerify() {
     el.style.color = 'var(--text3)';
   }
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     const s = await invoke('whisperx_engine_check');
     renderEngineBadge(el, s, { authoritative: true });
   } catch (e) {
@@ -203,7 +207,6 @@ async function refreshModelStatus() {
   try {
     const { MODEL_REGISTRY } =
       await import('../../transcription/model-registry.js');
-    const { invoke } = await import('@tauri-apps/api/core');
     const list = await invoke('list_models', {
       // Pass each model's readiness sentinel so non-CT2 models (Cohere →
       // model.safetensors) report "downloaded" correctly; CT2 omits it (Rust
@@ -279,8 +282,7 @@ async function deleteModel(id) {
   const label = model ? model.label : id;
   // Use Tauri's native dialog — window.confirm() does not reliably show a panel
   // in the WKWebView and can resolve without prompting.
-  const { ask } = await import('@tauri-apps/plugin-dialog');
-  const confirmed = await ask(
+  const confirmed = await dialogAsk(
     `Usunąć model „${label}" z dysku? Tej operacji nie można cofnąć.`,
     {
       title: 'Usuń model',
@@ -291,7 +293,6 @@ async function deleteModel(id) {
   );
   if (!confirmed) return;
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     await invoke('delete_model', { modelId: id });
     if (state.modelId === id) {
       state.modelId = '';
@@ -339,7 +340,6 @@ async function downloadModel(id) {
 
   let unlisten;
   try {
-    const { listen } = await import('@tauri-apps/api/event');
     unlisten = await listen('model-download-progress', (e) => {
       if (e.payload.modelId !== id) return;
       const { percent, bytesPerSec, etaSec } = e.payload;
@@ -349,7 +349,6 @@ async function downloadModel(id) {
         progEl.textContent = `${Math.round(percent)}% · ${mb} MB/s · ETA ${eta}`;
       }
     });
-    const { invoke } = await import('@tauri-apps/api/core');
     // Gated repos (Cohere) need a Bearer HF token; reuse the diarization HF-token
     // value. Public CT2 models pass null → no Authorization header (unchanged).
     const hfToken = model.gated ? getApiKey('huggingface') || null : null;
@@ -381,7 +380,6 @@ async function cancelTranscribe() {
   document.getElementById('cancelTranscribeBtn').style.display = 'none';
   syncTranscribeBtn();
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     await invoke('cancel_transcription');
   } catch (e) {
     // ignore
@@ -633,8 +631,7 @@ export async function alignToWords(opts = {}) {
   // progress box. NEVER window.confirm — it hard-crashes the WKWebView (see
   // context/foundation/lessons.md); use the async plugin-dialog ask().
   if (opts.confirm) {
-    const { ask } = await import('@tauri-apps/plugin-dialog');
-    const proceed = await ask(
+    const proceed = await dialogAsk(
       'Brak słów na poziomie ramek. Dopasowanie napisów do audio może potrwać 37–67 s przy pierwszym uruchomieniu. Kontynuować?',
       {
         title: 'Dopasuj do audio',
@@ -655,12 +652,10 @@ export async function alignToWords(opts = {}) {
 
   let unlisten;
   try {
-    const { listen } = await import('@tauri-apps/api/event');
     unlisten = await listen('transcribe-progress', (e) => {
       const { label, percent } = e.payload;
       setWhisperProgress(label, percent);
     });
-    const { invoke } = await import('@tauri-apps/api/core');
     const result = await invoke('align_transcript', {
       videoPath,
       transcript: state.srtContent,
@@ -729,8 +724,7 @@ async function exportTranscriptVTT() {
 
 async function browseWhisperVideo() {
   try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({
+    const path = await dialogOpen({
       filters: [
         {
           name: 'Wideo',
@@ -797,7 +791,6 @@ export async function transcribeDocument(
   const resolvedLanguage =
     kind === 'cohere-transformers' && language === 'auto' ? 'pl' : language;
 
-  const { invoke } = await import('@tauri-apps/api/core');
   // Route an external abort to the global single-reaper cancel (there is no
   // AbortSignal threaded through the Rust invoke — cancellation is a side-channel
   // command + atomic flag).
@@ -812,7 +805,6 @@ export async function transcribeDocument(
   let unlisten;
   try {
     if (onProgress) {
-      const { listen } = await import('@tauri-apps/api/event');
       unlisten = await listen('transcribe-progress', (e) => {
         const { label, percent } = e.payload;
         onProgress(label, percent);

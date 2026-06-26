@@ -7,14 +7,16 @@
 import { state, emit } from '../../state.js';
 import { parseSRT, parseVTT } from '../../parser/srt.js';
 import { saveTextToPath } from '../../util/save-file.js';
+import { MIN_CHARS } from './constants.js';
 import { syncAlignBtn } from './transcribe.js';
 import { toast } from '../toast.js';
 
-// Minimum sentence length (chars) for SRT/VTT/word segmentation. Formerly a
-// rarely-touched UI knob (pruned in S-16, #7) but kept as a module-level
-// constant so the parser signatures (`src/parser/*`, no-touch zone) keep
-// receiving it.
-export const MIN_CHARS = 20;
+// MIN_CHARS now lives in the dependency-free leaf ./constants.js (imported above)
+// and is re-exported here so existing consumers keep importing it from the
+// import-section barrel. Moving the declaration out of this module breaks the
+// temporal-dead-zone crash the segments.js <-> transcribe.js cycle caused in the
+// production bundle (S-09); see ./constants.js.
+export { MIN_CHARS };
 
 export function initSegments() {
   const srtFileInput = document.getElementById('srtFile');

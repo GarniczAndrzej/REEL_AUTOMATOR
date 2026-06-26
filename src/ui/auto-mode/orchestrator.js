@@ -40,6 +40,7 @@ import {
   pickFolder,
   saveTextToFolder,
 } from '../../util/save-file.js';
+import { invoke } from '../../platform/adapter.js';
 
 // Top-level run guard: only one auto-pipeline at a time. The individual stages
 // have their own guards, but a second LAUNCH must be rejected, not parallelised.
@@ -65,7 +66,6 @@ export class AutoRunController {
     if (stageId === 'transcribe') {
       // Upstream cancel aborts the whole run — downstream stages have no input.
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         await invoke('cancel_transcription');
       } catch (e) {
         /* best-effort; the driver poll-loop reaps on the next tick */

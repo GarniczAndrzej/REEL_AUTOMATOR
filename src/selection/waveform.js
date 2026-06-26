@@ -1,3 +1,5 @@
+import { invoke } from '../platform/adapter.js';
+
 // In-memory cache: sentenceId → Float32Array of RMS peaks
 const cache = new Map();
 
@@ -18,7 +20,6 @@ export async function loadWaveform(
 ) {
   if (cache.has(sentenceId)) return cache.get(sentenceId);
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     const raw = await invoke('extract_waveform', {
       videoPath,
       startS,

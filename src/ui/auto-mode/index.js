@@ -15,6 +15,7 @@ import {
 import { validateSelection } from './config.js';
 import { runBatch } from './batch.js';
 import { toast } from '../toast.js';
+import { dialogAsk } from '../../platform/adapter.js';
 
 export function initAutoMode() {
   const btn = document.getElementById('autoModeBtn');
@@ -60,8 +61,7 @@ async function launchAutoRun() {
   // would overwrite existing reels — text-only / export-only runs don't touch
   // them.
   if (state.autoMode.stages.analysis && state.reelsData.length) {
-    const { ask } = await import('@tauri-apps/plugin-dialog');
-    const proceed = await ask(
+    const proceed = await dialogAsk(
       'Istnieją już reelsy. Nadpisać je nowym biegiem automatycznym?',
       {
         title: 'Tryb automatyczny',

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:resolve": "vite build --config vite.electron.config.js",
     "preview": "vite preview",
     "tauri": "tauri"
   },

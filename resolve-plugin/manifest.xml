@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BlackmagicDesign>
+    <Plugin>
+        <Id>com.brave.reelsautomator</Id>
+        <Name>Reels Automator</Name>
+        <Version>0.1.0</Version>
+        <Description>Eksport reelsów do osi czasu DaVinci Resolve</Description>
+        <FilePath>main.js</FilePath>
+    </Plugin>
+</BlackmagicDesign>

@@ -12,6 +12,7 @@
 // and nothing new is ever written to plaintext.
 
 import { toast } from '../ui/toast.js';
+import { getInvoke } from '../platform/adapter.js';
 
 const STORAGE_PREFIX = 'edl_apikey_';
 
@@ -20,19 +21,6 @@ const PROVIDERS = ['openrouter', 'huggingface'];
 
 /** provider → key string. Hydrated at boot; the source of truth for reads. */
 const cache = new Map();
-
-/**
- * Lazily import the Tauri `invoke`. Mirrors `src/ai/cache.js`'s pattern.
- * @returns {Promise<((cmd: string, args?: object) => Promise<any>) | null>}
- */
-async function tauriInvoke() {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke;
-  } catch {
-    return null; // not in Tauri
-  }
-}
 
 /**
  * Read a stored API key for a provider. Synchronous — serves from the cache
@@ -55,7 +43,7 @@ export function getApiKey(provider) {
  */
 export async function setApiKey(provider, key) {
   cache.set(provider, key);
-  const invoke = await tauriInvoke();
+  const invoke = await getInvoke();
   if (!invoke) return; // browser dev: cache-only, never write plaintext
   try {
     await invoke('set_credential', { provider, secret: key });
@@ -76,7 +64,7 @@ export async function setApiKey(provider, key) {
  * @returns {Promise<void>}
  */
 export async function hydrateKeys() {
-  const invoke = await tauriInvoke();
+  const invoke = await getInvoke();
 
   // Browser dev (no Keychain): seed the cache from localStorage read-only so a
   // session works; never delete the plaintext (it's the only store here).

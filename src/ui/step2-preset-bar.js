@@ -12,6 +12,7 @@ import {
 } from '../ai/prompt-presets.js';
 import { toast } from './toast.js';
 import { saveTextToPath } from '../util/save-file.js';
+import { invoke, dialogOpen, dialogAsk } from '../platform/adapter.js';
 
 /** @typedef {import('../ai/prompt-presets.js').PromptPreset} PromptPreset - re-exported for callers */
 
@@ -203,14 +204,12 @@ async function exportPresets() {
  */
 async function importPresets() {
   try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({
+    const path = await dialogOpen({
       filters: [{ name: 'JSON', extensions: ['json'] }],
       multiple: false,
     });
     if (!path) return;
 
-    const { invoke } = await import('@tauri-apps/api/core');
     const raw = await invoke('load_text_file', { path });
 
     let parsed;
@@ -295,8 +294,7 @@ function promptNative(message, defaultValue = '') {
  */
 async function confirmNative(message, title = 'Potwierdź') {
   try {
-    const { ask } = await import('@tauri-apps/plugin-dialog');
-    return await ask(message, {
+    return await dialogAsk(message, {
       title,
       kind: 'warning',
       okLabel: 'Usuń',

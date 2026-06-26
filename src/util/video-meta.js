@@ -5,6 +5,7 @@
 // state value at its current/editable default — a probe never blocks an import.
 
 import { state } from '../state.js';
+import { invoke } from '../platform/adapter.js';
 
 // The fps picker only offers discrete options; snap a fractional probe (23.976,
 // 29.97, 59.94) to the nearest supported integer rate.
@@ -35,7 +36,6 @@ export async function populateVideoMeta(path) {
   state.videoPath = path;
   state.videoFilename = path.split('/').pop().split('\\').pop();
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     const meta = await invoke('probe_video_metadata', { path });
     if (meta && typeof meta.fps === 'number' && meta.fps > 0) {
       state.fps = snapFps(meta.fps);

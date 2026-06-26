@@ -28,6 +28,7 @@ import { generateXML } from '../../exporters/xml.js';
 import { generateLua } from '../../exporters/lua.js';
 import { pickFolder, saveTextToFolder } from '../../util/save-file.js';
 import { showPanel, updateStage, showOpenFolder } from './progress-panel.js';
+import { invoke, dialogOpen } from '../../platform/adapter.js';
 
 // Top-level batch guard, symmetric with the orchestrator's single-run guard. A
 // second launch while a batch (or single run) is live is rejected, not parallelised.
@@ -62,7 +63,6 @@ class BatchController {
   async cancelStage(stageId) {
     if (stageId === 'transcribe') {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         await invoke('cancel_transcription');
       } catch (e) {
         /* best-effort; the driver poll-loop reaps on the next tick */
@@ -81,8 +81,7 @@ class BatchController {
 export async function addVideosToBatch() {
   if (state.autoMode.running) return;
   try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const picked = await open({
+    const picked = await dialogOpen({
       multiple: true,
       filters: [
         {

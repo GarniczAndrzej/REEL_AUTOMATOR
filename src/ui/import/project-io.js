@@ -4,6 +4,7 @@
 
 import { state, emit } from '../../state.js';
 import { toast } from '../toast.js';
+import { invoke, dialogOpen, dialogSave } from '../../platform/adapter.js';
 import { escHtml } from './segments.js';
 import { renderModelManager } from './transcribe.js';
 import { stampAiOrder } from '../step2-reel-list.js';
@@ -26,12 +27,10 @@ let currentProjectPath = null;
 
 async function openProject() {
   try {
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const path = await open({
+    const path = await dialogOpen({
       filters: [{ name: 'Reelproj', extensions: ['reelproj'] }],
     });
     if (!path) return;
-    const { invoke } = await import('@tauri-apps/api/core');
     const data = await invoke('load_project', { path });
     applyProjectData(data);
     currentProjectPath = path;
@@ -51,8 +50,7 @@ async function saveProject() {
 
 async function saveProjectAs() {
   try {
-    const { save } = await import('@tauri-apps/plugin-dialog');
-    const path = await save({
+    const path = await dialogSave({
       filters: [{ name: 'Reelproj', extensions: ['reelproj'] }],
     });
     if (!path) return;
@@ -66,7 +64,6 @@ async function saveProjectAs() {
 
 async function writeProject(path) {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
     const payload = {
       // v5 (S-16) drops the consolidated/removed keys: the duplicate per-export
       // filename (folded into videoFilename), the min-sentence-length knob (now
