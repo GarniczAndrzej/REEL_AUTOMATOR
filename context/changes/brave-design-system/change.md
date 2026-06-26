@@ -1,9 +1,9 @@
 ---
 change_id: brave-design-system
 title: Brave design system
-status: implementing
+status: implemented
 created: 2026-06-25
-updated: 2026-06-25
+updated: 2026-06-26
 archived_at: null
 ---
 

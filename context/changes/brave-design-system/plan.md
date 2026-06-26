@@ -378,10 +378,10 @@ None — purely presentational. No `.reelproj` schema, state, or stored-data cha
 
 #### Automated
 
-- [x] 2.1 Regression suite passes
-- [x] 2.2 No purple literals remain in CSS
-- [x] 2.3 No purple literals remain in JS
-- [x] 2.4 No `#c0392b` remains
+- [x] 2.1 Regression suite passes — 39bb7cc
+- [x] 2.2 No purple literals remain in CSS — 39bb7cc
+- [x] 2.3 No purple literals remain in JS — 39bb7cc
+- [x] 2.4 No `#c0392b` remains — 39bb7cc
 
 #### Manual
 
@@ -395,8 +395,8 @@ None — purely presentational. No `.reelproj` schema, state, or stored-data cha
 
 #### Automated
 
-- [x] 3.1 App builds without errors
-- [x] 3.2 No text-logo string remains in the header `.logo` block
+- [x] 3.1 App builds without errors — 39bb7cc
+- [x] 3.2 No text-logo string remains in the header `.logo` block — 39bb7cc
 
 #### Manual
 
