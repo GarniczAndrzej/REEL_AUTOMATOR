@@ -3,5 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "description": "DaVinci Resolve Workflow Integration panel for Reels Automator (S-09). Embeds the shared src/ frontend and drives the Resolve scripting API.",
-  "main": "main.js"
+  "main": "main.js",
+  "build": {
+    "appId": "com.brave.reelsautomator",
+    "productName": "Reels Automator",
+    "asar": true,
+    "files": ["main.js", "preload.js", "manifest.xml", "backend/**/*", "renderer/**/*", "WorkflowIntegration.node"],
+    "extraResources": [
+      { "from": "../src-tauri/binaries/align_models", "to": "align_models" },
+      {
+        "from": "../src-tauri/binaries",
+        "to": ".",
+        "filter": ["whisperx-engine-*", "ffmpeg-*"]
+      }
+    ],
+    "mac": {
+      "hardenedRuntime": true,
+      "target": ["dir"]
+    }
+  }
 }

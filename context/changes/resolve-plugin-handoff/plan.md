@@ -713,24 +713,24 @@ native module must be individually signed before notarization succeeds.
 
 - [x] 3.3 Transcript appears on a Subtitles track in one click — caa5d5a
 - [x] 3.4 Subtitle timings align with media (0-based, no offset) — caa5d5a
-- [x] 3.5 Word-level and sentence-level variants both import correctly
-- [x] 3.6 Documented whether a direct subtitle API exists in the target Resolve version
+- [x] 3.5 Word-level and sentence-level variants both import correctly — 61757eb
+- [x] 3.6 Documented whether a direct subtitle API exists in the target Resolve version — 61757eb
 
 ### Phase 4: Mode B — WhisperX Sidecar Port (In-Panel Transcription)
 
 #### Automated
 
-- [ ] 4.1 Regression suite green
-- [ ] 4.2 `node --check` on all `resolve-plugin/backend/*.js`
-- [ ] 4.3 Engine readiness cached-read returns a verdict
+- [x] 4.1 Regression suite green
+- [x] 4.2 `node --check` on all `resolve-plugin/backend/*.js`
+- [x] 4.3 Engine readiness cached-read returns a verdict
 
 #### Manual
 
-- [ ] 4.4 In-panel transcription of an imported file produces SRT + word timestamps with inline progress
-- [ ] 4.5 Word-level alignment correct (≈0% mid-word cuts)
-- [ ] 4.6 Cancel mid-run terminates the engine, no orphaned torch process
-- [ ] 4.7 Second identical run hits the cache and returns instantly
-- [ ] 4.8 Model download/delete works with progress; opt-in diarization runs with an HF token
+- [x] 4.4 In-panel transcription of an imported file produces SRT + word timestamps with inline progress
+- [x] 4.5 Word-level alignment correct (≈0% mid-word cuts)
+- [x] 4.6 Cancel mid-run terminates the engine, no orphaned torch process
+- [x] 4.7 Second identical run hits the cache and returns instantly
+- [x] 4.8 Model download/delete works with progress; opt-in diarization runs with an HF token
 
 ### Phase 5: Mode A — Auto-Collect Timeline Audio
 

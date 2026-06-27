@@ -20,6 +20,12 @@ const textFile = require('./backend/text-file');
 const llmCache = require('./backend/llm-cache');
 const credentials = require('./backend/credentials');
 const openPath = require('./backend/open-path');
+const events = require('./backend/events');
+const whisper = require('./backend/whisper');
+const models = require('./backend/models');
+const engine = require('./backend/engine');
+const waveform = require('./backend/waveform');
+const metadata = require('./backend/metadata');
 
 // ── Native Resolve bridge ────────────────────────────────────────────────────
 // Bundled per-OS beside main.js. Absent on a fresh checkout/worktree (git-ignored,
@@ -71,6 +77,25 @@ const handlers = {
   // Mode C: current timeline In/Out marks (frame offsets) so the renderer can
   // push only the cues inside the selected range
   resolve_timeline_inout: () => resolve.timelineInOut(),
+  // ── Mode B (Phase 4): WhisperX in-panel transcription ──────────────────────
+  // whisper.rs — transcription, forced alignment, cancel (single global child +
+  // SIGTERM→300ms→SIGKILL reaper; progress via the transcribe-progress event)
+  transcribe_video: (args) => whisper.transcribeVideo(args),
+  align_transcript: (args) => whisper.alignTranscript(args),
+  cancel_transcription: () => whisper.cancelTranscription(),
+  // engine.rs — readiness (cached read on the launch path; --selftest/--capability
+  // spawn only on explicit user action)
+  whisperx_engine_check: () => engine.whisperxEngineCheck(),
+  whisperx_engine_capability: () => engine.whisperxEngineCapability(),
+  whisperx_engine_cached: () => engine.whisperxEngineCached(),
+  // models.rs — model manager (download emits model-download-progress)
+  list_models: (args) => models.listModels(args),
+  download_model: (args) => models.downloadModel(args),
+  delete_model: (args) => models.deleteModel(args),
+  // waveform.rs — clip-trim waveform peaks
+  extract_waveform: (args) => waveform.extractWaveform(args),
+  // metadata.rs — source fps/resolution probe (auto-populate on import)
+  probe_video_metadata: (args) => metadata.probeVideoMetadata(args),
 };
 
 function registerIpc() {
@@ -144,6 +169,10 @@ function createWindow() {
   // spawns a fresh instance (matches the Resolve SDK SamplePlugin; avoids a
   // lingering zombie process on macOS).
   mainWindow.on('close', () => app.quit());
+  // Route backend progress events (transcribe-progress, model-download-progress)
+  // to this panel's renderer — the Electron analog of Tauri's app.emit().
+  events.setSender(mainWindow.webContents);
+  mainWindow.on('closed', () => events.setSender(null));
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
