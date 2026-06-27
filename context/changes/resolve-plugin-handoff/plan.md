@@ -583,6 +583,19 @@ runs inside Resolve before starting packaging.
 
 ## Phase 6: Packaging — Signing + Notarization (macOS)
 
+> **2026-06-27 DESCOPED (user-directed).** The user needs the plugin for personal /
+> cross-device use only — no Apple Developer ID cert or notarization required.
+> Locally-built files carry no `com.apple.quarantine` flag; files moved via
+> AirDrop/iCloud get it, cleared with `xattr -dr com.apple.quarantine "<plugin dir>"`.
+> **Packaging-model ground truth (from the shipping Snap-Captions plugin):** a WI
+> plugin is a **plain folder Resolve hosts** (HTML/JS + per-arch
+> `WorkflowIntegration*.node` + the Node backend) — **NOT a standalone Electron app**;
+> Resolve provides the runtime, so there is no `.app` to sign and the original
+> `electron-builder` `build` block was aspirational. Replaced the signing pipeline
+> with `sidecar/install-resolve-plugin.sh` (build renderer → rsync the plugin folder
+> into the WI plugins dir → `binaries` symlink to the repo sidecars → clear
+> quarantine). Progress rows 6.1–6.6 below are struck through (descoped), not `[x]`.
+
 ### Overview
 
 Sign the Electron app + the native `WorkflowIntegration.node` + the bundled sidecars, notarize the
@@ -752,26 +765,28 @@ native module must be individually signed before notarization succeeds.
 
 #### Automated
 
-- [x] 5.1 Regression suite green
-- [x] 5.2 `node --check resolve-plugin/backend/resolve.js`
+- [x] 5.1 Regression suite green — 7f6fcf4
+- [x] 5.2 `node --check resolve-plugin/backend/resolve.js` — 7f6fcf4
 
 #### Manual
 
-- [x] 5.3 "Z osi czasu Resolve" button (Resolve panel only) collects timeline audio on click, no file picker
-- [x] 5.4 Render-to-file captures the timeline mix (edited timeline) and honors the In/Out range
-- [x] 5.5 Render-to-file unavailable → user keeps manual file import + Polish notice (no source-clip decode)
-- [x] 5.6 Collected audio feeds Mode B transcription end-to-end inside the panel
+- [x] 5.3 "Z osi czasu Resolve" button (Resolve panel only) collects timeline audio on click, no file picker — 7f6fcf4
+- [x] 5.4 Render-to-file captures the timeline mix (edited timeline) and honors the In/Out range — 7f6fcf4
+- [x] 5.5 Render-to-file unavailable → user keeps manual file import + Polish notice (no source-clip decode) — 7f6fcf4
+- [x] 5.6 Collected audio feeds Mode B transcription end-to-end inside the panel — 7f6fcf4
 
 ### Phase 6: Packaging — Signing + Notarization (macOS)
 
+> DESCOPED 2026-06-27 (personal use, no notarization) — rows below are struck through, not `[x]`. See the Phase 6 overview note. Install via `sidecar/install-resolve-plugin.sh`.
+
 #### Automated
 
-- [ ] 6.1 `codesign --verify --deep --strict` passes on the bundle
-- [ ] 6.2 `spctl -a -vv` / notarization staple validates
-- [ ] 6.3 Regression suite green
+- [ ] ~~6.1 `codesign --verify --deep --strict` passes on the bundle~~ — DESCOPED
+- [ ] ~~6.2 `spctl -a -vv` / notarization staple validates~~ — DESCOPED
+- [ ] ~~6.3 Regression suite green~~ — DESCOPED (suite stays green; verified continuously through Phases 1–5)
 
 #### Manual
 
-- [ ] 6.4 Signed + notarized plugin loads from the WI plugins dir on a clean macOS machine
-- [ ] 6.5 All four modes function under the signed/sandboxed build
-- [ ] 6.6 Gatekeeper raises no warning on first launch
+- [ ] ~~6.4 Signed + notarized plugin loads from the WI plugins dir on a clean macOS machine~~ — DESCOPED (folder-plugin installs via `sidecar/install-resolve-plugin.sh`; quarantine cleared in-script)
+- [ ] ~~6.5 All four modes function under the signed/sandboxed build~~ — DESCOPED (all four modes verified live in Phases 1–5)
+- [ ] ~~6.6 Gatekeeper raises no warning on first launch~~ — DESCOPED (locally-built/installed copy is unquarantined)
