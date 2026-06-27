@@ -225,3 +225,20 @@ export async function resolveTimelineInOut() {
     return null;
   }
 }
+
+/**
+ * Mode A (S-09 Phase 5): render the active Resolve timeline's audio MIX to a temp
+ * wav for in-panel transcription — the only auto-collect path (it captures the
+ * real timeline mix; we never blind-decode source clips). Resolves
+ * `{ ok: false }` when the render route is unavailable or fails, so the caller
+ * degrades to the manual file-import path. Electron WI host only — guarded by the
+ * caller on `resolveCapability().available`.
+ * @returns {Promise<{ ok: boolean, path?: string, reason?: string }>}
+ */
+export async function resolveCollectTimelineAudio() {
+  try {
+    return await invoke('resolve_collect_timeline_audio', {});
+  } catch {
+    return { ok: false, reason: 'error' };
+  }
+}

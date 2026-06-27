@@ -19,6 +19,15 @@ const path = require('path');
 
 const PLUGIN_ID = 'com.brave.reelsautomator';
 
+// Render preset Mode A loads to export timeline audio as QuickTime / AAC 320 kbps
+// CBR / 48 kHz. Only the Resolve UI can author AAC + CBR + bitrate (the scripting
+// API has no key for them — verified against the API docs), so the preset is
+// authored once in the UI; user render presets are GLOBAL across projects on a
+// machine, so LoadRenderPreset(name) then works in every project. When the preset
+// isn't installed yet we auto-import a bundled copy (`resolve-plugin/presets/`).
+// Matched leniently by name (the bundled export is "Automator Render").
+const RENDER_PRESET_RE = /automator/i;
+
 let WI = null;
 let resolveApp = null;
 let projectManager = null;
@@ -324,6 +333,314 @@ async function timelineInOut() {
   }
 }
 
+// ── Mode A — collect active-timeline audio (S-09 Phase 5) ─────────────────────
+//
+// On the "Z osi czasu Resolve" button click we render the ACTIVE TIMELINE's audio
+// MIX to a temp wav via the Resolve render API and feed it to the Phase-4
+// transcription engine — no manual file picker. Render-to-file is the ONLY
+// collect path: it captures the real timeline mix. We deliberately do NOT fall
+// back to decoding Media-Pool source clips — on an edited/multi-clip timeline that
+// yields source audio (wrong/partial transcription) with ambiguous clip order.
+// When the render route is unavailable or fails, Mode A degrades to the existing
+// manual file-import path (the renderer shows a Polish notice); it never silently
+// decodes source media.
+//
+// The render honors the user's timeline In/Out marks (render only that range);
+// with no marks set it renders the whole timeline. We render only OUR job (added,
+// started by id, deleted in `finally`) and never touch the user's existing render
+// queue (no DeleteAllRenderJobs).
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Find Resolve's built-in **"Audio Only"** render preset by its human-readable
+ * name (case-insensitive) from the project's render-preset list, or null. Resolve
+ * ships this factory preset on every install, so it's the guaranteed Linear-PCM
+ * fallback. Never throws.
+ * @param {any} project
+ * @returns {Promise<string|null>}
+ */
+async function findBuiltinAudioOnlyPreset(project) {
+  try {
+    const l = await project.GetRenderPresetList();
+    const names = Array.isArray(l) ? l.map(String) : [];
+    return names.find((p) => /audio[\s_]*only/i.test(p)) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the user's timeline In/Out into ABSOLUTE render MarkIn/MarkOut frames,
+ * or null to render the whole timeline (no In/Out set / API absent). `GetMarkInOut`
+ * may report 0-based offsets from the timeline origin OR absolute timeline frames
+ * depending on the Resolve version, while render MarkIn/MarkOut are absolute
+ * timeline frames — so we detect the basis against `GetStartFrame`/`GetEndFrame`
+ * and normalize. Never throws.
+ * @param {any} timeline
+ * @returns {Promise<{ markIn: number, markOut: number } | null>}
+ */
+async function timelineRenderRange(timeline) {
+  try {
+    if (typeof timeline.GetMarkInOut !== 'function') return null;
+    const mark = await timeline.GetMarkInOut();
+    const v = mark && (mark.video || mark.audio);
+    // Resolve OMITS the `in` field when the In point sits at frame 0 (observed
+    // live: `{video:{out:9792}}`), so a missing `in` means 0, not "no range".
+    if (!v || typeof v.out !== 'number') return null;
+    const inOff = typeof v.in === 'number' ? v.in : 0;
+    if (inOff < 0 || v.out < 0 || v.out < inOff) return null;
+
+    const startRaw =
+      typeof timeline.GetStartFrame === 'function'
+        ? Number(await timeline.GetStartFrame())
+        : 0;
+    const endRaw =
+      typeof timeline.GetEndFrame === 'function'
+        ? Number(await timeline.GetEndFrame())
+        : 0;
+    const start = Number.isFinite(startRaw) && startRaw > 0 ? startRaw : 0;
+    const end = Number.isFinite(endRaw) && endRaw > start ? endRaw : 0;
+
+    // Already absolute when the marks sit inside [start, end] (and start > 0);
+    // otherwise treat them as offsets from the timeline origin and add `start`.
+    const looksAbsolute = start > 0 && inOff >= start && (!end || v.out <= end);
+    const markIn = looksAbsolute ? inOff : start + inOff;
+    const markOut = looksAbsolute ? v.out : start + v.out;
+    return { markIn, markOut };
+  } catch {
+    return null;
+  }
+}
+
+/** Newest file in `dir` whose name starts with `prefix` (absolute path), or null. */
+function newestMatch(dir, prefix) {
+  try {
+    const entries = fs
+      .readdirSync(dir)
+      .filter((n) => n.startsWith(prefix))
+      .map((n) => {
+        const p = path.join(dir, n);
+        let mtime = 0;
+        try {
+          mtime = fs.statSync(p).mtimeMs;
+        } catch {
+          /* skip unreadable entry */
+        }
+        return { p, mtime };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    return entries.length ? entries[0].p : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Absolute path to the bundled "Automator" render-preset file, or null. */
+function bundledPresetFile() {
+  try {
+    const dir = path.join(__dirname, '..', 'presets');
+    const hit = fs.readdirSync(dir).find((n) => RENDER_PRESET_RE.test(n));
+    return hit ? path.join(dir, hit) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensure the "Automator" render preset is available and return its exact name (or
+ * null when it can't be made available). User render presets are global across
+ * projects, so a one-time UI authoring shows up everywhere; if it isn't installed
+ * on this machine yet, auto-import the bundled copy. NOTE: both LoadRenderPreset
+ * and ImportRenderPreset RESET the render settings, so the caller must run this
+ * BEFORE `SetRenderSettings`.
+ * @param {any} project
+ * @returns {Promise<string|null>}
+ */
+async function ensureRenderPreset(project) {
+  const listNames = async () => {
+    try {
+      const l = await project.GetRenderPresetList();
+      return Array.isArray(l) ? l.map(String) : [];
+    } catch {
+      return [];
+    }
+  };
+  const find = (names) => names.find((p) => RENDER_PRESET_RE.test(p)) || null;
+
+  let found = find(await listNames());
+  if (found) return found;
+
+  // Not installed on this machine — import the bundled preset file once.
+  const presetFile = bundledPresetFile();
+  if (presetFile) {
+    const importer =
+      typeof project.ImportRenderPreset === 'function'
+        ? project
+        : resolveApp && typeof resolveApp.ImportRenderPreset === 'function'
+          ? resolveApp
+          : null;
+    if (importer) {
+      try {
+        await importer.ImportRenderPreset(presetFile);
+      } catch {
+        /* import failed — caller falls back to the built-in Audio Only preset */
+      }
+      found = find(await listNames());
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Render the active timeline's audio mix to a temp file (QuickTime/AAC via the
+ * "Automator" render preset). Returns the absolute path on success; on any
+ * unavailability/failure returns `{ ok: false, reason }` so the renderer degrades
+ * to manual file import (never a blind source-clip decode).
+ * @returns {Promise<{ ok: true, path: string } | { ok: false, reason: string }>}
+ */
+async function collectTimelineAudio() {
+  if (!available || !projectManager)
+    return { ok: false, reason: 'unavailable' };
+  let project = null;
+  let jobId = null;
+  try {
+    project = await projectManager.GetCurrentProject();
+    if (!project) return { ok: false, reason: 'no-project' };
+    const timeline =
+      typeof project.GetCurrentTimeline === 'function'
+        ? await project.GetCurrentTimeline()
+        : null;
+    if (!timeline) return { ok: false, reason: 'no-timeline' };
+
+    // The render API must be present in this WI scripting scope; if not, degrade
+    // to manual import rather than guess at a source-clip decode.
+    if (
+      typeof project.SetRenderSettings !== 'function' ||
+      typeof project.AddRenderJob !== 'function' ||
+      typeof project.StartRendering !== 'function'
+    ) {
+      return { ok: false, reason: 'no-render-api' };
+    }
+
+    const tlName =
+      (typeof timeline.GetName === 'function' && (await timeline.GetName())) ||
+      'timeline';
+    const safeName = String(tlName).replace(/[^A-Za-z0-9_-]/g, '_');
+    const targetDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), 'reels-audio-'),
+    );
+    const customName = `reels_${safeName}_${Date.now()}`;
+
+    // Format/codec come from the "Automator" render preset (QuickTime / AAC 320 kbps
+    // CBR / 48 kHz) — only the UI can author AAC+CBR+bitrate, so we load the preset
+    // rather than set them via scripting. LoadRenderPreset must run BEFORE
+    // SetRenderSettings (it resets settings); SetRenderSettings below then overrides
+    // only target/range.
+    const presetName = await ensureRenderPreset(project);
+    let presetLoaded = false;
+    if (presetName && typeof project.LoadRenderPreset === 'function') {
+      presetLoaded = (await project.LoadRenderPreset(presetName)) === true;
+    }
+
+    // Fallback when "Automator" isn't installed: Resolve's built-in **"Audio Only"**
+    // preset, which renders Linear PCM (the path that worked before AAC was
+    // requested) — a factory preset present on every install. The delivered file is
+    // Linear PCM instead of AAC, but transcription is unaffected (it re-extracts to
+    // 16 kHz mono regardless).
+    if (!presetLoaded) {
+      const audioOnly = await findBuiltinAudioOnlyPreset(project);
+      if (audioOnly && typeof project.LoadRenderPreset === 'function') {
+        presetLoaded = (await project.LoadRenderPreset(audioOnly)) === true;
+      }
+    }
+
+    // Honor the user's In/Out marks — render only that range; render the whole
+    // timeline only when no In/Out is set.
+    const range = await timelineRenderRange(timeline);
+
+    // Override only target + range with documented keys (TargetDir, CustomName,
+    // ExportVideo/Audio, range) so the dict is never rejected. Format/codec/bitrate/
+    // sample-rate come from the loaded preset; ExportVideo:false is insurance that
+    // no video is encoded.
+    const renderSettings = {
+      TargetDir: targetDir,
+      CustomName: customName,
+      ExportVideo: false,
+      ExportAudio: true,
+    };
+    if (range) {
+      renderSettings.SelectAllFrames = false;
+      renderSettings.MarkIn = range.markIn;
+      renderSettings.MarkOut = range.markOut;
+    } else {
+      renderSettings.SelectAllFrames = true;
+    }
+    await project.SetRenderSettings(renderSettings);
+
+    // Last resort only (neither preset loaded): nudge the sample rate to 48 kHz on
+    // whatever the project's current format is. Skipped when a preset loaded (it
+    // already owns the audio spec).
+    if (!presetLoaded) {
+      try {
+        await project.SetRenderSettings({ AudioSampleRate: 48000 });
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    jobId = await project.AddRenderJob();
+    if (!jobId) return { ok: false, reason: 'no-render-job' };
+
+    const started = await project.StartRendering(jobId);
+    if (started === false) return { ok: false, reason: 'render-start-failed' };
+
+    // Poll until the render finishes. Cap the wait so a stuck job can't hang the
+    // panel forever — audio-only renders complete quickly (600 × 500 ms = 5 min).
+    for (let i = 0; i < 600; i++) {
+      const inProgress =
+        typeof project.IsRenderingInProgress === 'function'
+          ? await project.IsRenderingInProgress()
+          : false;
+      if (!inProgress) break;
+      await sleep(500);
+    }
+
+    if (typeof project.GetRenderJobStatus === 'function') {
+      const status = await project.GetRenderJobStatus(jobId);
+      const js = status && status.JobStatus;
+      if (js && js !== 'Complete') {
+        return { ok: false, reason: 'render-' + String(js).toLowerCase() };
+      }
+    }
+
+    const out = newestMatch(targetDir, customName);
+    if (!out) return { ok: false, reason: 'output-missing' };
+
+    // The preset produced the QuickTime/AAC file directly — feed it straight to the
+    // Phase-4 transcription engine (which re-extracts to 16 kHz mono regardless).
+    return { ok: true, path: out };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: 'error',
+      message: String((e && e.message) || e),
+    };
+  } finally {
+    // Remove only OUR job — never the user's other queued renders.
+    if (jobId && project && typeof project.DeleteRenderJob === 'function') {
+      try {
+        await project.DeleteRenderJob(jobId);
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+  }
+}
+
 // ── Accessors for the Mode C/A drive code (later phases) ──────────────────────
 function getResolve() {
   return resolveApp;
@@ -342,6 +659,7 @@ module.exports = {
   createReels,
   importSubtitles,
   timelineInOut,
+  collectTimelineAudio,
   getResolve,
   getProjectManager,
   isAvailable,

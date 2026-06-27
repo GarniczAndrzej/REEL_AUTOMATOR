@@ -512,9 +512,17 @@ required). Cache hit returns early with the "Z cache! ⚡" Polish marker.
 
 ### Overview
 
-On panel open, read the active timeline and extract its audio via a Resolve render-to-file call,
-falling back to an FFmpeg sidecar against media-pool source — feeding the Phase-4 transcription
-engine with no manual file picker.
+On demand (a **"Z osi czasu Resolve" button**, not on panel open), read the active timeline and
+extract its audio via a Resolve render-to-file call — feeding the Phase-4 transcription engine with
+no manual file picker. Render-to-file is the only path (it captures the actual timeline mix); when
+it is unavailable the user keeps the manual file-import picker.
+
+> **2026-06-27 trigger change (user-directed, post-live-test).** The plan originally auto-collected
+> the timeline audio on **panel open**. Tested live, the user preferred a **manual button trigger** —
+> auto-rendering on every open is intrusive (it queues a render job each time) and the user wants
+> control over when the mix is rendered. Mode A is now a **"Z osi czasu Resolve" button** beside
+> "Przeglądaj" (shown only inside the Resolve WI panel when the scripting API is available); clicking
+> it renders the active timeline's audio mix. Nothing happens automatically on open.
 
 ### Changes Required:
 
@@ -534,17 +542,25 @@ into the Phase-4 engine input.
 mix). When it fails or is unavailable, Mode A degrades to manual file import (not a blind FFmpeg
 decode of source media) with a Polish caveat — a single-clip FFmpeg decode only matches the timeline
 when the timeline is one unedited clip, so it is not used as an automatic fallback. The extracted wav
-replaces the manual file-import input for transcription only when render-to-file succeeds.
+replaces the manual file-import input for transcription only when render-to-file succeeds. **The
+render honors the user's timeline In/Out marks** (`GetMarkInOut` → absolute render `MarkIn`/`MarkOut`,
+`SelectAllFrames:false`); with no In/Out set it renders the whole timeline (`SelectAllFrames:true`).
+`GetMarkInOut` may report 0-based or absolute frames depending on the Resolve version, so the basis is
+normalized against `GetStartFrame`/`GetEndFrame` (verified live).
 
-#### 2. Panel-open auto-collect wiring
+#### 2. Button-triggered collect wiring
 
-**File**: `src/ui/import/transcribe.js` (input source), `src/platform/adapter.js`
+**File**: `src/ui/import/transcribe.js` (input source), `src/index.html` (the button),
+`src/platform/adapter.js`
 
-**Intent**: When `resolve_available`, on panel open present the collected timeline audio as the
-transcription input automatically — no file picker step.
+**Intent**: Add a **"Z osi czasu Resolve" button** beside "Przeglądaj", shown only inside the
+Resolve WI panel when `resolve_available`. On click, render the active timeline's audio mix and
+present it as the transcription input — no file picker step. Nothing runs on panel open.
 
-**Contract**: gated on `resolve_available`; falls back to the existing file-import path when the
-API/render route fails.
+**Contract**: button visibility gated on `isElectron()` + `resolve_available`; on click it calls
+`resolveCollectTimelineAudio()` and feeds the resulting wav into `state._whisperVideoPath`. On
+unavailability/failure it leaves the manual file-import picker untouched with a Polish notice. The
+button never appears under Tauri/browser or on Resolve Free.
 
 ### Success Criteria:
 
@@ -555,9 +571,9 @@ API/render route fails.
 
 #### Manual Verification:
 
-- On panel open with a timeline active, audio is auto-collected with no manual file picker
-- The render-to-file path captures the timeline mix (verified against an edited/arranged timeline)
-- When render-to-file is unavailable, Mode A degrades to manual file import with a Polish notice (no silent source-clip decode)
+- The "Z osi czasu Resolve" button appears only inside the Resolve WI panel (hidden under Tauri/browser and on Resolve Free); clicking it collects the timeline audio with no manual file picker
+- The render-to-file path captures the timeline mix (verified against an edited/arranged timeline) and honors the In/Out range (only the marked range is rendered; whole timeline when no marks)
+- When render-to-file is unavailable, the user keeps the manual file-import picker with a Polish notice (no silent source-clip decode)
 - The collected audio feeds Mode B transcription end-to-end inside the panel
 
 **Implementation Note**: Pause for human confirmation that the full A→B→(selection)→C/D pipeline
@@ -720,31 +736,31 @@ native module must be individually signed before notarization succeeds.
 
 #### Automated
 
-- [x] 4.1 Regression suite green
-- [x] 4.2 `node --check` on all `resolve-plugin/backend/*.js`
-- [x] 4.3 Engine readiness cached-read returns a verdict
+- [x] 4.1 Regression suite green — a89a09d
+- [x] 4.2 `node --check` on all `resolve-plugin/backend/*.js` — a89a09d
+- [x] 4.3 Engine readiness cached-read returns a verdict — a89a09d
 
 #### Manual
 
-- [x] 4.4 In-panel transcription of an imported file produces SRT + word timestamps with inline progress
-- [x] 4.5 Word-level alignment correct (≈0% mid-word cuts)
-- [x] 4.6 Cancel mid-run terminates the engine, no orphaned torch process
-- [x] 4.7 Second identical run hits the cache and returns instantly
-- [x] 4.8 Model download/delete works with progress; opt-in diarization runs with an HF token
+- [x] 4.4 In-panel transcription of an imported file produces SRT + word timestamps with inline progress — a89a09d
+- [x] 4.5 Word-level alignment correct (≈0% mid-word cuts) — a89a09d
+- [x] 4.6 Cancel mid-run terminates the engine, no orphaned torch process — a89a09d
+- [x] 4.7 Second identical run hits the cache and returns instantly — a89a09d
+- [x] 4.8 Model download/delete works with progress; opt-in diarization runs with an HF token — a89a09d
 
 ### Phase 5: Mode A — Auto-Collect Timeline Audio
 
 #### Automated
 
-- [ ] 5.1 Regression suite green
-- [ ] 5.2 `node --check resolve-plugin/backend/resolve.js`
+- [x] 5.1 Regression suite green
+- [x] 5.2 `node --check resolve-plugin/backend/resolve.js`
 
 #### Manual
 
-- [ ] 5.3 On panel open with a timeline active, audio auto-collects with no file picker
-- [ ] 5.4 Render-to-file captures the timeline mix (verified on an edited timeline)
-- [ ] 5.5 Render-to-file unavailable → Mode A degrades to manual file import + Polish notice (no source-clip decode)
-- [ ] 5.6 Collected audio feeds Mode B transcription end-to-end inside the panel
+- [x] 5.3 "Z osi czasu Resolve" button (Resolve panel only) collects timeline audio on click, no file picker
+- [x] 5.4 Render-to-file captures the timeline mix (edited timeline) and honors the In/Out range
+- [x] 5.5 Render-to-file unavailable → user keeps manual file import + Polish notice (no source-clip decode)
+- [x] 5.6 Collected audio feeds Mode B transcription end-to-end inside the panel
 
 ### Phase 6: Packaging — Signing + Notarization (macOS)
 

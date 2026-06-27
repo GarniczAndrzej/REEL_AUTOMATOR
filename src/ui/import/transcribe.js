@@ -14,6 +14,9 @@ import {
   dialogOpen,
   dialogAsk,
   listen,
+  isElectron,
+  resolveCapability,
+  resolveCollectTimelineAudio,
 } from '../../platform/adapter.js';
 import { exportTranscriptSrt } from '../export-srt.js';
 import { populateVideoMeta } from '../../util/video-meta.js';
@@ -79,6 +82,79 @@ export function initTranscribe() {
   if (fullVerifyBtn) fullVerifyBtn.addEventListener('click', fullEngineVerify);
   initModelManager();
   initWhisperAdvanced();
+
+  // S-09 Mode A — wire the "Z osi czasu Resolve" button. It renders the active
+  // timeline's audio mix as the transcription input ON CLICK (not on panel open),
+  // and is shown only inside the Resolve WI panel when the scripting API is
+  // available (resolveCapability/state.fps were already resolved + seeded in
+  // main.js before this init ran; the verdict is memoized).
+  const collectBtn = document.getElementById('collectTimelineAudioBtn');
+  if (collectBtn) {
+    collectBtn.addEventListener('click', collectTimelineAudioFromResolve);
+    showResolveAudioButtonIfAvailable();
+  }
+}
+
+/**
+ * Reveal the "Z osi czasu Resolve" button only inside the Resolve WI panel when
+ * the scripting API is available; it stays hidden under Tauri/browser and on
+ * Resolve Free / non-Studio (no API). Never throws.
+ * @returns {Promise<void>}
+ */
+async function showResolveAudioButtonIfAvailable() {
+  const btn = document.getElementById('collectTimelineAudioBtn');
+  if (!btn) return;
+  if (!isElectron()) return; // stays hidden under Tauri/browser
+  try {
+    const cap = await resolveCapability();
+    btn.style.display = cap && cap.available ? '' : 'none';
+  } catch {
+    btn.style.display = 'none';
+  }
+}
+
+/**
+ * S-09 Mode A (button-triggered): render the active Resolve timeline's audio mix
+ * and present it as the transcription input. Render-to-file is the only
+ * auto-collect path (it captures the real timeline MIX); on unavailability or
+ * failure it leaves the manual picker untouched and shows a Polish notice (never a
+ * blind source-clip decode). Never throws — a failure restores the previous path.
+ * @returns {Promise<void>}
+ */
+async function collectTimelineAudioFromResolve() {
+  const btn = document.getElementById('collectTimelineAudioBtn');
+  const pathEl = document.getElementById('whisperVideoPath');
+  const prev = pathEl ? pathEl.value : '';
+  if (btn) btn.disabled = true;
+  if (pathEl) pathEl.value = 'Renderowanie audio z aktywnej osi czasu Resolve…';
+  try {
+    const res = await resolveCollectTimelineAudio();
+    if (res && res.ok && res.path) {
+      state._whisperVideoPath = res.path;
+      if (pathEl) pathEl.value = res.path;
+      // fps is already seeded from the live timeline (Phase 1); deliberately do
+      // NOT probe the audio-only wav — it has no video stream, so populateVideoMeta
+      // would clobber the authoritative Resolve fps.
+      syncTranscribeBtn();
+      syncAlignBtn();
+      emit();
+      toast('Pobrano audio z aktywnej osi czasu Resolve.', 'success');
+    } else {
+      if (pathEl) pathEl.value = prev;
+      toast(
+        'Nie udało się pobrać audio z osi czasu Resolve — wybierz plik ręcznie.',
+        'info',
+      );
+    }
+  } catch {
+    if (pathEl) pathEl.value = prev;
+    toast(
+      'Nie udało się pobrać audio z osi czasu Resolve — wybierz plik ręcznie.',
+      'info',
+    );
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── F1 Whisper transcription ──────────────────────────────────────

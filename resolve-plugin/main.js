@@ -77,6 +77,10 @@ const handlers = {
   // Mode C: current timeline In/Out marks (frame offsets) so the renderer can
   // push only the cues inside the selected range
   resolve_timeline_inout: () => resolve.timelineInOut(),
+  // Mode A (Phase 5): render the active timeline's audio MIX to a temp wav for
+  // in-panel transcription (no manual file picker). `{ ok:false }` when the render
+  // route is unavailable → renderer degrades to manual file import.
+  resolve_collect_timeline_audio: () => resolve.collectTimelineAudio(),
   // ── Mode B (Phase 4): WhisperX in-panel transcription ──────────────────────
   // whisper.rs — transcription, forced alignment, cancel (single global child +
   // SIGTERM→300ms→SIGKILL reaper; progress via the transcribe-progress event)
