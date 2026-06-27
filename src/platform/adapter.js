@@ -195,3 +195,18 @@ export async function resolveCapability() {
 export async function resolveCreateReels(payload) {
   return invoke('resolve_create_reels', payload);
 }
+
+/**
+ * Mode C (S-09 Phase 3): push the already-built 0-based `.srt` onto the current
+ * Resolve timeline's subtitle track. Resolve's scripting API has no direct
+ * subtitle-item creation, so the backend writes the SRT to a temp file and
+ * imports it via the Media Pool (`timeline.ImportIntoTimeline` fallback) — never
+ * `CreateSubtitlesFromAudio` (it re-transcribes and discards our text). 0-based,
+ * no CMX offset. Electron WI host only — guarded by the caller on
+ * `resolveCapability().available`.
+ * @param {{ srt: string }} payload - the generated SRT text
+ * @returns {Promise<{ imported: boolean, method: string }>}
+ */
+export async function resolveImportSubtitles(payload) {
+  return invoke('resolve_import_subtitles', payload);
+}

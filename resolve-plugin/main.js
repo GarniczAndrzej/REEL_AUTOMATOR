@@ -65,6 +65,9 @@ const handlers = {
   // gap from settings), built directly via the live Resolve API (AppendToTimeline
   // + AddMarker) from a pure clip payload
   resolve_create_reels: (args) => resolve.createReels(args),
+  // Mode C (Phase 3): push the generated 0-based SRT onto the current timeline's
+  // subtitle track via Media-Pool import (ImportIntoTimeline fallback)
+  resolve_import_subtitles: (args) => resolve.importSubtitles(args),
 };
 
 function registerIpc() {

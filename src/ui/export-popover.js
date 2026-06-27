@@ -19,11 +19,16 @@ import { buildPrompt } from '../ai/prompt.js';
 import { saveTextToPath } from '../util/save-file.js';
 import { stripExt } from '../util/filename.js';
 import { toast } from './toast.js';
-import { exportTranscriptSrt, transcriptBase } from './export-srt.js';
+import {
+  exportTranscriptSrt,
+  buildTranscriptSrt,
+  transcriptBase,
+} from './export-srt.js';
 import {
   isElectron,
   resolveCapability,
   resolveCreateReels,
+  resolveImportSubtitles,
 } from '../platform/adapter.js';
 
 export function init() {
@@ -74,6 +79,13 @@ export function init() {
     .getElementById('exResolveGen')
     ?.addEventListener('click', exportToResolve);
 
+  // S-09 Mode C: one-click push of the transcript onto a Resolve Subtitles track
+  // (Electron WI panel only; the row stays hidden unless the Resolve API is
+  // available).
+  document
+    .getElementById('exResolveSubs')
+    ?.addEventListener('click', exportSubtitlesToResolve);
+
   // "More" — transcript + segments + prompt.
   document
     .getElementById('exSrtBtn')
@@ -112,11 +124,14 @@ async function applyResolveExportMode() {
     cap = { available: false };
   }
   const row = document.getElementById('resolveExportRow');
+  const subsRow = document.getElementById('resolveSubtitlesRow');
   if (cap.available) {
     if (row) row.style.display = '';
+    if (subsRow) subsRow.style.display = '';
     return; // Studio: API drive available — no fallback notice
   }
   if (row) row.style.display = 'none';
+  if (subsRow) subsRow.style.display = 'none';
   if (document.getElementById('resolveFallbackNotice')) return;
   const note = document.createElement('div');
   note.id = 'resolveFallbackNotice';
@@ -335,6 +350,55 @@ function datedFolderName() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `Reels ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}`;
+}
+
+// ── Mode C — transcript → Resolve subtitles track (S-09 Phase 3) ───────────
+// One-click push of our already-built 0-based SRT onto the current timeline's
+// subtitle track. The word-vs-sentence decision is the SHARED `buildTranscriptSrt`
+// (export-srt.js) — the exact same logic as the file `.srt` export — so checking
+// word-by-word sends word-by-word here too (and never silently degrades to full
+// phrases; it aborts with a Polish toast if word timing can't be produced). The
+// Electron backend writes the SRT to a temp file and imports it via the Media
+// Pool (`ImportIntoTimeline` fallback); `CreateSubtitlesFromAudio` is never used
+// (it re-transcribes, discarding our text). Gated on `resolve_available`.
+
+async function exportSubtitlesToResolve() {
+  if (!state.sentences.length) {
+    toast('Brak transkrypcji do wysłania.', 'info');
+    return;
+  }
+  // Defensive re-check: the row is only shown when available, but state can move.
+  let cap;
+  try {
+    cap = await resolveCapability();
+  } catch {
+    cap = { available: false };
+  }
+  if (!cap.available) {
+    toast('Brak dostępu do API DaVinci Resolve.', 'error');
+    return;
+  }
+
+  // Shared word/sentence decision — honors the word-by-word toggle identically to
+  // the file export (aligns when needed, aborts with a toast on failure).
+  const built = await buildTranscriptSrt();
+  if (!built) return;
+
+  const btn = document.getElementById('exResolveSubs');
+  if (btn) btn.disabled = true;
+  try {
+    await resolveImportSubtitles({ srt: built.content });
+    toast(
+      built.wordLevel
+        ? 'Dodano napisy słowo-po-słowie w DaVinci Resolve'
+        : 'Dodano napisy do osi czasu w DaVinci Resolve',
+      'success',
+    );
+  } catch (e) {
+    toast('Nie udało się dodać napisów w Resolve: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── "More" — transcript / segments / prompt ────────────────────────

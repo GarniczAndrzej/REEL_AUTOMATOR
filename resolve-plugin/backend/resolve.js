@@ -13,6 +13,10 @@
 //
 // The Mode D/C/A drive code (Phases 2/3/5) builds on the accessors below.
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
 const PLUGIN_ID = 'com.brave.reelsautomator';
 
 let WI = null;
@@ -207,6 +211,92 @@ async function createUniqueTimeline(mediaPool, project, base) {
   throw new Error('Nie można utworzyć timeline: ' + base);
 }
 
+// ── Mode C — transcript → subtitles track (S-09 Phase 3) ─────────────────────
+//
+// Resolve's scripting API exposes NO direct subtitle-item creation (verified
+// 2026-06-27 against the live WI scope + the scripting reference):
+// `ImportIntoTimeline` targets AAF/timeline files and `CreateSubtitlesFromAudio`
+// re-transcribes the audio (discarding our WhisperX text — explicitly excluded by
+// the plan). So the guaranteed path is to write our already-built 0-based `.srt`
+// to a temp file and import it via the Media Pool, then append it onto a subtitle
+// track. We try the Media-Pool import first (survives across Resolve versions)
+// and fall back to `timeline.ImportIntoTimeline`, reporting which strategy worked
+// so the Phase-3 manual check can document the live API surface. The SRT is
+// 0-based (`transcript.js`) — never the EDL `3600*fps` CMX offset.
+
+/**
+ * Push the generated SRT onto the current timeline's subtitle track.
+ * @param {{ srt: string }} args - the generated SRT text (0-based, no CMX offset)
+ * @returns {Promise<{ imported: boolean, method: string }>}
+ */
+async function importSubtitles({ srt }) {
+  if (!available || !projectManager) {
+    throw new Error('Resolve API niedostępne');
+  }
+  if (typeof srt !== 'string' || !srt.trim()) {
+    throw new Error('Brak napisów do wysłania');
+  }
+
+  const project = await projectManager.GetCurrentProject();
+  if (!project) throw new Error('Brak otwartego projektu');
+  const timeline =
+    typeof project.GetCurrentTimeline === 'function'
+      ? await project.GetCurrentTimeline()
+      : null;
+  if (!timeline) throw new Error('Brak aktywnej osi czasu');
+
+  // Resolve reads the subtitles from a file on disk; cleaned up in `finally`.
+  const tmpPath = path.join(os.tmpdir(), `reels-subtitles-${Date.now()}.srt`);
+  await fs.promises.writeFile(tmpPath, srt, 'utf8');
+
+  try {
+    // Strategy 1 — Media Pool import + append. Importing an `.srt` yields a
+    // subtitle MediaPoolItem; ensure a subtitle track exists, then append it.
+    // The clip carries its own SRT timecodes, so it lands at the right frames.
+    const mediaPool = await project.GetMediaPool();
+    if (mediaPool) {
+      let items = null;
+      try {
+        items = await mediaPool.ImportMedia([tmpPath]);
+      } catch {
+        items = null;
+      }
+      const subItem = Array.isArray(items) && items.length ? items[0] : null;
+      if (subItem) {
+        try {
+          const count = Number(await timeline.GetTrackCount('subtitle')) || 0;
+          if (count < 1) await timeline.AddTrack('subtitle');
+        } catch {
+          // GetTrackCount/AddTrack unavailable — let AppendToTimeline place it.
+        }
+        try {
+          const appended = await mediaPool.AppendToTimeline([
+            { mediaPoolItem: subItem },
+          ]);
+          if (appended) return { imported: true, method: 'media-pool' };
+        } catch {
+          // Append rejected — fall through to the direct timeline import.
+        }
+      }
+    }
+
+    // Strategy 2 — direct timeline import (older/edge versions). Historically
+    // rejects `.srt` in the WI scope, but cheap to try before giving up.
+    try {
+      const ok = await timeline.ImportIntoTimeline(tmpPath, {});
+      if (ok) return { imported: true, method: 'import-into-timeline' };
+    } catch {
+      // Both strategies exhausted below.
+    }
+
+    throw new Error(
+      'Resolve odrzucił import napisów (brak bezpośredniego API napisów)',
+    );
+  } finally {
+    fs.promises.unlink(tmpPath).catch(() => {});
+  }
+}
+
 // ── Accessors for the Mode C/A drive code (later phases) ──────────────────────
 function getResolve() {
   return resolveApp;
@@ -223,6 +313,7 @@ module.exports = {
   bootstrap,
   capability,
   createReels,
+  importSubtitles,
   getResolve,
   getProjectManager,
   isAvailable,

@@ -691,28 +691,28 @@ native module must be individually signed before notarization succeeds.
 
 #### Automated
 
-- [x] 2.1 Regression suite green
-- [x] 2.2 `node --check resolve-plugin/backend/resolve.js`
+- [x] 2.1 Regression suite green — 09112bc
+- [x] 2.2 `node --check resolve-plugin/backend/resolve.js` — 09112bc
 
 #### Manual
 
-- [x] 2.3 One click creates a dated folder with a single timeline holding all reels, separated by the `gapFrames` setting, in a live project
-- [x] 2.4 Source media lands in the Media Pool; clips reference it correctly
-- [x] 2.5 Clip frames land at expected positions (no 1-hour offset) — frame-math confirmed
-- [x] 2.6 Markers appear at correct frames with correct colors
-- [x] 2.7 Timeline fps matches `state.fps`
+- [x] 2.3 One click creates a dated folder with a single timeline holding all reels, separated by the `gapFrames` setting, in a live project — 09112bc
+- [x] 2.4 Source media lands in the Media Pool; clips reference it correctly — 09112bc
+- [x] 2.5 Clip frames land at expected positions (no 1-hour offset) — frame-math confirmed — 09112bc
+- [x] 2.6 Markers appear at correct frames with correct colors — 09112bc
+- [x] 2.7 Timeline fps matches `state.fps` — 09112bc
 
 ### Phase 3: Mode C — Subtitles Track
 
 #### Automated
 
-- [ ] 3.1 Regression suite green
-- [ ] 3.2 `node --check resolve-plugin/backend/resolve.js`
+- [x] 3.1 Regression suite green
+- [x] 3.2 `node --check resolve-plugin/backend/resolve.js`
 
 #### Manual
 
-- [ ] 3.3 Transcript appears on a Subtitles track in one click
-- [ ] 3.4 Subtitle timings align with media (0-based, no offset)
+- [x] 3.3 Transcript appears on a Subtitles track in one click
+- [x] 3.4 Subtitle timings align with media (0-based, no offset)
 - [ ] 3.5 Word-level and sentence-level variants both import correctly
 - [ ] 3.6 Documented whether a direct subtitle API exists in the target Resolve version
 

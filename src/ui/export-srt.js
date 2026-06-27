@@ -38,28 +38,30 @@ export function transcriptBase() {
 }
 
 /**
- * Save the transcript as `.srt`, honoring the word-by-word toggle.
- * Mode OFF → sentence-level. Mode ON → per-word, auto-aligning first when no
- * frame-level word timing exists yet (heavy ~37–67s cold spawn, behind an
- * ask() confirmation). Every abort path surfaces a Polish toast — never silent.
- * @returns {Promise<void>}
+ * Build the transcript SRT honoring the word-by-word toggle — the single source
+ * of the word-vs-sentence decision, shared by the file `.srt` export and the
+ * Mode C Resolve subtitle push so neither silently degrades to phrases when
+ * word-by-word is on. Mode OFF → sentence-level. Mode ON → per-word, auto-aligning
+ * first when no frame-level word timing exists yet (heavy ~37–67s cold spawn,
+ * behind an ask() confirmation). Returns the SRT string, or `null` when the
+ * export should abort — every abort path surfaces a Polish toast, never silent.
+ * @returns {Promise<{ content: string, wordLevel: boolean } | null>}
  */
-export async function exportTranscriptSrt() {
+export async function buildTranscriptSrt() {
   if (!state.sentences.length) {
     toast('Brak transkrypcji do eksportu.', 'info');
-    return;
+    return null;
   }
-  // Mode OFF → sentence-level .srt (unchanged behavior).
+  // Mode OFF → sentence-level .srt.
   if (!state.whisperAdvanced.wordLevelSrtExport) {
-    const saved = await saveTextToPath({
-      defaultName: transcriptBase() + '.srt',
+    return {
       content: generateTranscriptSRT(state.sentences, state.fps),
-    });
-    if (saved) toast('Zapisano transkrypcję', 'success');
-    return;
+      wordLevel: false,
+    };
   }
   // Mode ON → word-by-word .srt. Needs frame-based words[]; auto-align when
-  // missing (heavy, ~37–67s cold spawn) only when a video is loaded.
+  // missing (heavy, ~37–67s cold spawn) only when a video is loaded. We never
+  // fall through to sentence-level here — word-by-word means word-by-word.
   if (!hasFrameWords()) {
     const videoPath = state.videoPath || state._whisperVideoPath;
     if (!videoPath) {
@@ -67,24 +69,44 @@ export async function exportTranscriptSrt() {
         'Najpierw wybierz plik wideo, aby dopasować napisy do audio.',
         'info',
       );
-      return;
+      return null;
     }
     const { alignToWords } = await import('./import/transcribe.js');
     const ok = await alignToWords({ confirm: true });
-    if (!ok) return; // declined/cancelled/failed — alignToWords already surfaced why
+    if (!ok) return null; // declined/cancelled/failed — alignToWords surfaced why
     if (!hasFrameWords()) {
-      // Align finished but produced no frame-level word timing — previously this
-      // returned silently. Tell the user why no per-word file was written.
+      // Align finished but produced no frame-level word timing.
       toast(
         'Dopasowanie nie wygenerowało słów na poziomie ramek — eksport słowo-po-słowie niemożliwy.',
         'info',
       );
-      return;
+      return null;
     }
   }
+  return {
+    content: generateWordSRT(state.sentences, state.fps),
+    wordLevel: true,
+  };
+}
+
+/**
+ * Save the transcript as `.srt`, honoring the word-by-word toggle (see
+ * {@link buildTranscriptSrt}).
+ * @returns {Promise<void>}
+ */
+export async function exportTranscriptSrt() {
+  const built = await buildTranscriptSrt();
+  if (!built) return;
   const saved = await saveTextToPath({
     defaultName: transcriptBase() + '.srt',
-    content: generateWordSRT(state.sentences, state.fps),
+    content: built.content,
   });
-  if (saved) toast('Zapisano napisy słowo-po-słowie', 'success');
+  if (saved) {
+    toast(
+      built.wordLevel
+        ? 'Zapisano napisy słowo-po-słowie'
+        : 'Zapisano transkrypcję',
+      'success',
+    );
+  }
 }
