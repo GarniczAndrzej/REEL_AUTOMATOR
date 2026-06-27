@@ -210,3 +210,18 @@ export async function resolveCreateReels(payload) {
 export async function resolveImportSubtitles(payload) {
   return invoke('resolve_import_subtitles', payload);
 }
+
+/**
+ * Mode C (S-09 Phase 3): read the current Resolve timeline's In/Out marks as
+ * 0-based frame offsets (the same basis our SRT cues use), so the renderer can
+ * push only the cues inside the selected range. Resolves to `null` when no
+ * In/Out is set, the API is absent, or under Tauri/browser.
+ * @returns {Promise<{ inFrame: number, outFrame: number } | null>}
+ */
+export async function resolveTimelineInOut() {
+  try {
+    return await invoke('resolve_timeline_inout', {});
+  } catch {
+    return null;
+  }
+}

@@ -18,8 +18,8 @@ import {
 
 // True when at least one sentence carries a word with finite frame timing —
 // i.e. frame-normalized word data the word exporter can actually emit.
-function hasFrameWords() {
-  return state.sentences.some(
+function hasFrameWords(sentences = state.sentences) {
+  return sentences.some(
     (s) =>
       Array.isArray(s.words) &&
       s.words.some(
@@ -45,24 +45,27 @@ export function transcriptBase() {
  * first when no frame-level word timing exists yet (heavy ~37–67s cold spawn,
  * behind an ask() confirmation). Returns the SRT string, or `null` when the
  * export should abort — every abort path surfaces a Polish toast, never silent.
+ * @param {import('../state.js').Sentence[]} [sentences] - subset to emit
+ *   (defaults to the full transcript); the Mode C In/Out-range push passes a
+ *   range-filtered subset so word/sentence selection stays identical.
  * @returns {Promise<{ content: string, wordLevel: boolean } | null>}
  */
-export async function buildTranscriptSrt() {
-  if (!state.sentences.length) {
+export async function buildTranscriptSrt(sentences = state.sentences) {
+  if (!sentences.length) {
     toast('Brak transkrypcji do eksportu.', 'info');
     return null;
   }
   // Mode OFF → sentence-level .srt.
   if (!state.whisperAdvanced.wordLevelSrtExport) {
     return {
-      content: generateTranscriptSRT(state.sentences, state.fps),
+      content: generateTranscriptSRT(sentences, state.fps),
       wordLevel: false,
     };
   }
   // Mode ON → word-by-word .srt. Needs frame-based words[]; auto-align when
   // missing (heavy, ~37–67s cold spawn) only when a video is loaded. We never
   // fall through to sentence-level here — word-by-word means word-by-word.
-  if (!hasFrameWords()) {
+  if (!hasFrameWords(sentences)) {
     const videoPath = state.videoPath || state._whisperVideoPath;
     if (!videoPath) {
       toast(
@@ -74,7 +77,7 @@ export async function buildTranscriptSrt() {
     const { alignToWords } = await import('./import/transcribe.js');
     const ok = await alignToWords({ confirm: true });
     if (!ok) return null; // declined/cancelled/failed — alignToWords surfaced why
-    if (!hasFrameWords()) {
+    if (!hasFrameWords(sentences)) {
       // Align finished but produced no frame-level word timing.
       toast(
         'Dopasowanie nie wygenerowało słów na poziomie ramek — eksport słowo-po-słowie niemożliwy.',
@@ -84,7 +87,7 @@ export async function buildTranscriptSrt() {
     }
   }
   return {
-    content: generateWordSRT(state.sentences, state.fps),
+    content: generateWordSRT(sentences, state.fps),
     wordLevel: true,
   };
 }

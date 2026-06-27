@@ -706,15 +706,15 @@ native module must be individually signed before notarization succeeds.
 
 #### Automated
 
-- [x] 3.1 Regression suite green
-- [x] 3.2 `node --check resolve-plugin/backend/resolve.js`
+- [x] 3.1 Regression suite green — caa5d5a
+- [x] 3.2 `node --check resolve-plugin/backend/resolve.js` — caa5d5a
 
 #### Manual
 
-- [x] 3.3 Transcript appears on a Subtitles track in one click
-- [x] 3.4 Subtitle timings align with media (0-based, no offset)
-- [ ] 3.5 Word-level and sentence-level variants both import correctly
-- [ ] 3.6 Documented whether a direct subtitle API exists in the target Resolve version
+- [x] 3.3 Transcript appears on a Subtitles track in one click — caa5d5a
+- [x] 3.4 Subtitle timings align with media (0-based, no offset) — caa5d5a
+- [x] 3.5 Word-level and sentence-level variants both import correctly
+- [x] 3.6 Documented whether a direct subtitle API exists in the target Resolve version
 
 ### Phase 4: Mode B — WhisperX Sidecar Port (In-Panel Transcription)
 

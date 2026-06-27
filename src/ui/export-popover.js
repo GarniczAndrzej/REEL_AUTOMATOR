@@ -29,6 +29,7 @@ import {
   resolveCapability,
   resolveCreateReels,
   resolveImportSubtitles,
+  resolveTimelineInOut,
 } from '../platform/adapter.js';
 
 export function init() {
@@ -353,14 +354,45 @@ function datedFolderName() {
 }
 
 // ── Mode C — transcript → Resolve subtitles track (S-09 Phase 3) ───────────
-// One-click push of our already-built 0-based SRT onto the current timeline's
-// subtitle track. The word-vs-sentence decision is the SHARED `buildTranscriptSrt`
-// (export-srt.js) — the exact same logic as the file `.srt` export — so checking
-// word-by-word sends word-by-word here too (and never silently degrades to full
-// phrases; it aborts with a Polish toast if word timing can't be produced). The
-// Electron backend writes the SRT to a temp file and imports it via the Media
-// Pool (`ImportIntoTimeline` fallback); `CreateSubtitlesFromAudio` is never used
-// (it re-transcribes, discarding our text). Gated on `resolve_available`.
+// One-click push of our already-built SRT onto the current timeline's subtitle
+// track. The subtitles START AT THE TIMELINE In POINT: we read the In mark
+// (`timeline.GetMarkInOut`, a 0-based frame offset = the same basis our cues use)
+// and shift the whole transcript so its first cue lands exactly at In (Out is
+// ignored). When no In point is set, the subtitles start at the timeline origin
+// (offset 0). The word-vs-sentence decision is the SHARED `buildTranscriptSrt`
+// (export-srt.js) — identical to the file `.srt` export — so word-by-word sends
+// word-by-word here too (never silently degrading to phrases). The Electron
+// backend writes the SRT to a temp file and imports it via the Media Pool
+// (`ImportIntoTimeline` fallback); `CreateSubtitlesFromAudio` is never used (it
+// re-transcribes, discarding our text). Gated on `resolve_available`.
+
+/**
+ * Return copies of `sentences` with every frame value (and per-word timing)
+ * shifted by `delta` frames. Pure — does not touch `state`. Used to re-base the
+ * transcript so its first cue lands at the timeline In point.
+ * @param {import('../state.js').Sentence[]} sentences
+ * @param {number} delta - frames to add to every start/end
+ * @returns {import('../state.js').Sentence[]}
+ */
+function shiftSentences(sentences, delta) {
+  if (!delta) return sentences;
+  return sentences.map((s) => ({
+    ...s,
+    start_frame: s.start_frame + delta,
+    end_frame: s.end_frame + delta,
+    words: Array.isArray(s.words)
+      ? s.words.map((w) => ({
+          ...w,
+          start_frame: Number.isFinite(w.start_frame)
+            ? w.start_frame + delta
+            : w.start_frame,
+          end_frame: Number.isFinite(w.end_frame)
+            ? w.end_frame + delta
+            : w.end_frame,
+        }))
+      : s.words,
+  }));
+}
 
 async function exportSubtitlesToResolve() {
   if (!state.sentences.length) {
@@ -380,18 +412,36 @@ async function exportSubtitlesToResolve() {
   }
 
   // Shared word/sentence decision — honors the word-by-word toggle identically to
-  // the file export (aligns when needed, aborts with a toast on failure).
+  // the file export (aligns when needed, aborts with a toast on failure). We run
+  // it on the original transcript, then shift the resulting cues to the In point.
   const built = await buildTranscriptSrt();
   if (!built) return;
+
+  // Start at the timeline In point: shift so the earliest cue lands exactly at
+  // In (no Out filtering). No In mark set → push from the timeline origin.
+  const range = await resolveTimelineInOut();
+  let srt = built.content;
+  if (range) {
+    const firstStart = Math.min(...state.sentences.map((s) => s.start_frame));
+    const delta = range.inFrame - firstStart;
+    if (delta) {
+      const built2 = await buildTranscriptSrt(
+        shiftSentences(state.sentences, delta),
+      );
+      if (!built2) return;
+      srt = built2.content;
+    }
+  }
 
   const btn = document.getElementById('exResolveSubs');
   if (btn) btn.disabled = true;
   try {
-    await resolveImportSubtitles({ srt: built.content });
+    await resolveImportSubtitles({ srt });
+    const scope = range ? ' (od punktu In)' : '';
     toast(
-      built.wordLevel
+      (built.wordLevel
         ? 'Dodano napisy słowo-po-słowie w DaVinci Resolve'
-        : 'Dodano napisy do osi czasu w DaVinci Resolve',
+        : 'Dodano napisy do osi czasu w DaVinci Resolve') + scope,
       'success',
     );
   } catch (e) {

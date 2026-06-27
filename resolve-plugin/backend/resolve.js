@@ -297,6 +297,33 @@ async function importSubtitles({ srt }) {
   }
 }
 
+/**
+ * Read the current timeline's In/Out marks. `GetMarkInOut()` returns frame
+ * offsets from the timeline origin, e.g. `{video:{in:0,out:134}}` — the same
+ * 0-based basis our SRT cues use, so the renderer can filter cues to the range
+ * with no re-basing. Returns null when no In/Out is set (or the API is absent).
+ * @returns {Promise<{ inFrame: number, outFrame: number } | null>}
+ */
+async function timelineInOut() {
+  if (!available || !projectManager) return null;
+  try {
+    const project = await projectManager.GetCurrentProject();
+    const timeline =
+      project &&
+      typeof project.GetCurrentTimeline === 'function' &&
+      (await project.GetCurrentTimeline());
+    if (!timeline || typeof timeline.GetMarkInOut !== 'function') return null;
+    const mark = await timeline.GetMarkInOut();
+    const v = mark && (mark.video || mark.audio);
+    if (!v || typeof v.in !== 'number' || typeof v.out !== 'number')
+      return null;
+    if (v.in < 0 || v.out < 0 || v.out < v.in) return null;
+    return { inFrame: v.in, outFrame: v.out };
+  } catch {
+    return null;
+  }
+}
+
 // ── Accessors for the Mode C/A drive code (later phases) ──────────────────────
 function getResolve() {
   return resolveApp;
@@ -314,6 +341,7 @@ module.exports = {
   capability,
   createReels,
   importSubtitles,
+  timelineInOut,
   getResolve,
   getProjectManager,
   isAvailable,

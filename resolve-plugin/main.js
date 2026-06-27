@@ -68,6 +68,9 @@ const handlers = {
   // Mode C (Phase 3): push the generated 0-based SRT onto the current timeline's
   // subtitle track via Media-Pool import (ImportIntoTimeline fallback)
   resolve_import_subtitles: (args) => resolve.importSubtitles(args),
+  // Mode C: current timeline In/Out marks (frame offsets) so the renderer can
+  // push only the cues inside the selected range
+  resolve_timeline_inout: () => resolve.timelineInOut(),
 };
 
 function registerIpc() {
