@@ -92,13 +92,14 @@ plugins dir on a clean machine.
   (`research.md` Area 1), not 6.
 - **The implicit "import fails ⇒ no backend" probe is the structural trap** — replace with an
   explicit `window.bridge` capability check (`research.md` Open Q7) routed through one adapter.
-- **The Lua exporter already encodes the Mode D data contract** (`lua.js:6,48-54,87-185`) — but
-  Mode D uses **`ImportTimelineFromFile`** with the existing **FCPXML** exporter (0-based,
-  `fcpxml.js:153`), not call-by-call construction (decision: lower new-surface, reuses
-  regression-fenced exporters). **EDL is excluded from this path** — `edl.js:15` bakes the
-  EDL-only `3600*fps` CMX offset, which would push every clip an hour into the timeline.
-- **`ImportTimelineFromFile` accepts AAF/EDL/XML/FCPXML/DRT/OTIO** (`research.md` Area 4) — the
-  Mode D shortcut.
+- **The Lua exporter encodes the Mode D data contract** (`lua.js:6,44-185`) — Mode D drives the
+  live API with the **same call-by-call sequence** (`ImportMedia` → `CreateEmptyTimeline` →
+  `AppendToTimeline` → `AddMarker`), via a pure `buildResolveReels` payload builder. recordFrame is
+  **0-based** — the EDL-only `3600*fps` CMX offset (`edl.js:15`) is never used (it would push every
+  clip an hour into the timeline).
+- **`ImportTimelineFromFile` (FCPXML file import) was tried and rejected** (2026-06-27): it returns
+  `errorCode:6 "Unable to import a timeline"` in the WI scripting scope regardless of `importOptions`.
+  Direct `AppendToTimeline` construction is the working path. (Resolves research Open Question #2.)
 - **Mode C has no reliable direct subtitle-item API historically** (`research.md` Area 3) →
   SRT-import is primary; verify a direct API in-phase.
 - **WI native bridge runs in-process and does NOT require the "External scripting" preference**
@@ -137,17 +138,20 @@ D (headline, lowest-risk via exporter reuse) → C (SRT-import) → B (the heavy
 block feature work — but the dev-loadable plugin proves functionality from Phase 1 onward.
 
 The reuse boundary stays exactly where F-02 drew it: UI/exporters/parser/ai/state intact; only the
-IPC layer and the backend implementations are new. Mode D leans on the already-regression-fenced
-exporters via `ImportTimelineFromFile` rather than re-deriving timeline construction.
+IPC layer and the backend implementations are new. Mode D reuses the regression-fenced
+`mergeAdjacentClips` spans + Lua frame-math through a pure `buildResolveReels` builder, and drives the
+timeline directly via `AppendToTimeline` (the `ImportTimelineFromFile`/FCPXML shortcut was rejected
+live — errorCode 6).
 
 ## Critical Implementation Details
 
 - **Frame-math (Modes C/D):** the Resolve record cursor is **0-based** — never carry the EDL
   `3600*fps` offset into Resolve. Timelines are created at `state.fps`, which is seeded from the
-  live Resolve timeline on panel open (Phase 1) — not the default 25 (`state.js:95`). For Mode D via
-  `ImportTimelineFromFile`, use the **FCPXML** exporter (0-based, `fcpxml.js:153`); the **EDL
-  exporter is excluded** because `edl.js:15` bakes the 1-hour offset. The residual risk is the
-  importer's interpretation, so the manual checklist must confirm clip frames land where expected.
+  live Resolve timeline on panel open (Phase 1) — not the default 25 (`state.js:95`). Mode D builds
+  timelines by **direct `AppendToTimeline` construction** (the S-08 Lua blueprint, `lua.js:142-185`):
+  per-reel `recordFrame` cursor restarts at 0, no inter-reel gaps, marker frame = span record cursor +
+  (`sentence.start_frame` − `span.start_frame`). The **EDL exporter is excluded** (`edl.js:15` bakes
+  the 1-hour offset). `ImportTimelineFromFile`/FCPXML is **not** used (rejected live, errorCode 6).
 - **WhisperX orphan-reaping (Mode B):** a SIGKILL of the PyInstaller bootloader orphans the torch
   worker and keeps stdout open. The Tauri loop uses a 250 ms `tokio` timeout to avoid hanging; in
   Node this is *easier* (event-driven `stdout.on('data')` needs no polling), but the SIGTERM →
@@ -289,54 +293,79 @@ that the panel loads and routes correctly in live Resolve before starting Mode D
 
 ### Overview
 
-Add a "Resolve" export mode that creates a dated folder with each reel as its own timeline plus
-source media in the Media Pool, by **reusing the existing exporters via `ImportTimelineFromFile`**.
-This is the headline FR-030 value on the lowest-risk path.
+Add a "Resolve" export mode that creates a dated folder with a **single timeline holding every
+reel** — separated by the inter-reel `gapFrames` setting, the same layout as the Lua export — plus
+source media in the Media Pool, by **directly driving the Resolve API** (`ImportMedia` →
+`CreateEmptyTimeline` → `AppendToTimeline` → `AddMarker`). This is the headline FR-030 value.
+
+> **2026-06-27 layout change (user-directed, post-live-test).** The plan originally created **one
+> timeline per reel**; tested live, the user preferred the Lua-export layout: **all reels on one
+> timeline** with the inter-reel `gapFrames` setting between them. Mode D now builds a single
+> `buildResolveTimeline` payload (continuous record cursor + `gapFrames` gaps) and the backend
+> creates one timeline. Markers from every reel land on the one timeline at their continuous record
+> frames.
+
+> **2026-06-27 approach change (empirical).** The original plan built each timeline by writing a
+> per-reel FCPXML and calling `ImportTimelineFromFile`. Tested live in Resolve Studio, that path
+> **fails with `errorCode:6 "Unable to import a timeline"`** for every reel — including with explicit
+> `importOptions` (`importSourceClips:false`+`sourceClipsFolders`, `importSourceClips:true`+
+> `sourceClipsPath`, and bare default). The failure is Resolve rejecting the **FCPXML itself** in the
+> WI scripting scope, not media-link resolution. Mode D therefore uses **direct `AppendToTimeline`
+> construction** — the proven S-08 Lua-exporter sequence — instead of file import. (Resolves
+> research Open Question #2.) `ImportTimelineFromFile` / FCPXML is **not** used for Mode D.
 
 ### Changes Required:
 
 #### 1. Resolve export mode (sibling of `saveFormat`)
 
-**File**: `src/ui/export-popover.js`, `src/platform/adapter.js`
+**File**: `src/ui/export-popover.js`, `src/platform/adapter.js`, `src/exporters/resolve-payload.js` (new)
 
 **Intent**: Add a Resolve-mode sibling to `saveFormat(key)` — same `state.reelsData.length` guard,
-same `state`-derived opts, but instead of `saveTextToPath` it calls a new bridge command that drives
-the Resolve API. Gated on `resolve_available`.
+same `state`-derived inputs, but instead of `saveTextToPath` it builds a single-timeline clip+marker
+payload and calls a new bridge command that drives the Resolve API. Gated on `resolve_available`.
 
-**Contract**: reuses `mergeAdjacentClips` spans and the existing `gen*()` opts assembly
-(`export-popover.js:105-207`). New bridge command e.g. `resolve_create_reels(opts)`.
+**Contract**: a **pure** builder
+`buildResolveTimeline({reelsData, sentences, mergeThreshold, gapFrames, name})`
+(`src/exporters/resolve-payload.js`) reuses `mergeAdjacentClips` spans + the `lua.js:131-182`
+continuous cursor/`recordFrameById` frame-math (0-based; **all reels on one timeline** — the cursor
+runs continuously with `gapFrames` of empty timeline between consecutive reels) and returns a single
+`{ name, clips:[{startFrame,endFrame,recordFrame}], markers:[{frame,color,label}] }` (colors
+hook=Green/body=Blue/punchline=Red, `lua.js:6`). `export-popover.js` assembles
+`{ folderName (dated), mediaPaths:[videoPath], fps, timeline }` (with `name = state.projectName`,
+`gapFrames = state.gapFrames`) and calls `adapter.resolveCreateReels(payload)` → bridge command
+`resolve_create_reels`. recordFrame stays **0-based** — never the EDL `3600*fps` offset (`edl.js:15`).
 
 #### 2. Mode D Resolve-drive backend
 
 **File**: `resolve-plugin/backend/resolve.js`
 
-**Intent**: For each reel, generate the existing **FCPXML** via the pure exporter (0-based,
-`fcpxml.js:153` — **not** EDL, which carries the `3600*fps` offset), write a temp file, then
-`ImportTimelineFromFile`. Create the dated subfolder (`AddSubFolder(root, name)` →
-`SetCurrentFolder`), import source media to the Media Pool, and place markers. One timeline per reel.
+**Intent**: Create the dated subfolder, import the source media once, then **build the single
+timeline directly via the live API** (no temp files, no FCPXML). One timeline holding every reel.
 
-**Contract**: sequence per `research.md` Area 4 — `GetMediaPool` → `GetRootFolder` →
-`AddSubFolder` → `SetCurrentFolder` → `AddItemListToMediaPool([paths])` → per reel
-`ImportTimelineFromFile(file, {opts})`. **Per-reel file generation:** `generateFCPXML` takes the
-full `reelsData[]` and emits one `<sequence>`/`<project>` per reel into a single file
-(`fcpxml.js:47`, `xml.js:43`); since `ImportTimelineFromFile` imports one timeline per file, call the
-exporter with a **single-reel `reelsData` slice** (`[reel]`) and write one temp FCPXML per reel
-before each import — do not feed the whole array and rely on Resolve splitting the multi-sequence
-file. Markers carried from `reel.markers` (colors
-hook=Green/body=Blue/punchline=Red, `lua.js:6`). Frame-math: the **FCPXML** exporter emits 0-based
-frames (`fcpxml.js:153`) and carries fps + markers natively; **EDL is excluded** (`edl.js:15` bakes
-the `3600*fps` offset). Verify import fidelity manually. No `trackIndex` (defaults V1/A1).
+**Contract**: sequence (S-08 Lua blueprint `lua.js:44-185`, `research.md` Area 3/4) —
+`GetCurrentProject` → `GetMediaPool` → `GetRootFolder` → `AddSubFolder(root, folderName)` →
+`SetCurrentFolder` → `ImportMedia([videoPath])` (capture the returned `MediaPoolItem`) →
+`CreateEmptyTimeline(uniqueName)` → `SetCurrentTimeline` →
+`AppendToTimeline([{mediaPoolItem, startFrame, endFrame, recordFrame}])` (one entry per
+`timeline.clips` span across all reels) → per marker `AddMarker(frame, color, label, "", 1, "")`.
+**Name collisions:** `CreateEmptyTimeline` returns null if the name exists — append `_2`, `_3`, …
+until free (mirror `lua.js:87-98`). Timeline fps inherits the project setting, which Phase 1 seeded
+from the live timeline = `state.fps` (no `SetSetting` needed). No `trackIndex` (defaults V1/A1). Every
+Resolve call is async — `await` each.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- Regression suite green (exporters reused, frame-math fence): `node --experimental-vm-modules test/regression.js`
+- Regression suite green incl. a **new `buildResolveTimeline` frame-math case** (0-based recordFrames,
+  continuous cursor + `gapFrames` between reels, marker frames):
+  `node --experimental-vm-modules test/regression.js`
 - `node --check resolve-plugin/backend/resolve.js`
 
 #### Manual Verification:
 
-- One click creates a dated folder with one timeline per reel in a live Resolve project
+- One click creates a dated folder with a single timeline holding all reels (separated by the
+  `gapFrames` setting) in a live Resolve project
 - Source media lands in the Media Pool; clips reference it correctly
 - Clip frames land at the expected timeline positions (NOT offset by 1 hour) — frame-math confirmed
 - Markers appear at the correct frames with the correct colors
@@ -610,7 +639,8 @@ native module must be individually signed before notarization succeeds.
   `--selftest`/`--capability` spawn only on explicit user action.
 - **Offline env vars** (`HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE`) shave ~50 s off non-diarize runs —
   preserve them.
-- Mode D via `ImportTimelineFromFile` writes a temp file per reel; negligible vs the API round-trip.
+- Mode D issues one `AppendToTimeline` batch + N `AddMarker` calls per reel; all in-process API
+  round-trips, no temp files or file import.
 
 ## Migration Notes
 
@@ -643,34 +673,34 @@ native module must be individually signed before notarization succeeds.
 
 #### Automated
 
-- [x] 1.1 Regression suite green: `node --experimental-vm-modules test/regression.js`
-- [x] 1.2 Electron main process passes `node --check` (main.js + preload.js)
-- [x] 1.3 Vite Electron target builds without error
-- [x] 1.4 Tauri app still builds: `cargo check --manifest-path src-tauri/Cargo.toml`
-- [x] 1.5 Prettier clean on changed files
+- [x] 1.1 Regression suite green: `node --experimental-vm-modules test/regression.js` — 5091709
+- [x] 1.2 Electron main process passes `node --check` (main.js + preload.js) — 5091709
+- [x] 1.3 Vite Electron target builds without error — 5091709
+- [x] 1.4 Tauri app still builds: `cargo check --manifest-path src-tauri/Cargo.toml` — 5091709
+- [x] 1.5 Prettier clean on changed files — 5091709
 
 #### Manual
 
-- [x] 1.6 Plugin appears under Workspace → Workflow Integrations and the panel opens in live Resolve Studio
-- [x] 1.7 Existing frontend renders inside the panel; no failed-import console errors
-- [x] 1.8 LLM/cache/credential round-trip works through the adapter (no silent no-op)
-- [x] 1.9 Availability probe flips correctly between Studio (API) and Free (file-export fallback)
-- [x] 1.10 `state.fps` is seeded from the live Resolve timeline (not default 25) before any export
+- [x] 1.6 Plugin appears under Workspace → Workflow Integrations and the panel opens in live Resolve Studio — 5091709
+- [x] 1.7 Existing frontend renders inside the panel; no failed-import console errors — 5091709
+- [x] 1.8 LLM/cache/credential round-trip works through the adapter (no silent no-op) — 5091709
+- [x] 1.9 Availability probe flips correctly between Studio (API) and Free (file-export fallback) — 5091709
+- [x] 1.10 `state.fps` is seeded from the live Resolve timeline (not default 25) before any export — 5091709
 
 ### Phase 2: Mode D — Reels → Timelines
 
 #### Automated
 
-- [ ] 2.1 Regression suite green
-- [ ] 2.2 `node --check resolve-plugin/backend/resolve.js`
+- [x] 2.1 Regression suite green
+- [x] 2.2 `node --check resolve-plugin/backend/resolve.js`
 
 #### Manual
 
-- [ ] 2.3 One click creates a dated folder with one timeline per reel in a live project
-- [ ] 2.4 Source media lands in the Media Pool; clips reference it correctly
-- [ ] 2.5 Clip frames land at expected positions (no 1-hour offset) — frame-math confirmed
-- [ ] 2.6 Markers appear at correct frames with correct colors
-- [ ] 2.7 Timeline fps matches `state.fps`
+- [x] 2.3 One click creates a dated folder with a single timeline holding all reels, separated by the `gapFrames` setting, in a live project
+- [x] 2.4 Source media lands in the Media Pool; clips reference it correctly
+- [x] 2.5 Clip frames land at expected positions (no 1-hour offset) — frame-math confirmed
+- [x] 2.6 Markers appear at correct frames with correct colors
+- [x] 2.7 Timeline fps matches `state.fps`
 
 ### Phase 3: Mode C — Subtitles Track
 

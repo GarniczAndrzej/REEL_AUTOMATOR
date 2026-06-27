@@ -172,3 +172,26 @@ export async function resolveCapability() {
   }
   return _resolveCap;
 }
+
+/**
+ * Mode D (S-09 Phase 2): drive the Resolve scripting API to create a dated
+ * Media-Pool folder with a single timeline holding every reel (separated by the
+ * inter-reel gap from settings — same layout as the Lua export). The renderer
+ * hands over a pure, 0-based clip + marker payload (`buildResolveTimeline` — the
+ * regression-fenced Lua frame-math, NOT the EDL `3600*fps` CMX offset that would
+ * push every clip an hour into the timeline); the Electron backend drives the
+ * live API directly (`ImportMedia` → `CreateEmptyTimeline` → `AppendToTimeline` →
+ * `AddMarker`) — no temp files, no FCPXML (`ImportTimelineFromFile` was rejected
+ * live, errorCode 6). Electron WI host only — guarded by the caller on
+ * `resolveCapability().available`.
+ * @param {{
+ *   folderName: string,
+ *   mediaPaths: string[],
+ *   fps: number,
+ *   timeline: import('../exporters/resolve-payload.js').ResolveTimeline,
+ * }} payload
+ * @returns {Promise<{ created: number, folder: string, timeline: string }>}
+ */
+export async function resolveCreateReels(payload) {
+  return invoke('resolve_create_reels', payload);
+}

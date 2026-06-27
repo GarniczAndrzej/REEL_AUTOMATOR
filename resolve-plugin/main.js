@@ -61,6 +61,10 @@ const handlers = {
   path_join: (args) => path.join(...(args.parts || [])),
   // Resolve availability + live timeline fps (Phase 1 capability probe)
   resolve_capability: () => resolve.capability(),
+  // Mode D (Phase 2): dated folder + one timeline holding all reels (inter-reel
+  // gap from settings), built directly via the live Resolve API (AppendToTimeline
+  // + AddMarker) from a pure clip payload
+  resolve_create_reels: (args) => resolve.createReels(args),
 };
 
 function registerIpc() {

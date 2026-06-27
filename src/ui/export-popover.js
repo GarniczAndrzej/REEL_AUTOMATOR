@@ -10,6 +10,7 @@ import { generateEDL } from '../exporters/edl.js';
 import { generateXML } from '../exporters/xml.js';
 import { generateLua } from '../exporters/lua.js';
 import { generateFCPXML } from '../exporters/fcpxml.js';
+import { buildResolveTimeline } from '../exporters/resolve-payload.js';
 import {
   generateTranscriptVTT,
   generateSegmentsMd,
@@ -19,7 +20,11 @@ import { saveTextToPath } from '../util/save-file.js';
 import { stripExt } from '../util/filename.js';
 import { toast } from './toast.js';
 import { exportTranscriptSrt, transcriptBase } from './export-srt.js';
-import { isElectron, resolveCapability } from '../platform/adapter.js';
+import {
+  isElectron,
+  resolveCapability,
+  resolveCreateReels,
+} from '../platform/adapter.js';
 
 export function init() {
   // Export trigger now lives in the header (next to Settings) and the sidebar
@@ -63,6 +68,12 @@ export function init() {
     .getElementById('exFcpxmlCopy')
     ?.addEventListener('click', () => copyFormat('fcpxml'));
 
+  // S-09 Mode D: one-click hand-off to the live DaVinci Resolve project (Electron
+  // WI panel only; the row stays hidden unless the Resolve API is available).
+  document
+    .getElementById('exResolveGen')
+    ?.addEventListener('click', exportToResolve);
+
   // "More" — transcript + segments + prompt.
   document
     .getElementById('exSrtBtn')
@@ -78,28 +89,35 @@ export function openPopover() {
   // Open at any stage — transcript/.md/prompt export is useful before reels
   // exist; the EDL/XML/Lua buttons each guard on `reelsData` themselves.
   updateSummary();
-  applyResolveFallbackNotice();
+  applyResolveExportMode();
   const modal = document.getElementById('exportModal');
   if (modal) modal.style.display = 'flex';
 }
 
-// S-09: inside the DaVinci Resolve WI panel (Electron), when the Resolve
-// scripting API is unavailable (Resolve Free / non-Studio / no open project /
-// missing bridge) the panel falls back to the S-08 file-export set. Surface a
-// one-time Polish notice so the editor knows why the one-click Resolve hand-off
-// isn't offered. No-op under Tauri/browser (no Resolve host → no notice). The
-// Resolve-drive export mode itself lands in Phase 2.
-async function applyResolveFallbackNotice() {
+// S-09: inside the DaVinci Resolve WI panel (Electron), choose the export face by
+// live Resolve availability. When the scripting API is reachable (Studio + open
+// project), reveal the one-click "Wyślij do Resolve" row (Mode D). When it is
+// unavailable (Resolve Free / non-Studio / no open project / missing bridge),
+// surface a one-time Polish notice so the editor knows why the hand-off isn't
+// offered and falls back to the S-08 file-export set. No-op under Tauri/browser
+// (no Resolve host → neither the row nor the notice).
+async function applyResolveExportMode() {
   if (!isElectron()) return;
   const body = document.querySelector('#exportModal .modal-body');
-  if (!body || document.getElementById('resolveFallbackNotice')) return;
+  if (!body) return;
   let cap;
   try {
     cap = await resolveCapability();
   } catch {
     cap = { available: false };
   }
-  if (cap.available) return; // Studio: API drive available (wired in Phase 2)
+  const row = document.getElementById('resolveExportRow');
+  if (cap.available) {
+    if (row) row.style.display = '';
+    return; // Studio: API drive available — no fallback notice
+  }
+  if (row) row.style.display = 'none';
+  if (document.getElementById('resolveFallbackNotice')) return;
   const note = document.createElement('div');
   note.id = 'resolveFallbackNotice';
   note.className = 'info-box';
@@ -246,6 +264,77 @@ async function copyFormat(key) {
   state[f.store] = content;
   emit();
   await copyText(content);
+}
+
+// ── Mode D — reels → Resolve timeline (S-09 Phase 2) ───────────────
+// One-click hand-off into the live DaVinci Resolve project: a dated Media-Pool
+// folder with a single timeline holding every reel, separated by the inter-reel
+// gap from settings (`state.gapFrames`) — the same layout as the Lua export. The
+// renderer builds a pure clip + marker payload (`buildResolveTimeline`, 0-based —
+// the regression-fenced Lua frame-math, NOT the EDL `3600*fps` CMX offset that
+// would push every clip an hour in) and the Electron backend drives the live
+// Resolve API directly (`ImportMedia` → `CreateEmptyTimeline` → `AppendToTimeline`
+// → `AddMarker`). `ImportTimelineFromFile`/FCPXML was rejected live (errorCode 6
+// in the WI scripting scope). Gated on `resolve_available` (row hidden otherwise).
+
+async function exportToResolve() {
+  if (!state.reelsData.length) {
+    toast('Brak danych reelsów!', 'info');
+    return;
+  }
+  if (!state.videoPath) {
+    toast(
+      'Brak ścieżki wideo — wybierz plik wideo (sekcja Import lub „Przeglądaj").',
+      'info',
+    );
+    return;
+  }
+  // Defensive re-check: the row is only shown when available, but state can move.
+  let cap;
+  try {
+    cap = await resolveCapability();
+  } catch {
+    cap = { available: false };
+  }
+  if (!cap.available) {
+    toast('Brak dostępu do API DaVinci Resolve.', 'error');
+    return;
+  }
+
+  // Pure builder → { name, clips:[{startFrame,endFrame,recordFrame}], markers }.
+  // One timeline with every reel: the record cursor runs continuously, with
+  // `state.gapFrames` of empty timeline between consecutive reels (same as Lua).
+  const timeline = buildResolveTimeline({
+    reelsData: state.reelsData,
+    sentences: state.sentences,
+    mergeThreshold: state.mergeThreshold,
+    gapFrames: state.gapFrames,
+    name: state.projectName || 'Reels',
+  });
+
+  const btn = document.getElementById('exResolveGen');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await resolveCreateReels({
+      folderName: datedFolderName(),
+      mediaPaths: [state.videoPath],
+      fps: state.fps,
+      timeline,
+    });
+    const name = (res && res.timeline) || timeline.name;
+    toast(`Utworzono timeline „${name}" w DaVinci Resolve`, 'success');
+  } catch (e) {
+    toast('Nie udało się utworzyć timeline w Resolve: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Dated Media-Pool folder name, local time, e.g. "Reels 2026-06-27 14-05".
+function datedFolderName() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `Reels ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}`;
 }
 
 // ── "More" — transcript / segments / prompt ────────────────────────

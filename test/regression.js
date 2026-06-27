@@ -24,6 +24,7 @@ import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
 import { generateLua } from '../src/exporters/lua.js';
 import { generateFCPXML } from '../src/exporters/fcpxml.js';
+import { buildResolveTimeline } from '../src/exporters/resolve-payload.js';
 import { buildPrompt, DEFAULT_SCORING_GUIDANCE } from '../src/ai/prompt.js';
 import { validateThemes } from '../src/ai/validate.js';
 
@@ -1468,18 +1469,18 @@ assert(
 );
 
 // ─────────────────────────────────────────────────────────────────
-// Test 15: word-by-word SRT export (S-19 Phase 2)
-// One cue per word; onset-pin (starts never move), 4-frame floor,
-// right-side-only padding, clamp-to-next-onset (no overlap, cue may stay
-// sub-floor). FPS=25 → 1 frame = 40ms.
+// Test 15: word-by-word SRT export (S-19, gapless fill-forward)
+// One cue per word; onset-pin (starts never move), each cue held forward to
+// the next word's onset (no gaps), final word floor-padded. FPS=25 → 1 frame
+// = 40ms.
 // ─────────────────────────────────────────────────────────────────
 
 console.log('\n── Test 15: word-by-word SRT export ─────────────────────');
 
 // Two sentences so flattening crosses a sentence boundary. Words exercise:
-//  (a) longer than floor → end unchanged
-//  (b) shorter than floor, room to pad → end pushed to start+4
-//  (c) shorter than floor, pad would cross next onset → end clamped (cue < 4f)
+//  (a) onset 0, held forward to next onset 20
+//  (b) onset 20, held forward across the sentence boundary to next onset 50
+//  (c) onset 50, held forward to next onset 52 (sub-floor cue is fine)
 //  (d) final word → free pad to floor (no successor)
 const wordSrtSentences = [
   {
@@ -1488,8 +1489,8 @@ const wordSrtSentences = [
     start_frame: 0,
     end_frame: 24,
     words: [
-      { text: 'Słowo', start_frame: 0, end_frame: 10 }, // (a) dur 10 > floor
-      { text: 'drugie', start_frame: 20, end_frame: 22 }, // (b) dur 2 < floor
+      { text: 'Słowo', start_frame: 0, end_frame: 10 }, // (a) end filled to next onset 20
+      { text: 'drugie', start_frame: 20, end_frame: 22 }, // (b) end filled to next onset 50
     ],
   },
   {
@@ -1498,7 +1499,7 @@ const wordSrtSentences = [
     start_frame: 50,
     end_frame: 53,
     words: [
-      { text: 'trzecie', start_frame: 50, end_frame: 51 }, // (c) floor would hit 54 > next onset 52
+      { text: 'trzecie', start_frame: 50, end_frame: 51 }, // (c) end filled to next onset 52
       { text: 'czwarte', start_frame: 52, end_frame: 53 }, // (d) final → pad to 56
     ],
   },
@@ -1510,15 +1511,15 @@ const wsLines = wordSRT.split('\n');
 // Exact block layout (number / timestamp / text / blank), 4 cues.
 const expectedWordSRT = [
   '1',
-  '00:00:00,000 --> 00:00:00,400', // (a) start 0 (pinned), end 10 unchanged
+  '00:00:00,000 --> 00:00:00,800', // (a) start 0 (pinned), end filled to next onset 20
   'Słowo',
   '',
   '2',
-  '00:00:00,800 --> 00:00:00,960', // (b) start 20 (pinned), end 20+4=24
+  '00:00:00,800 --> 00:00:02,000', // (b) start 20 (pinned), end filled to next onset 50
   'drugie',
   '',
   '3',
-  '00:00:02,000 --> 00:00:02,080', // (c) start 50 (pinned), end clamped to next onset 52
+  '00:00:02,000 --> 00:00:02,080', // (c) start 50 (pinned), end filled to next onset 52
   'trzecie',
   '',
   '4',
@@ -1527,7 +1528,7 @@ const expectedWordSRT = [
   '',
 ].join('\n');
 
-assertEq(wordSRT, expectedWordSRT, 'word .srt exact onset/floor/clamp output');
+assertEq(wordSRT, expectedWordSRT, 'word .srt exact onset/fill-forward output');
 
 // Onset-pin: every cue start stamp equals frameToStamp of the word's onset.
 assert(wsLines[1].startsWith('00:00:00,000 -->'), '(a) start pinned to 0');
@@ -1535,28 +1536,30 @@ assert(wsLines[5].startsWith('00:00:00,800 -->'), '(b) start pinned to 20');
 assert(wsLines[9].startsWith('00:00:02,000 -->'), '(c) start pinned to 50');
 assert(wsLines[13].startsWith('00:00:02,080 -->'), '(d) start pinned to 52');
 
-// Floor + clamp specifics.
+// Fill-forward specifics: each non-final cue ends exactly at the next onset.
 assert(
-  wsLines[1].endsWith('--> 00:00:00,400'),
-  '(a) word longer than floor keeps its end',
+  wsLines[1].endsWith('--> 00:00:00,800'),
+  '(a) cue held forward to next onset (frame 20)',
 );
 assert(
-  wsLines[5].endsWith('--> 00:00:00,960'),
-  '(b) short word right-padded to start+4 frames',
+  wsLines[5].endsWith('--> 00:00:02,000'),
+  '(b) cue held forward across sentence boundary to next onset (frame 50)',
 );
 assert(
   wsLines[9].endsWith('--> 00:00:02,080'),
-  '(c) floor crossing next onset is clamped to next start (no overlap)',
+  '(c) cue held forward to next onset (frame 52), sub-floor is fine',
 );
 assert(
   wsLines[13].endsWith('--> 00:00:02,240'),
   '(d) final word freely padded to the 4-frame floor',
 );
 
-// No overlap: cue 3 end == cue 4 start onset.
+// Gapless: every non-final cue's end stamp == the next cue's start stamp.
 assert(
-  wsLines[9].split(' --> ')[1] === wsLines[13].split(' --> ')[0],
-  'clamped cue ends exactly at next onset (zero overlap)',
+  wsLines[1].split(' --> ')[1] === wsLines[5].split(' --> ')[0] &&
+    wsLines[5].split(' --> ')[1] === wsLines[9].split(' --> ')[0] &&
+    wsLines[9].split(' --> ')[1] === wsLines[13].split(' --> ')[0],
+  'cues are gapless: each end meets the next onset exactly',
 );
 
 // Skips words lacking numeric frame keys (e.g. stale seconds-only data).
@@ -1726,6 +1729,123 @@ assert(
     ),
   ),
   'validateThemes throws when no theme has any valid ids',
+);
+
+// ─────────────────────────────────────────────────────────────────
+// Test 18: buildResolveTimeline — Mode D clip+marker payload (S-09 Phase 2)
+// The Electron WI panel drives the live Resolve API directly (AppendToTimeline +
+// AddMarker) from this pure builder instead of importing FCPXML (rejected live,
+// errorCode 6). Frame-math mirrors lua.js exactly: ALL reels on ONE timeline, the
+// record cursor running continuously with `gapFrames` of empty timeline between
+// consecutive reels. recordFrame is 0-based (NEVER the EDL 3600*fps offset);
+// markers carry the live AddMarker color vocabulary (hook=Green/body=Blue/
+// punchline=Red) at their continuous record frames.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 18: buildResolveTimeline (Mode D payload) ───────');
+
+const m7 = newSentences.find((s) => s.id === 7);
+const m8 = newSentences.find((s) => s.id === 8);
+const reelADur = m2.duration_frame + m3.duration_frame; // clips 2+3
+const resolveTl = buildResolveTimeline({
+  reelsData: markerReels, // reel A {hook:2,body:2,punchline:3} + marker-free reel B [7,8]
+  sentences: newSentences,
+  mergeThreshold: MERGE_0,
+  gapFrames: GAP_FRAMES,
+  name: PROJECT_NAME,
+});
+
+assert(resolveTl.name === PROJECT_NAME, 'timeline carries the project name');
+
+// One flat clip list across both reels: clips 2, 3 (reel A) then 7, 8 (reel B).
+assert(
+  resolveTl.clips.length === 4,
+  `single timeline holds all 4 clips (got ${resolveTl.clips.length})`,
+);
+
+// Reel A clips: source frames map to the span start/end; recordFrame is the
+// 0-based continuous cursor (clip2=0, clip3=dur2).
+assert(
+  resolveTl.clips[0].startFrame === m2.start_frame &&
+    resolveTl.clips[0].endFrame === m2.end_frame,
+  'clip[0] source frames = clip 2 span',
+);
+assert(
+  resolveTl.clips[0].recordFrame === 0,
+  'clip[0] recordFrame is 0-based (no 3600*fps offset)',
+);
+assert(
+  resolveTl.clips[1].recordFrame === m2.duration_frame,
+  `clip[1] recordFrame = dur2 (${m2.duration_frame}) — cursor advances`,
+);
+
+// Inter-reel gap: reel B's first clip (clip 7) starts after reel A's total
+// duration PLUS gapFrames — the continuous single-timeline cursor, not a reset.
+assert(
+  resolveTl.clips[2].startFrame === m7.start_frame,
+  'clip[2] source frames = clip 7 span',
+);
+assert(
+  resolveTl.clips[2].recordFrame === reelADur + GAP_FRAMES,
+  `clip[2] recordFrame = reelADur + gap (${reelADur} + ${GAP_FRAMES})`,
+);
+assert(
+  resolveTl.clips[3].recordFrame === reelADur + GAP_FRAMES + m7.duration_frame,
+  'clip[3] recordFrame continues after clip 7 (no second gap mid-reel)',
+);
+
+// Markers: 3 from reel A (reel B is marker-free), at their continuous record
+// frames. Colors per the live AddMarker vocabulary; hook(2)=0, body(2)=0,
+// punchline(3)=dur2.
+assert(
+  resolveTl.markers.length === 3,
+  `timeline carries 3 markers from reel A (got ${resolveTl.markers.length})`,
+);
+const resByLabel = new Map(resolveTl.markers.map((m) => [m.label, m]));
+assert(
+  resByLabel.get('HOOK')?.color === 'Green' &&
+    resByLabel.get('HOOK')?.frame === 0,
+  'HOOK marker is Green at frame 0',
+);
+assert(
+  resByLabel.get('BODY')?.color === 'Blue' &&
+    resByLabel.get('BODY')?.frame === 0,
+  'BODY marker is Blue at frame 0',
+);
+assert(
+  resByLabel.get('PUNCHLINE')?.color === 'Red' &&
+    resByLabel.get('PUNCHLINE')?.frame === m2.duration_frame,
+  `PUNCHLINE marker is Red at frame dur2 (${m2.duration_frame})`,
+);
+
+// gapFrames=0 collapses the inter-reel gap: reel B's first clip lands exactly at
+// reel A's total duration (no empty frames between reels).
+const noGapTl = buildResolveTimeline({
+  reelsData: markerReels,
+  sentences: newSentences,
+  mergeThreshold: MERGE_0,
+  gapFrames: 0,
+  name: PROJECT_NAME,
+});
+assert(
+  noGapTl.clips[2].recordFrame === reelADur,
+  'gapFrames=0 → reel B starts at reelADur (no inter-reel gap)',
+);
+
+// Merge path: adjacent clips 9+10 collapse to one span (threshold=12), so the
+// timeline yields a single clip covering both — same span source as the exporters.
+const mergedTl = buildResolveTimeline({
+  reelsData: [{ reel_name: 'R', clip_ids: [9, 10] }],
+  sentences: newSentences,
+  mergeThreshold: MERGE_12,
+  gapFrames: GAP_FRAMES,
+  name: PROJECT_NAME,
+});
+assert(
+  mergedTl.clips.length === 1 &&
+    mergedTl.clips[0].startFrame === s9.start_frame &&
+    mergedTl.clips[0].endFrame === s10.end_frame,
+  'merged clips 9+10 produce one span [clip9.start, clip10.end]',
 );
 
 // ─────────────────────────────────────────────────────────────────

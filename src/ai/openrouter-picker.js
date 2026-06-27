@@ -88,7 +88,9 @@ export function init(config = LEGACY_CONFIG) {
 
   loadBtn.addEventListener('click', () => loadOrModels(config));
   search.addEventListener('focus', () => openOrDropdown(config));
-  search.addEventListener('input', (e) => filterOrModels(config, e.target.value));
+  search.addEventListener('input', (e) =>
+    filterOrModels(config, e.target.value),
+  );
   badge.addEventListener('click', () => search.focus());
 
   document.addEventListener('click', (e) => {
@@ -183,7 +185,9 @@ function renderOrDropdown(config, models) {
     })
     .join('');
   dd.querySelectorAll('.or-model-item').forEach((el) => {
-    el.addEventListener('click', () => selectOrModel(config, el.dataset.modelId));
+    el.addEventListener('click', () =>
+      selectOrModel(config, el.dataset.modelId),
+    );
   });
 }
 

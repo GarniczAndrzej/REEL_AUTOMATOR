@@ -54,13 +54,17 @@ export function generateTranscriptSRT(sentences, fps, opts = {}) {
 
 /**
  * Generate a word-by-word `.srt` — one cue per spoken word, for karaoke-style
- * Reels/TikTok captions. Timing rules (S-19): the cue start is pinned to the
- * word's real audio onset (`start_frame`) and never moved; every word is held
- * for at least 4 frames at project fps; shorter words are padded only on the
- * right; any right-pad that would cross the next word's onset is clamped to
- * that onset (overlap-free, even if the resulting cue is < 4 frames). Words are
- * flattened in global order across sentence boundaries, so clamping respects
- * real audio adjacency. Speaker labels are never emitted. Pure function.
+ * Reels/TikTok captions. Timing rules (S-19, gapless fill-forward): the cue
+ * start is pinned to the word's real audio onset (`start_frame`) and never
+ * moved — so every cue lines up with speech. Each cue is then held forward
+ * (to the right) until the NEXT word's onset, leaving no gap between cues: a
+ * word stays on screen until the following word is actually spoken. The final
+ * word has no successor to fill toward, so it keeps its own end with a 4-frame
+ * floor. If a successor's onset is at or before the current word's start
+ * (overlapping/diarized timing), the end is clamped to the start so the cue is
+ * never reversed. Words are flattened in global order across sentence
+ * boundaries, so fill respects real audio adjacency. Speaker labels are never
+ * emitted. Pure function.
  * @param {import('../state.js').Sentence[]} sentences
  * @param {number} fps
  * @returns {string}
@@ -84,9 +88,13 @@ export function generateWordSRT(sentences, fps) {
   const out = [];
   words.forEach((w, i) => {
     const start = w.start_frame;
-    let end = Math.max(w.end_frame, start + FLOOR_FRAMES);
     const next = words[i + 1];
-    if (next && end > next.start_frame) end = Math.max(start, next.start_frame);
+    // Gapless fill-forward: hold this cue until the next word's onset (clamped
+    // to `start` so an overlapping successor can't reverse the cue). The last
+    // word has no successor, so it keeps its own end with the 4-frame floor.
+    const end = next
+      ? Math.max(start, next.start_frame)
+      : Math.max(w.end_frame, start + FLOOR_FRAMES);
     out.push(String(i + 1));
     out.push(
       `${frameToStamp(start, fps, ',')} --> ${frameToStamp(end, fps, ',')}`,
