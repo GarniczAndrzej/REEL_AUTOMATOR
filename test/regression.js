@@ -10,6 +10,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseSRT, framesToTC, parseTime } from '../src/parser/srt.js';
 import { mergeAdjacentClips } from '../src/parser/segments.js';
 import { segmentFromWords } from '../src/parser/word-segments.js';
@@ -28,7 +29,7 @@ import { buildResolveTimeline } from '../src/exporters/resolve-payload.js';
 import { buildPrompt, DEFAULT_SCORING_GUIDANCE } from '../src/ai/prompt.js';
 import { validateThemes } from '../src/ai/validate.js';
 
-const SRT_PATH = new URL('./sample.srt', import.meta.url).pathname;
+const SRT_PATH = fileURLToPath(new URL('./sample.srt', import.meta.url));
 const srtText = readFileSync(SRT_PATH, 'utf-8');
 
 let passed = 0;
@@ -741,7 +742,7 @@ assert(
 
 console.log('\n── Test 9: segmentFromWords (word-driven) ───────────────');
 
-const WX_PATH = new URL('./whisperx-fixture.json', import.meta.url).pathname;
+const WX_PATH = fileURLToPath(new URL('./whisperx-fixture.json', import.meta.url));
 const wxFixture = JSON.parse(readFileSync(WX_PATH, 'utf-8'));
 const wxSentences = segmentFromWords(wxFixture.segments, FPS, MIN_CHARS);
 

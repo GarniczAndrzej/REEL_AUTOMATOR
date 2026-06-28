@@ -1,0 +1,20 @@
+# Normalize all text files to LF in the repository and check them out as LF on
+# every platform. This keeps the JS pipeline byte-identical across macOS/Windows
+# (test fixtures like test/sample.srt must stay LF or the SRT parser sees stray
+# \r) and keeps the sidecar shell scripts runnable under Git-Bash on Windows
+# (CRLF shebang/scripts fail). See context/foundation/windows-port-guide.md §8.
+* text=auto eol=lf
+
+# Shell scripts must be LF — Git-Bash chokes on \r in shebangs and line endings.
+*.sh text eol=lf
+
+# Known-binary assets — never touch their bytes (most are git-ignored anyway).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.icns binary
+*.bin  binary
+*.mp4  binary
+*.reelproj text eol=lf
