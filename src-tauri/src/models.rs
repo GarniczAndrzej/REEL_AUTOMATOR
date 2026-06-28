@@ -49,6 +49,13 @@ fn models_root(app: &AppHandle) -> Result<PathBuf, String> {
 /// Final on-disk directory for a model id (holds model.bin + config/tokenizer/…).
 /// Public so `whisper.rs` can resolve the local `--model` path for transcription.
 pub fn model_dir(app: &AppHandle, model_id: &str) -> Result<PathBuf, String> {
+    // Guard the destructive callers (download swap + delete): an empty/blank
+    // model_id would join to the models ROOT, so delete_model would wipe every
+    // model and the download swap would target the root. No caller passes empty
+    // today, but the blast radius warrants a cheap explicit check.
+    if model_id.trim().is_empty() {
+        return Err("Brak identyfikatora modelu (modelId).".into());
+    }
     Ok(models_root(app)?.join(sanitize(model_id)))
 }
 

@@ -502,12 +502,38 @@ async function ensureRenderPreset(project) {
  * to manual file import (never a blind source-clip decode).
  * @returns {Promise<{ ok: true, path: string } | { ok: false, reason: string }>}
  */
+// The rendered WAV is RETURNED to the caller (it becomes the transcription input,
+// consumed on a later, separate click), so it can't be deleted in this function's
+// `finally` without racing the consumer. Instead, sweep any PRIOR run's output at
+// the start of each collect: previous renders have already been transcribed (or
+// abandoned) and are dead temp, so each Mode A click leaves at most one file
+// behind rather than accumulating one per click. Never touches the dir we're about
+// to create. Best-effort — a failed unlink just defers to the OS tmp reaper.
+async function sweepStaleAudioDirs() {
+  try {
+    const tmp = os.tmpdir();
+    const entries = await fs.promises.readdir(tmp);
+    await Promise.all(
+      entries
+        .filter((name) => name.startsWith('reels-audio-'))
+        .map((name) =>
+          fs.promises
+            .rm(path.join(tmp, name), { recursive: true, force: true })
+            .catch(() => {}),
+        ),
+    );
+  } catch {
+    /* best-effort cleanup */
+  }
+}
+
 async function collectTimelineAudio() {
   if (!available || !projectManager)
     return { ok: false, reason: 'unavailable' };
   let project = null;
   let jobId = null;
   try {
+    await sweepStaleAudioDirs();
     project = await projectManager.GetCurrentProject();
     if (!project) return { ok: false, reason: 'no-project' };
     const timeline =

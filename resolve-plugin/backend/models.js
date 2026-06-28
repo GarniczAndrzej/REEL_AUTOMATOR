@@ -27,6 +27,17 @@ function modelDir(modelId) {
   return path.join(paths.modelsRoot(), sanitize(modelId));
 }
 
+// Guard the destructive paths: an empty/blank modelId would make modelDir('')
+// resolve to the models ROOT, so deleteModel would `rm` every model and
+// downloadModel's swap would target the root. No caller passes empty today, but
+// the blast radius (whole model set) warrants a cheap explicit check. (Mirror of
+// the latent hazard in the Tauri models.rs path.)
+function requireModelId(modelId) {
+  if (!modelId || !String(modelId).trim()) {
+    throw new Error('Brak identyfikatora modelu (modelId).');
+  }
+}
+
 function isDownloaded(dir, sentinel) {
   const s = sentinel && sentinel.trim() ? sentinel : MODEL_SENTINEL;
   try {
@@ -113,6 +124,7 @@ async function verifySha256(filePath, expected) {
  * @returns {Promise<string>}
  */
 async function downloadModel({ modelId, repo, files, totalBytes, hfToken }) {
+  requireModelId(modelId);
   if (!files || !files.length) {
     throw new Error(
       'Brak listy plików modelu w rejestrze (uzupełnij repo/files).',
@@ -250,6 +262,7 @@ async function downloadModel({ modelId, repo, files, totalBytes, hfToken }) {
 
 /** Delete a downloaded model directory. */
 async function deleteModel({ modelId }) {
+  requireModelId(modelId);
   const dir = modelDir(modelId);
   await fsp.rm(dir, { recursive: true, force: true });
 }

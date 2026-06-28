@@ -12,7 +12,14 @@
 // WhisperX sidecar + model manager land in Phase 4.
 
 const path = require('path');
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  session,
+} = require('electron');
 
 const resolve = require('./backend/resolve');
 const project = require('./backend/project');
@@ -157,6 +164,39 @@ async function nativeAsk({ message, options }) {
 
 let mainWindow = null;
 
+// preload.js exposes a generic `window.bridge.invoke` reaching every IPC channel
+// (fs writes + child_process spawn), so a panel-side XSS (LLM/transcript text via
+// innerHTML) could escalate to arbitrary file write / process spawn. Defence in
+// depth, applied only to THIS Electron host (the shared `src/` HTML is reused by
+// the Tauri build, which has its own CSP story):
+//   1. A strict CSP header on every renderer response — `script-src 'self'` is the
+//      load-bearing line (built JS/CSS are local; the only external fetch is the
+//      OpenRouter API).
+//   2. Deny in-app window creation + off-`file://` navigation; route real http(s)
+//      links to the system browser instead.
+const RENDERER_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://openrouter.ai",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-src 'none'",
+].join('; ');
+
+function hardenSession() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [RENDERER_CSP],
+      },
+    });
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 480,
@@ -168,6 +208,23 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+  // Block navigation-hijack: deny popups and any attempt to navigate the panel
+  // away from its bundled `file://` renderer; hand genuine web URLs to the OS
+  // browser rather than loading them in-process.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) {
+      event.preventDefault();
+      if (url.startsWith('https://') || url.startsWith('http://')) {
+        shell.openExternal(url);
+      }
+    }
   });
   // Quit the plugin process when the panel closes so reopening from the menu
   // spawns a fresh instance (matches the Resolve SDK SamplePlugin; avoids a
@@ -190,6 +247,7 @@ app.whenReady().then(async () => {
     console.warn('[resolve-plugin] Resolve bootstrap failed:', e.message);
   }
   registerIpc();
+  hardenSession();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

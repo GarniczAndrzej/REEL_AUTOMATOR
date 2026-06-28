@@ -1,9 +1,9 @@
 ---
 change_id: resolve-plugin-handoff
 title: Resolve plugin handoff
-status: implemented
+status: impl_reviewed
 created: 2026-06-22
-updated: 2026-06-27
+updated: 2026-06-28
 archived_at: null
 ---
 
