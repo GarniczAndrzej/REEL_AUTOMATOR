@@ -6,6 +6,7 @@ src-tauri/target/
 
 # WhisperX sidecar — large frozen artifacts + bundled models (built by sidecar/build.sh)
 sidecar/.venv/
+sidecar/.venv-gpu/
 sidecar/build/
 sidecar/dist/
 sidecar/whisperx_engine/align_models/

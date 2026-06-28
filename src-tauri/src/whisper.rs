@@ -559,7 +559,7 @@ pub async fn transcribe_video(
 
     let sidecar = app
         .shell()
-        .sidecar(crate::engine::ENGINE_SIDECAR)
+        .sidecar(crate::engine::engine_sidecar())
         .map_err(|e| {
             let _ = std::fs::remove_file(&wav_path);
             format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
@@ -574,6 +574,9 @@ pub async fn transcribe_video(
     } else {
         crate::engine::with_hf_offline(sidecar)
     };
+    // UTF-8 stdio so Polish diacritics in the JSON result survive Windows' cp1250
+    // pipe default (see engine::with_utf8_io).
+    let sidecar = crate::engine::with_utf8_io(sidecar);
 
     let (rx, child) = sidecar.spawn().map_err(|e| {
         let _ = std::fs::remove_file(&wav_path);
@@ -803,15 +806,15 @@ pub async fn align_transcript(
         let _ = std::fs::remove_file(&transcript_path);
     };
 
-    let sidecar = crate::engine::with_hf_offline(
+    let sidecar = crate::engine::with_utf8_io(crate::engine::with_hf_offline(
         app.shell()
-            .sidecar(crate::engine::ENGINE_SIDECAR)
+            .sidecar(crate::engine::engine_sidecar())
             .map_err(|e| {
                 cleanup_temps();
                 format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
             })?
             .args(align_args),
-    );
+    ));
 
     let (rx, child) = sidecar.spawn().map_err(|e| {
         cleanup_temps();

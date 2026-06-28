@@ -85,6 +85,19 @@ def _align_models_base():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), ALIGN_MODEL_SUBDIR)
 
 
+# Pin UTF-8 on both std streams before we capture/redirect them. The JSON result
+# contract carries non-ASCII (Polish diacritics ą/ć/ę/ł/ń/ó/ś/ź/ż) via
+# ensure_ascii=False, but on Windows the std streams default to the legacy
+# ANSI/OEM codepage (cp1250/cp1252/cp852) when stdio is a pipe — which mangles or
+# drops those characters (and can even raise UnicodeEncodeError mid-run). The Rust
+# layer reads stdout as UTF-8, so force UTF-8 here. Best-effort: a non-
+# reconfigurable stream (already detached / unusual freeze) is left as-is.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 # Real stdout is reserved for the single JSON result document — the Rust layer
 # parses stdout verbatim as JSON. whisperx/pyannote/faster-whisper log chatter
 # (e.g. "Performing voice activity detection") to stdout, which would corrupt

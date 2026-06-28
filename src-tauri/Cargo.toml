@@ -31,10 +31,11 @@ sha2 = "0.10"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
 futures-util = "0.3"
-# macOS Keychain backend (S-11). keyring 3.x ships NO credential store by
-# default (silently falls back to an in-memory mock); `apple-native` links the
-# Security framework so secrets actually persist to the login Keychain.
-keyring = { version = "3.6.3", features = ["apple-native"] }
+# OS credential-store backends (S-11). keyring 3.x ships NO credential store by
+# default (silently falls back to an in-memory mock, so keys vanish each launch);
+# `apple-native` links macOS Security framework, `windows-native` the Windows
+# Credential Manager, so secrets actually persist to the OS keychain per platform.
+keyring = { version = "3.6.3", features = ["apple-native", "windows-native"] }
 
 # Unix-only: send SIGTERM to the engine sidecar on cancel (see whisper.rs
 # cancel_transcription) so the PyInstaller worker child shuts down cleanly.

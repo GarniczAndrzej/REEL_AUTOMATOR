@@ -14,9 +14,10 @@
 #   ALIGN_LANGS="pl en" sidecar/build.sh   # which alignment models to bundle
 #
 # Targets produced (per the plan):
-#   src-tauri/binaries/whisperx-engine-aarch64-apple-darwin        (macOS CPU)
-#   src-tauri/binaries/whisperx-engine-aarch64-apple-darwin-gpu    (macOS Metal)
-#   src-tauri/binaries/whisperx-engine-x86_64-pc-windows-msvc.exe  (Windows)
+#   src-tauri/binaries/whisperx-engine-aarch64-apple-darwin            (macOS CPU)
+#   src-tauri/binaries/whisperx-engine-gpu-aarch64-apple-darwin        (macOS Metal)
+#   src-tauri/binaries/whisperx-engine-x86_64-pc-windows-msvc.exe      (Windows CPU)
+#   src-tauri/binaries/whisperx-engine-gpu-x86_64-pc-windows-msvc.exe  (Windows CUDA)
 #
 # Prerequisites: Python 3.10/3.11, pip, internet (first build pulls wheels +
 # the alignment model). See sidecar/README.md.
@@ -51,13 +52,20 @@ case "$uname_s" in
   *) echo "unsupported OS: $uname_s" >&2; exit 1 ;;
 esac
 
-SUFFIX=""
-[ "$GPU" = "1" ] && SUFFIX="-gpu"
-OUT_NAME="whisperx-engine-${TRIPLE}${SUFFIX}"
+# Naming: the GPU variant's `-gpu` goes BEFORE the triple so the base name is
+# `whisperx-engine-gpu`. Tauri's externalBin/sidecar resolver appends the host
+# triple to a base name, so only `whisperx-engine-gpu-<triple>` (not
+# `whisperx-engine-<triple>-gpu`) is resolvable as its own sidecar.
+BASE_NAME="whisperx-engine"
+[ "$GPU" = "1" ] && BASE_NAME="whisperx-engine-gpu"
+OUT_NAME="${BASE_NAME}-${TRIPLE}"
 echo "==> Building $OUT_NAME (GPU=$GPU, align langs: $ALIGN_LANGS)"
 
 # ── Python venv ─────────────────────────────────────────────────────────────
+# CPU and GPU torch builds cannot co-exist in one venv (same package, different
+# +cpu/+cuXXX local version), so the GPU build gets its own venv.
 VENV="$SIDECAR_DIR/.venv"
+[ "$GPU" = "1" ] && VENV="$SIDECAR_DIR/.venv-gpu"
 if [ ! -d "$VENV" ]; then
   python3 -m venv "$VENV"
 fi
@@ -66,23 +74,55 @@ source "$VENV/bin/activate" 2>/dev/null || source "$VENV/Scripts/activate"
 python -m pip install --upgrade pip wheel >/dev/null
 
 # ── Dependency install ──────────────────────────────────────────────────────
-# macOS arm64 (the shipping target) installs the Phase-0-certified locked stack
-# with --no-deps: whisperx 3.8.6 declares `huggingface-hub<1.0.0` but transformers
-# 5.x needs `>=1.5.0`, so the gate-validated combo is NOT pip cross-resolvable. The
-# lock pins every package (incl. the mac MPS torch wheel) at the runtime-proven
-# versions; --no-deps tolerates whisperx's stale cap. Other platforms fall back to
-# best-effort resolution from requirements.txt.
+# Every platform installs the Phase-0-certified locked stack with --no-deps:
+# whisperx 3.8.6 declares `huggingface-hub<1.0.0` but transformers 5.x needs
+# `>=1.5.0`, so the gate-validated combo is NOT pip cross-resolvable on ANY
+# platform (a plain `pip install -r requirements.txt` hits ResolutionImpossible —
+# confirmed on Windows). The lock pins every package at the runtime-proven
+# versions; --no-deps tolerates whisperx's stale cap.
+#
+# torch is platform-specific, so on non-macOS we install the torch trio FIRST
+# from the correct wheel index (CPU or CUDA) at the EXACT versions pinned in the
+# lock; the lock's `torch==2.8.0` etc. then resolve as already-satisfied by the
+# local +cpu/+cuXXX build (PEP 440: `==2.8.0` permits `2.8.0+cpu`). macOS skips
+# this and takes torch (the MPS wheel) straight from the lock.
+#
+# NOTE (torchcodec): the lock includes torchcodec==0.7.0, whose native libs need
+# *shared* FFmpeg libraries to decode. Our bundled ffmpeg is a static .exe (no
+# DLLs), so torchcodec fails to load — but it is only used by pyannote (opt-in
+# diarization) and degrades gracefully (in-memory waveform fallback). Core
+# transcription + forced alignment use whisperx.load_audio (ffmpeg subprocess),
+# not torchcodec, so the CPU/GPU --selftest and the main path are unaffected.
+TORCH_TRIO="torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0"  # MUST match requirements.lock.txt
 LOCK="$ENGINE_PKG/requirements.lock.txt"
-if [ "$uname_s" = "Darwin" ] && [ -f "$LOCK" ]; then
+if [ -f "$LOCK" ]; then
+  if [ "$uname_s" != "Darwin" ]; then
+    if [ "$GPU" = "1" ]; then
+      # CUDA build (Linux/Windows). cu128 carries Blackwell sm_120 kernels (RTX 50xx);
+      # cu121 has none and fails at runtime with "no kernel image available".
+      TORCH_INDEX="https://download.pytorch.org/whl/${CUDA:-cu128}"
+    else
+      TORCH_INDEX="https://download.pytorch.org/whl/cpu"
+    fi
+    echo "==> Installing torch trio from $TORCH_INDEX ($TORCH_TRIO)"
+    python -m pip install --index-url "$TORCH_INDEX" $TORCH_TRIO
+  fi
   echo "==> Installing locked sidecar stack (--no-deps) from requirements.lock.txt"
   python -m pip install --no-deps -r "$LOCK"
+  # PyInstaller's Windows bootloader build needs pefile + pywin32-ctypes. These are
+  # win32-only deps NOT in the macOS lock, and --no-deps skipped pyinstaller's own
+  # deps, so install them explicitly when freezing on Windows.
+  if [ "$EXE_EXT" = ".exe" ]; then
+    echo "==> Installing Windows PyInstaller deps (pefile, pywin32-ctypes)"
+    python -m pip install "pefile>=2022.5.30" pywin32-ctypes
+  fi
 else
+  # No lock present — best-effort resolution (will likely fail the whisperx/
+  # transformers cross-resolve; keep a lock checked in to avoid this path).
   if [ "$uname_s" = "Darwin" ]; then
-    # macOS without a lock: torch ships with Metal (MPS); CTranslate2 stays CPU.
     python -m pip install torch torchaudio
   elif [ "$GPU" = "1" ]; then
-    # CUDA build (Linux/Windows).
-    python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+    python -m pip install torch torchaudio --index-url "https://download.pytorch.org/whl/${CUDA:-cu128}"
   else
     python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
   fi

@@ -6,14 +6,92 @@
 // Phase 2.
 
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::{Command, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-/// Base name of the sidecar; Tauri resolves the arch-suffixed file per platform.
-pub const ENGINE_SIDECAR: &str = "whisperx-engine";
+/// Base names of the two engine sidecar variants; Tauri appends the host triple
+/// (e.g. `-x86_64-pc-windows-msvc.exe`). The `-gpu` build ships cu128/CUDA torch;
+/// the default build is CPU-only. The active one is chosen by `engine_sidecar()`.
+pub const ENGINE_SIDECAR_CPU: &str = "whisperx-engine";
+pub const ENGINE_SIDECAR_GPU: &str = "whisperx-engine-gpu";
+
+/// Host target triple, matching `sidecar/build.sh`'s naming. Used to locate the
+/// arch-suffixed GPU sidecar file on disk for the spawn-free presence check.
+fn host_triple() -> &'static str {
+    if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "aarch64-apple-darwin"
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        "x86_64-apple-darwin"
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        "x86_64-unknown-linux-gnu"
+    } else {
+        ""
+    }
+}
+
+/// True if the GPU sidecar binary is present for the host triple. Checks the dev
+/// staging dir (`src-tauri/binaries/`) and the production location (beside the
+/// bundled main executable). Spawn-free — it stats a file, never launches torch.
+fn gpu_sidecar_present() -> bool {
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+    let file = format!("{ENGINE_SIDECAR_GPU}-{}{ext}", host_triple());
+    if Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join(&file)
+        .is_file()
+    {
+        return true;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            if dir.join(&file).is_file() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// True if a usable NVIDIA GPU + driver is present (cheap, ~instant): `nvidia-smi`
+/// runs and lists ≥1 GPU. This only shells out to the always-installed driver
+/// tool — it does NOT spawn the multi-GB engine. Any error/absence ⇒ false.
+fn nvidia_gpu_present() -> bool {
+    std::process::Command::new("nvidia-smi")
+        .arg("-L")
+        .output()
+        .map(|o| o.status.success() && !o.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+/// Choose the engine variant ONCE per process (memoized). Selection is cheap and
+/// spawn-free so the launch badge (`whisperx_engine_cached`, which must never
+/// spawn the engine) can fold the chosen variant into its readiness cache key:
+///   1. `REEL_ENGINE_VARIANT=cpu|gpu` env override (debugging),
+///   2. else GPU iff the gpu sidecar binary is present AND `nvidia-smi` finds a GPU,
+///   3. else CPU.
+/// The engine's own `--selftest`/`--capability` provides the *authoritative*
+/// `gpu:true`/`device` confirmation for the readiness badge; this routing only
+/// decides which binary to spawn. The GPU build is a safe superset — if CUDA is
+/// unusable it auto-falls back to `device="cpu"` (torch.cuda.is_available()), so a
+/// false-positive selection degrades gracefully rather than failing.
+pub fn engine_sidecar() -> &'static str {
+    static SELECTED: OnceLock<&'static str> = OnceLock::new();
+    SELECTED.get_or_init(|| {
+        match std::env::var("REEL_ENGINE_VARIANT").ok().as_deref() {
+            Some("gpu") => ENGINE_SIDECAR_GPU,
+            Some("cpu") => ENGINE_SIDECAR_CPU,
+            _ if gpu_sidecar_present() && nvidia_gpu_present() => ENGINE_SIDECAR_GPU,
+            _ => ENGINE_SIDECAR_CPU,
+        }
+    })
+}
 
 /// Bound for the cheap `--capability` probe. It does a device detect + dir check
 /// (no model load, no align), so even cold — torch import + onefile extraction —
@@ -38,6 +116,18 @@ const SELFTEST_TIMEOUT: Duration = Duration::from_secs(300);
 pub fn with_hf_offline(cmd: Command) -> Command {
     cmd.env("HF_HUB_OFFLINE", "1")
         .env("TRANSFORMERS_OFFLINE", "1")
+}
+
+/// Force the engine's stdio to UTF-8. The result JSON uses `ensure_ascii=False`
+/// (raw Polish diacritics ą/ć/ę/ł/ń/ó/ś/ź/ż); on Windows a frozen Python's *piped*
+/// stdout defaults to the legacy ANSI codepage (cp1250), so those characters
+/// arrive as non-UTF-8 bytes that the Rust reader (`from_utf8_lossy`) turns into
+/// U+FFFD — the "missing Polish signs" bug. `PYTHONUTF8`/`PYTHONIOENCODING` make
+/// the embedded interpreter encode stdio as UTF-8. The engine script also self-
+/// reconfigures its streams to UTF-8; this is belt-and-suspenders that *also*
+/// fixes an exe frozen before that change. Apply at every engine spawn site.
+pub fn with_utf8_io(cmd: Command) -> Command {
+    cmd.env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8")
 }
 
 /// Resolve the external wav2vec2 alignment-model directory that ships *beside*
@@ -102,12 +192,12 @@ pub async fn run_engine(
     let arg_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     // Both callers (self-test, capability) use only the bundled align model (or
     // no model at all) — force HF offline so they don't stall on network checks.
-    let sidecar = with_hf_offline(
+    let sidecar = with_utf8_io(with_hf_offline(
         app.shell()
-            .sidecar(ENGINE_SIDECAR)
+            .sidecar(engine_sidecar())
             .map_err(|e| format!("Silnik WhisperX niedostępny: {e}"))?
             .args(arg_vec),
-    );
+    ));
     let (mut rx, child) = sidecar
         .spawn()
         .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
@@ -170,6 +260,10 @@ fn readiness_cache_key(app: &AppHandle) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     h.update(app.package_info().version.to_string().as_bytes());
+    h.update(b"\x00");
+    // Fold in the selected variant so a CPU verdict never paints a GPU badge
+    // (or vice-versa) after a swap — each variant gets its own cache file.
+    h.update(engine_sidecar().as_bytes());
     h.update(b"\x00");
     match align_model_dir(app).and_then(|d| std::fs::metadata(&d).ok()) {
         Some(meta) => {
