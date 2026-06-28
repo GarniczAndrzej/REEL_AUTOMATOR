@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-26
+updated: 2026-06-28
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -40,7 +40,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-05  | builtin-whisperx-transcription | transcribe locally with word-level alignment + manage models | F-01            | FR-001, FR-002, FR-003, FR-004, FR-005, FR-006, FR-007 | done     |
 | S-07  | auto-mode-pipeline          | run the whole pipeline in one click with staged progress     | S-01, S-05         | FR-008, FR-009                                | done     |
 | S-08  | timeline-export-set         | export Premiere XML, FCPXML and Resolve Lua (with markers)   | S-01               | FR-027, FR-028, FR-029                        | done |
-| S-09  | resolve-plugin-handoff      | auto-collect timeline audio, transcribe in-panel, insert subtitles onto Subtitles track, and create reel timelines — all from inside Resolve | S-01, S-05, S-08, F-02 | FR-030, FR-031, US-02 | go-with-rework |
+| S-09  | resolve-plugin-handoff      | auto-collect timeline audio, transcribe in-panel, insert subtitles onto Subtitles track, and create reel timelines — all from inside Resolve | S-01, S-05, S-08, F-02 | FR-030, FR-031, US-02 | done |
 | S-11  | keychain-credentials        | store API keys in the OS keychain, never plaintext           | —                  | FR-035                                        | done     |
 | S-16  | ui-ux-redesign              | move through a simpler, decluttered flow with fewer visible steps | —              | — (UX overhaul; supports US-01 review speed)  | done     |
 | S-17  | feature-pruning-cleanup     | run a recurring pass to identify, decide on, and remove backlog/feature bloat | —    | — (process/maintenance; keep-it-lean)         | done     |
@@ -263,7 +263,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - **Timeline audio extraction in-plugin** — does the Resolve API expose a render-to-file call (e.g. `project:RenderSingleClip()`) that can extract a wav/mp4 from the current timeline without the user manually exporting first? Or must the plugin invoke an FFmpeg sidecar against the source media referenced in the Media Pool? — Owner: team. Block: no (either path works; the render-to-file route is cleaner; investigate at implementation time).
   - **S-05 engine bridge** — the WhisperX sidecar currently lives inside a Tauri `externalBin`; in the Electron bridge rebuild it needs to be spawned as a child process from Node (`child_process.spawn`) with the same audio-extraction + word-alignment pipeline. — Owner: team. Block: no (scoped rework, analogous to the other command reimplementations).
 - **Risk:** The headline differentiator and the largest single technical risk. F-02 returned `Go-with-rework`: no hard blocker, but the Tauri→Electron bridge rebuild + packaging/signing are scoped rework. The subtitle insertion path (mode C) depends on Resolve Studio 18.5+ API availability; the frame-by-frame fallback adds surface area. The file-export set (S-08) remains the always-available fallback.
-- **Status:** go-with-rework
+- **Status:** done
 
 ### S-11: API keys in the OS keychain
 
@@ -595,6 +595,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-02: Scoring-first reel list UI** — Archived 2026-06-18 → `context/archive/2026-06-18-scoring-first-reel-list/`. Lesson: —.
 - **S-28: app re-skinned to the BRAVE brand — monochrome palette, DM Sans, BRAVE logo** — Archived 2026-06-26 → `context/archive/2026-06-25-brave-design-system/`. Lesson: —.
 - **S-04: reorder, merge, delete segments (reorder/merge/delete ops need rework)** — Archived 2026-06-18 → `context/archive/2026-06-18-segment-tuning-ops/`. Diagnosis showed delete/merge already worked; only drag-reorder was broken because Tauri's webview intercepted HTML5 drag events — fixed with one config flip (`dragDropEnabled: false`), `moveClip()` untouched. Lesson: Tauri's webview swallows HTML5 drag-and-drop by default; set `dragDropEnabled: false` on the window to hand DnD to the frontend (and it governs the HTML5 file-drop import too — no native `onDragDropEvent` listener to lose).
+- **S-09: auto-collect timeline audio, transcribe in-panel, insert subtitles onto Subtitles track, and create reel timelines — all from inside Resolve** — Archived 2026-06-28 → `context/archive/2026-06-22-resolve-plugin-handoff/`. Lesson: —.
 - **S-25: cut AI-analysis cost via a two-stage (cluster → curate) pipeline with two selectable OpenRouter models + prompt caching** — Archived 2026-06-24 → `context/archive/2026-06-23-cost-optimized-ai-analysis/`. Phase-2 evidence gate ran OPEN (two strong single-shot models both plateaued on long mixed-topic input), so built instrumentation + model tiering + cluster→curate pipeline + Stage-1 minification (Phases 1,3,4,5); Phase 2a skipped. Lesson: a `cache_control` provider-cache lever is inert when an exact-match disk cache sits in front of the call and the marker isn't isolating a stable prefix — the disk cache serves prompt-identical re-runs before the network, so the provider cache never fires (impl-review F1).
 - **S-11: store API keys in the OS keychain, never plaintext** — Archived 2026-06-18 → `context/archive/2026-06-18-keychain-credentials/`. `keyring`-crate `keychain.rs` get/set/delete commands + hydrated `src/ai/api-key.js` cache (sync `getApiKey`, async write-through `setApiKey`, boot `hydrateKeys()` with one-time localStorage→Keychain migration); R2 accessor folded in. Lesson: the `keyring` 3.x crate ships NO credential store by default (silent in-memory mock) — enable `apple-native` in Cargo.toml or Keychain writes don't persist.
 - **S-19: export a word-by-word SRT (one word per cue), onset-pinned with a ≥4-frame minimum, ready to drop into TikTok/Reels captions** — Archived 2026-06-18 → `context/archive/2026-06-18-word-level-srt-export/`. Lesson: —.
