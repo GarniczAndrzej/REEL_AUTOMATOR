@@ -547,21 +547,21 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Automated
 
-- [x] 1.1 Python syntax/import sanity (`py_compile`)
-- [x] 1.2 Frozen selftest returns valid `ok:true` JSON (after rebuild)
+- [x] 1.1 Python syntax/import sanity (`py_compile`) — 3672449
+- [x] 1.2 Frozen selftest returns valid `ok:true` JSON (after rebuild) — 3672449
 
 #### Manual
 
-- [x] 1.3 `--fetch-align-model` downloads the model, emits progress, exits 0; HF layout present
-- [x] 1.4 Re-run `--fetch-align-model` on a populated dir is a no-op
-- [x] 1.5 Empty cache + no network → exit code 15
+- [x] 1.3 `--fetch-align-model` downloads the model, emits progress, exits 0; HF layout present — 3672449
+- [x] 1.4 Re-run `--fetch-align-model` on a populated dir is a no-op — 3672449
+- [x] 1.5 Empty cache + no network → exit code 15 — 3672449
 
 ### Phase 2: Rust — gating, progress band, proactive command, error mapping
 
 #### Automated
 
-- [ ] 2.1 `cargo check` clean
-- [ ] 2.2 Regression suite green
+- [x] 2.1 `cargo check` clean
+- [x] 2.2 Regression suite green
 
 #### Manual
 

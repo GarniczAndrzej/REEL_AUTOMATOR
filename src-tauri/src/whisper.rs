@@ -66,6 +66,14 @@ fn map_progress(phase: &str, pct: f64) -> (String, f64) {
             format!("Dopasowanie słów… {}%", p as u32),
             70.0 + p * 0.25, // 70..95
         ),
+        // One-time first-run alignment-model download, which the engine runs at
+        // the start of the align stage. The label carries the live download
+        // percent; the overall bar parks at the align-start point (70) so it
+        // never jumps backward once the real "align" phase reports its own 0..100.
+        "download" => (
+            format!("Pobieranie modelu wyrównania (jednorazowo)… {}%", p as u32),
+            70.0,
+        ),
         "diarize" => (
             format!("Rozpoznawanie mówców… {}%", p as u32),
             95.0 + p * 0.05, // 95..100
@@ -185,6 +193,7 @@ fn engine_error_message(code: Option<i32>, stderr: &str) -> String {
         Some(12) => "Dopasowanie słów (alignment) nie powiodło się. Spróbuj ponownie lub zmień język.".to_string(),
         Some(13) => "Rozpoznawanie mówców (diaryzacja) nie powiodło się. Sprawdź token Hugging Face i dostęp do modelu pyannote.".to_string(),
         Some(14) => "Transkrypcja nie powiodła się. Sprawdź model i plik audio.".to_string(),
+        Some(15) => "Pierwsze uruchomienie wymaga połączenia z internetem, aby pobrać model wyrównania (~1,2 GB). Połącz się z siecią i spróbuj ponownie.".to_string(),
         Some(2) => "Nieprawidłowe wywołanie silnika WhisperX (błąd argumentów).".to_string(),
         _ => {
             let tail: String = stderr.lines().rev().take(3).collect::<Vec<_>>().join(" | ");
@@ -565,14 +574,15 @@ pub async fn transcribe_video(
             format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
         })?
         .args(args);
-    // Transcription model is local and the align model is bundled, so force HF
-    // offline (skips slow network etag checks) — except when diarizing, where
-    // pyannote may still need to be fetched from HuggingFace.
+    // The transcription model is always local (gated above), and the engine now
+    // gates the align-model load/download itself per language via
+    // `model_cache_only` (Phase 1) — so no blanket offline env here lets a
+    // first-run align-model download proceed. Diarizing may still need to fetch
+    // pyannote from HuggingFace; pass the token via env (not argv).
     let sidecar = if diarize {
-        // pyannote may still need HuggingFace; pass the token via env (not argv).
         sidecar.env("HF_TOKEN", hf_token.clone())
     } else {
-        crate::engine::with_hf_offline(sidecar)
+        sidecar
     };
 
     let (rx, child) = sidecar.spawn().map_err(|e| {
@@ -795,23 +805,24 @@ pub async fn align_transcript(
         align_args.push(dir);
     }
 
-    // Align-only uses just the bundled wav2vec2 model — always force HF offline.
-    // Clean up the temp WAV + transcript on the early sidecar/spawn error paths
-    // too (the post-loop cleanup at the bottom only runs once the engine starts).
+    // Align-only uses the wav2vec2 model, which the engine now gates itself per
+    // language via `model_cache_only` (Phase 1) — no blanket offline env here
+    // so a first-run download can proceed. Clean up the temp WAV + transcript on
+    // the early sidecar/spawn error paths too (the post-loop cleanup at the
+    // bottom only runs once the engine starts).
     let cleanup_temps = || {
         let _ = std::fs::remove_file(&wav_path);
         let _ = std::fs::remove_file(&transcript_path);
     };
 
-    let sidecar = crate::engine::with_hf_offline(
-        app.shell()
-            .sidecar(crate::engine::ENGINE_SIDECAR)
-            .map_err(|e| {
-                cleanup_temps();
-                format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
-            })?
-            .args(align_args),
-    );
+    let sidecar = app
+        .shell()
+        .sidecar(crate::engine::ENGINE_SIDECAR)
+        .map_err(|e| {
+            cleanup_temps();
+            format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
+        })?
+        .args(align_args);
 
     let (rx, child) = sidecar.spawn().map_err(|e| {
         cleanup_temps();
@@ -871,6 +882,89 @@ async fn reap_engine_child(c: CommandChild) {
     {
         let _ = c.kill();
     }
+}
+
+/// Drive the engine's `--fetch-align-model` mode: download (or confirm cached)
+/// one language's wav2vec2 alignment model, relaying its `PROGRESS
+/// phase=download percent=…` stderr lines as `align-download-progress` events
+/// for the model-manager's proactive "Pobierz model wyrównania" button.
+///
+/// Deliberately not routed through `drive_engine`/`TRANSCRIBE_CHILD` — that
+/// singleton tracks the one in-flight *transcription* run and its cancel
+/// semantics; this is a separate, short-lived, non-cancellable fetch. No
+/// forced-offline env here — the entire point is to allow the network.
+#[tauri::command]
+pub async fn download_align_model(app: AppHandle, language: Option<String>) -> Result<(), String> {
+    let lang = language
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "pl".to_string());
+    let mut args: Vec<String> = vec![
+        "--fetch-align-model".into(),
+        "--language".into(),
+        lang.clone(),
+    ];
+    if let Some(dir) = crate::engine::align_model_dir(&app) {
+        args.push("--align-model-dir".into());
+        args.push(dir);
+    }
+
+    let sidecar = app
+        .shell()
+        .sidecar(crate::engine::ENGINE_SIDECAR)
+        .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
+        .args(args);
+
+    let (mut rx, _child) = sidecar
+        .spawn()
+        .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
+
+    let mut stderr_buf = String::new();
+    let mut stderr_line = String::new();
+    let mut exit_code: Option<i32> = None;
+    while let Some(ev) = rx.recv().await {
+        match ev {
+            CommandEvent::Stderr(b) => {
+                let chunk = String::from_utf8_lossy(&b);
+                append_bounded_tail(&mut stderr_buf, &chunk, STDERR_TAIL_MAX_BYTES);
+                stderr_line.push_str(&chunk);
+                while let Some(nl) = stderr_line.find('\n') {
+                    let line: String = stderr_line.drain(..=nl).collect();
+                    let line = line.trim_end();
+                    if let Some(rest) = line.strip_prefix("PROGRESS ") {
+                        let mut phase = "";
+                        let mut percent = 0.0_f64;
+                        for tok in rest.split_whitespace() {
+                            if let Some(v) = tok.strip_prefix("phase=") {
+                                phase = v;
+                            } else if let Some(v) = tok.strip_prefix("percent=") {
+                                percent = v.parse().unwrap_or(0.0);
+                            }
+                        }
+                        if phase == "download" {
+                            let _ = app.emit(
+                                "align-download-progress",
+                                serde_json::json!({ "language": lang, "percent": percent }),
+                            );
+                        }
+                    }
+                }
+            }
+            CommandEvent::Terminated(p) => {
+                exit_code = p.code;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if exit_code != Some(0) {
+        return Err(engine_error_message(exit_code, &stderr_buf));
+    }
+    let _ = app.emit(
+        "align-download-progress",
+        serde_json::json!({ "language": lang, "percent": 100.0 }),
+    );
+    Ok(())
 }
 
 /// Mark the run cancelled so the driver returns the cancelled-state message, then

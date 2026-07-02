@@ -7,7 +7,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::{Command, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -40,30 +39,93 @@ pub fn with_hf_offline(cmd: Command) -> Command {
         .env("TRANSFORMERS_OFFLINE", "1")
 }
 
-/// Resolve the external wav2vec2 alignment-model directory that ships *beside*
-/// the sidecar (Tauri `bundle.resources` → `align_models/`). The model is no
-/// longer baked into the frozen binary: a multi-GB onefile Mach-O fails to load
-/// on macOS, so it lives outside the executable and the path is passed to the
-/// engine via `--align-model-dir`.
+/// Resolve the **writable** per-user directory where the wav2vec2 alignment model
+/// is cached, and ensure it exists. The model is no longer bundled with the app:
+/// the 2.4 GB HF cache (further doubled to ~4.7 GB by Tauri dereferencing the HF
+/// symlinks) pushed the DMG far past GitHub's 2 GB release-asset limit. Instead it
+/// is downloaded on first transcription into this app-cache dir and reused offline
+/// afterwards. The path is handed to the engine via `--align-model-dir`; the
+/// engine downloads into it (standard `models--org--repo/snapshots/…` HF layout)
+/// when it is empty.
 ///
-/// Resolution order:
-///   1. bundled resource dir (production app bundle), then
-///   2. the repo `src-tauri/binaries/align_models` (covers `tauri dev`, where
-///      `build.sh` stages the model next to the sidecar binary).
-/// Returns `None` when neither exists (engine then falls back to next-to-exe).
+/// Returns `None` only if the app cache dir cannot be resolved (engine then falls
+/// back to its own next-to-exe / default-HF-cache resolution).
 pub fn align_model_dir(app: &AppHandle) -> Option<String> {
-    if let Ok(p) = app.path().resolve("align_models", BaseDirectory::Resource) {
-        if p.is_dir() {
-            return Some(p.to_string_lossy().into_owned());
+    let dir = app.path().app_cache_dir().ok()?.join("align_models");
+    let _ = std::fs::create_dir_all(&dir);
+    Some(dir.to_string_lossy().into_owned())
+}
+
+/// Whether the alignment model has already been downloaded into the cache dir.
+/// Drives the `HF_HUB_OFFLINE` decision: when present, a run may go fully offline
+/// (no per-spawn network etag checks — ~50 s saved cold); when absent, the run
+/// MUST be allowed network so the first-run download can proceed.
+///
+/// Detection is a shallow recursive glob for a non-trivial `*.safetensors` weight
+/// file under the cache (the engine writes the standard HF snapshot layout, where
+/// the weight is a symlink into `blobs/` — `metadata` follows it to the real size).
+pub fn align_model_present(app: &AppHandle) -> bool {
+    fn has_weight(p: &std::path::Path, depth: usize) -> bool {
+        if depth > 6 {
+            return false;
+        }
+        let Ok(rd) = std::fs::read_dir(p) else {
+            return false;
+        };
+        for e in rd.flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                if has_weight(&path, depth + 1) {
+                    return true;
+                }
+            } else if path.extension().map(|x| x == "safetensors").unwrap_or(false)
+                && std::fs::metadata(&path).map(|m| m.len() > 1024).unwrap_or(false)
+            {
+                return true;
+            }
+        }
+        false
+    }
+    match align_model_dir(app) {
+        Some(dir) => has_weight(std::path::Path::new(&dir), 0),
+        None => false,
+    }
+}
+
+/// Recursive total size of real (non-symlink) files under `dir`. The HF cache
+/// layout the align-model download writes nests `blobs/` (real files) inside
+/// `models--org--repo/snapshots/<sha>/…` (symlinks into `blobs/`) several levels
+/// deep — unlike the flat CT2 model dirs in `models.rs`, so this walks
+/// recursively. Symlinks are skipped (not dereferenced), so each blob is
+/// counted exactly once via its real file in `blobs/`, never doubled via the
+/// snapshot symlink that points to it.
+fn dir_size_recursive(dir: &std::path::Path) -> u64 {
+    let mut total = 0u64;
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let path = e.path();
+            if let Ok(meta) = std::fs::symlink_metadata(&path) {
+                if meta.is_dir() {
+                    total += dir_size_recursive(&path);
+                } else if meta.is_file() {
+                    total += meta.len();
+                }
+            }
         }
     }
-    let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("binaries")
-        .join("align_models");
-    if dev.is_dir() {
-        return Some(dev.to_string_lossy().into_owned());
-    }
-    None
+    total
+}
+
+/// Cheap status read for the model-manager's align-model card: whether the
+/// per-language model is present, and its on-disk footprint. Never spawns the
+/// sidecar (mirrors `align_model_present`'s glob-only presence check).
+#[tauri::command]
+pub async fn align_model_status(app: AppHandle) -> Result<serde_json::Value, String> {
+    let downloaded = align_model_present(&app);
+    let size_bytes = align_model_dir(&app)
+        .map(|d| dir_size_recursive(std::path::Path::new(&d)))
+        .unwrap_or(0);
+    Ok(serde_json::json!({ "downloaded": downloaded, "size_bytes": size_bytes }))
 }
 
 /// Readiness report returned by the engine `--selftest` / `--capability` probe.
