@@ -67,9 +67,13 @@ pub fn align_model_dir(app: &AppHandle) -> Option<String> {
 /// (no per-spawn network etag checks — ~50 s saved cold); when absent, the run
 /// MUST be allowed network so the first-run download can proceed.
 ///
-/// Detection is a shallow recursive glob for a non-trivial `*.safetensors` weight
-/// file under the cache (the engine writes the standard HF snapshot layout, where
-/// the weight is a symlink into `blobs/` — `metadata` follows it to the real size).
+/// Detection is a shallow recursive glob for a non-trivial `*.safetensors` OR
+/// `*.bin` weight file under the cache (the engine writes the standard HF
+/// snapshot layout, where the weight is a symlink into `blobs/` — `metadata`
+/// follows it to the real size). Both extensions are checked because
+/// `_ensure_align_model` downloads whichever single format a language's repo
+/// actually ships on `main` — the Polish repo, for one, has no `.safetensors`
+/// at all, only `pytorch_model.bin` (see change.md's Phase 1 deviation note).
 pub fn align_model_present(app: &AppHandle) -> bool {
     fn has_weight(p: &std::path::Path, depth: usize) -> bool {
         if depth > 6 {
@@ -84,7 +88,10 @@ pub fn align_model_present(app: &AppHandle) -> bool {
                 if has_weight(&path, depth + 1) {
                     return true;
                 }
-            } else if path.extension().map(|x| x == "safetensors").unwrap_or(false)
+            } else if path
+                .extension()
+                .map(|x| x == "safetensors" || x == "bin")
+                .unwrap_or(false)
                 && std::fs::metadata(&path).map(|m| m.len() > 1024).unwrap_or(false)
             {
                 return true;

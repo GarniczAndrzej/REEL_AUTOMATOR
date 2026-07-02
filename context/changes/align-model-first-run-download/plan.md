@@ -587,11 +587,11 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Automated
 
-- [x] 4.1 `cargo check` clean
-- [x] 4.2 `tauri.conf.json` valid JSON
+- [x] 4.1 `cargo check` clean — 31ab4f7
+- [x] 4.2 `tauri.conf.json` valid JSON — 31ab4f7
 
 #### Manual
 
-- [ ] 4.3 Full rebuild → DMG ~400 MB, no `align_models/` in bundle
+- [x] 4.3 Full rebuild → DMG ~400 MB, no `align_models/` in bundle — 31ab4f7
 - [ ] 4.4 Fresh-install run downloads model once into the app cache
 - [ ] 4.5 Second run fully offline, identical alignment + exports verify

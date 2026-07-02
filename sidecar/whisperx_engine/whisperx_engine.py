@@ -293,6 +293,92 @@ def _load_audio(whisperx, audio_path):
 # bar to 100% almost instantly (the aggregation guard from the plan).
 _DOWNLOAD_PROGRESS_MIN_BYTES = 50 * 1024 * 1024
 
+# HF repo id per language, mirroring whisperx.alignment.DEFAULT_ALIGN_MODELS_HF
+# for the shipping scope (Polish). Kept as a *local* copy so the proactive
+# "Pobierz model wyrównania" fetch can resolve the repo and start the download
+# WITHOUT `import whisperx` (which drags torch/transformers — tens of seconds of
+# cold-start latency before the first byte, [[whisperx-cold-spawn-cost]]). The
+# lazy `_align` path still resolves through whisperx's authoritative dict since
+# it already has whisperx warm; only the standalone download button uses this.
+_ALIGN_HF_REPOS = {
+    "pl": "jonatasgrosman/wav2vec2-large-xlsr-53-polish",
+}
+
+# Accept whichever single weight format the repo's `main` actually ships. The
+# Polish model only has pytorch_model.bin on main — no safetensors variant (a
+# safetensors copy exists only on an unofficial, unmerged community PR revision,
+# too fragile to pin to). A repo carrying both would be genuinely redundant, but
+# that is not the case here, so there is nothing to exclude.
+_ALIGN_ALLOW_PATTERNS = [
+    "*.safetensors",
+    "*.bin",
+    "*.json",
+    "*.txt",
+    "vocab*",
+    "tokenizer*",
+    "preprocessor*",
+]
+
+
+def _align_model_cached(model_dir):
+    """True when `model_dir` already holds a non-trivial weight file — a cheap,
+    torch-free presence probe (recursive glob for `*.bin`/`*.safetensors` > 1 KB,
+    matching src-tauri/src/engine.rs `align_model_present` and the model-manager
+    card's Pobrany/Brak status). Lets the fetch button skip an already-downloaded
+    model instantly instead of loading 1.2 GB into torch just to confirm."""
+    for root, _dirs, files in os.walk(model_dir):
+        for name in files:
+            if name.endswith(".safetensors") or name.endswith(".bin"):
+                try:
+                    if os.path.getsize(os.path.join(root, name)) > 1024:
+                        return True
+                except OSError:
+                    continue
+    return False
+
+
+def _download_align_snapshot(repo_id, model_dir):
+    """Pull one language's alignment snapshot into `model_dir` with progress,
+    using only `huggingface_hub` (no whisperx/torch import). Emits
+    `PROGRESS phase=download percent=…` on stderr for `drive_engine` to parse.
+    Raises on failure — callers map that to EXIT_ALIGN_MODEL_DOWNLOAD_FAIL."""
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.utils import tqdm as hf_tqdm
+
+    class ProgressTqdm(hf_tqdm):
+        """Reports the dominant weight file's download percent on stderr;
+        ignores small bars (config/tokenizer) per the aggregation guard.
+
+        huggingface_hub's `_create_progress_bar` auto-disables tqdm whenever
+        stderr isn't a TTY — always true for this frozen sidecar, which Tauri
+        always spawns with piped stdio. A disabled tqdm's `update()` returns
+        before touching `self.n` (see tqdm.std.tqdm.update), so without this
+        override `self.n` would never advance and every percent read would be
+        frozen at 0 until a single misleading jump at close(). Force it enabled
+        so the byte counter actually moves; redirect its own ANSI bar text to
+        devnull since only the `PROGRESS phase=download` lines this class emits
+        are meant for `drive_engine` to parse.
+        """
+
+        def __init__(self, *args, **kwargs):
+            kwargs["disable"] = False
+            kwargs["file"] = open(os.devnull, "w")
+            super().__init__(*args, **kwargs)
+
+        def update(self, n=1):
+            result = super().update(n)
+            total = self.total
+            if total and total >= _DOWNLOAD_PROGRESS_MIN_BYTES:
+                _emit_progress("download", 100 * self.n / total)
+            return result
+
+    snapshot_download(
+        repo_id,
+        cache_dir=model_dir,
+        allow_patterns=_ALIGN_ALLOW_PATTERNS,
+        tqdm_class=ProgressTqdm,
+    )
+
 
 def _ensure_align_model(whisperx, language, model_dir, allow_download, device="cpu"):
     """Load the per-language wav2vec2 alignment model, downloading it once into
@@ -321,58 +407,7 @@ def _ensure_align_model(whisperx, language, model_dir, allow_download, device="c
     _emit_progress("download", 0)
     if language in DEFAULT_ALIGN_MODELS_HF:
         try:
-            from huggingface_hub import snapshot_download
-            from huggingface_hub.utils import tqdm as hf_tqdm
-
-            class ProgressTqdm(hf_tqdm):
-                """Reports the dominant weight file's download percent on stderr;
-                ignores small bars (config/tokenizer) per the aggregation guard.
-
-                huggingface_hub's `_create_progress_bar` auto-disables tqdm
-                whenever stderr isn't a TTY — always true for this frozen
-                sidecar, which Tauri always spawns with piped stdio. A
-                disabled tqdm's `update()` returns before touching `self.n`
-                (see tqdm.std.tqdm.update), so without this override `self.n`
-                would never advance and every percent read would be frozen at
-                0 until a single misleading jump at close(). Force it enabled
-                so the byte counter actually moves; redirect its own ANSI bar
-                text to devnull since only the `PROGRESS phase=download`
-                lines this class emits are meant for `drive_engine` to parse.
-                """
-
-                def __init__(self, *args, **kwargs):
-                    kwargs["disable"] = False
-                    kwargs["file"] = open(os.devnull, "w")
-                    super().__init__(*args, **kwargs)
-
-                def update(self, n=1):
-                    result = super().update(n)
-                    total = self.total
-                    if total and total >= _DOWNLOAD_PROGRESS_MIN_BYTES:
-                        _emit_progress("download", 100 * self.n / total)
-                    return result
-
-            snapshot_download(
-                DEFAULT_ALIGN_MODELS_HF[language],
-                cache_dir=model_dir,
-                # Accept whichever single weight format the repo's `main`
-                # actually ships. jonatasgrosman/wav2vec2-large-xlsr-53-polish
-                # (the Polish model) only has pytorch_model.bin on main — no
-                # safetensors variant (a safetensors copy exists only on an
-                # unofficial, unmerged community PR revision, too fragile to
-                # pin to). A repo carrying both would be genuinely redundant,
-                # but that's not the case here, so there is nothing to exclude.
-                allow_patterns=[
-                    "*.safetensors",
-                    "*.bin",
-                    "*.json",
-                    "*.txt",
-                    "vocab*",
-                    "tokenizer*",
-                    "preprocessor*",
-                ],
-                tqdm_class=ProgressTqdm,
-            )
+            _download_align_snapshot(DEFAULT_ALIGN_MODELS_HF[language], model_dir)
         except Exception as e:
             _log("alignment model download failed: %s" % e)
             if os.environ.get("ENGINE_DEBUG"):
@@ -754,13 +789,50 @@ def cmd_fetch_align_model(args):
     document (nothing for the caller to parse besides the exit code + the
     PROGRESS lines), mirroring the fact that the caller only cares about
     completion, not a data payload.
+
+    Speed: this path deliberately avoids `import whisperx` for the shipping
+    (HF-backed) languages. Downloading needs only `huggingface_hub`; pulling in
+    whisperx/torch here just to hand it to `_ensure_align_model` added tens of
+    seconds of cold-start latency BEFORE the first byte — the user pressing the
+    button saw a frozen bar the whole time ([[whisperx-cold-spawn-cost]]). So we
+    emit `download 0` immediately, skip an already-cached model with a torch-free
+    presence probe, and stream the snapshot directly. The post-download torch
+    validation load is skipped too: the on-disk snapshot (and the real
+    `align()` on the next transcription) is the validation the button needs.
+    Non-HF/torchaudio languages (outside the shipping scope) still fall back to
+    the whisperx path.
     """
-    import whisperx
+    # Fire feedback before any heavy work so the UI shows "Pobieranie… 0%"
+    # instead of a dead bar during the cold spawn.
+    _emit_progress("download", 0)
 
     language = None if args.language in (None, "", "auto") else (args.language or "pl")
     if not language:
         language = "pl"
     model_dir = _alignment_model_dir(language)
+
+    if _align_model_cached(model_dir):
+        _emit_progress("download", 100)
+        return EXIT_OK
+
+    repo_id = _ALIGN_HF_REPOS.get(language)
+    if repo_id is not None:
+        try:
+            _download_align_snapshot(repo_id, model_dir)
+        except Exception as e:
+            _log("alignment model download failed: %s" % e)
+            if os.environ.get("ENGINE_DEBUG"):
+                import traceback
+
+                _log(traceback.format_exc())
+            sys.exit(EXIT_ALIGN_MODEL_DOWNLOAD_FAIL)
+        _emit_progress("download", 100)
+        return EXIT_OK
+
+    # torchaudio-backed / non-shipping language: fall back to the whisperx path,
+    # which knows how to download those internally.
+    import whisperx
+
     _ensure_align_model(whisperx, language, model_dir, allow_download=True, device="cpu")
     return EXIT_OK
 
