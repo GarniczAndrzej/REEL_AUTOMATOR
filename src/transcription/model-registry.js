@@ -7,8 +7,10 @@
 // The per-file `sha256` is only set for `model.bin` (the LFS weights); the small
 // JSON/txt files are plain git blobs (no content sha256 published), so they carry
 // '' and skip verification. `sizeBytes` values come from the HF tree API and feed
-// the aggregate %/ETA. The per-language alignment model is bundled in the sidecar
-// (Phase 1), shown here as a status-only entry — never downloaded by the user.
+// the aggregate %/ETA. The per-language wav2vec2 alignment model is NOT bundled
+// with the app (S-29) — it downloads once on first use (or via the model
+// manager's "Pobierz model wyrównania" button) into a writable per-user cache;
+// see `ALIGN_MODEL` below.
 
 /**
  * @typedef {Object} ModelFile
@@ -146,13 +148,20 @@ export const MODEL_REGISTRY = [
 ];
 
 /**
- * The per-language wav2vec2 alignment model bundled into the sidecar. Surfaced
- * in the manager as status-only (readiness comes from the engine self-check).
+ * The per-language wav2vec2 alignment model (S-29). Downloaded once on first
+ * use — lazily on the first transcription, or via the model manager's
+ * "Pobierz model wyrównania" button — into a writable per-user cache
+ * (`app_cache_dir()/align_models`), then reused offline. No `files[]`
+ * manifest: the engine itself (`--fetch-align-model`) drives the download via
+ * `huggingface_hub.snapshot_download`, not Rust's file-streaming downloader.
+ * Polish is the only shipped language (`whisperx.alignment.DEFAULT_ALIGN_MODELS_HF`
+ * has no `en`-equivalent size guarantee — torchaudio languages are a documented
+ * limitation, see plan.md).
  */
-export const ALIGNMENT_MODEL = {
-  id: 'wav2vec2-align',
-  label: 'Model dopasowania słów (wbudowany)',
-  bundled: true,
+export const ALIGN_MODEL = {
+  language: 'pl',
+  label: 'Model wyrównania (polski, ~1,2 GB)',
+  sizeBytes: 1_200_000_000,
 };
 
 /** @param {string} id @returns {TranscriptionModel|undefined} */

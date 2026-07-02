@@ -202,6 +202,7 @@ async function initModelManager() {
   await refreshModelStatus();
   restoreSelectedModel();
   await renderModelManager();
+  await renderAlignModelCard();
   refreshEngineReadiness();
 }
 
@@ -209,18 +210,34 @@ async function initModelManager() {
  * Paint the engine-readiness badge from a status verdict.
  * @param {HTMLElement|null} el
  * @param {{ok:boolean, device?:string, gpu?:boolean, alignment_model_ready?:boolean}} status
- * @param {{authoritative:boolean}} opts - `authoritative` is true ONLY for the full
- *   `--selftest` path, which is the sole path allowed to paint the green "Silnik gotowy"
- *   tier. The cheap capability probe cannot `import whisperx`, so it cannot verify the
- *   frozen import chain (the false-positive documented in whisperx_engine.py) — it paints
- *   the distinct, non-authoritative amber "Silnik wykryty" tier instead.
+ * @param {{authoritative:boolean, alignModelDownloaded?:boolean}} opts - `authoritative` is
+ *   true ONLY for the full `--selftest` path, which is the sole path allowed to paint the
+ *   green "Silnik gotowy" tier. The cheap capability probe cannot `import whisperx`, so it
+ *   cannot verify the frozen import chain (the false-positive documented in
+ *   whisperx_engine.py) — it paints the distinct, non-authoritative amber "Silnik wykryty"
+ *   tier instead. `alignModelDownloaded` (S-29) is the CHEAP `align_model_status` presence
+ *   glob (no spawn) — used to append a download hint without waiting for a full re-selftest
+ *   to flip `alignment_model_ready`.
  */
-function renderEngineBadge(el, status, { authoritative }) {
+function renderEngineBadge(
+  el,
+  status,
+  { authoritative, alignModelDownloaded = false },
+) {
   if (!el) return;
   if (status.ok) {
     const dev = `${status.device || 'cpu'}${status.gpu ? ', GPU' : ''}`;
     if (authoritative) {
-      el.textContent = `Silnik gotowy (${dev})${status.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
+      let suffix = '';
+      if (status.alignment_model_ready) {
+        suffix = ', model dopasowania wbudowany';
+      } else if (!alignModelDownloaded) {
+        // Cheap presence check says it's genuinely missing — not just stale
+        // from before the last full verify (see downloadAlignModel's
+        // completion re-render, which clears this immediately on success).
+        suffix = ' — pobierz model wyrównania';
+      }
+      el.textContent = `Silnik gotowy (${dev})${suffix}`;
       el.style.color = 'var(--green)';
     } else {
       el.textContent = `Silnik wykryty (${dev}) — pełna weryfikacja zalecana`;
@@ -230,6 +247,16 @@ function renderEngineBadge(el, status, { authoritative }) {
     el.textContent =
       'Silnik WhisperX nie jest jeszcze zbudowany. Uruchom sidecar/build.sh.';
     el.style.color = 'var(--amber)';
+  }
+}
+
+/** Cheap presence-only read (no spawn); never throws. @returns {Promise<boolean>} */
+async function isAlignModelDownloaded() {
+  try {
+    const s = await invoke('align_model_status');
+    return !!s?.downloaded;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -243,7 +270,11 @@ async function refreshEngineReadiness() {
     if (s) {
       // Cached verdict carries its own `authoritative` flag (true only when a
       // full self-test wrote it), so the badge paints the correct tier.
-      renderEngineBadge(el, s, { authoritative: !!s.authoritative });
+      const alignModelDownloaded = await isAlignModelDownloaded();
+      renderEngineBadge(el, s, {
+        authoritative: !!s.authoritative,
+        alignModelDownloaded,
+      });
     } else {
       el.textContent =
         'Silnik niezweryfikowany — kliknij „Pełna weryfikacja silnika”.';
@@ -268,7 +299,8 @@ async function fullEngineVerify() {
   }
   try {
     const s = await invoke('whisperx_engine_check');
-    renderEngineBadge(el, s, { authoritative: true });
+    const alignModelDownloaded = await isAlignModelDownloaded();
+    renderEngineBadge(el, s, { authoritative: true, alignModelDownloaded });
   } catch (e) {
     if (el) {
       el.textContent = 'Nie można sprawdzić silnika: ' + e;
@@ -445,6 +477,108 @@ async function downloadModel(id) {
     if (unlisten) unlisten();
     _downloadingId = null;
     renderModelManager();
+  }
+}
+
+// ── S-29 align-model card (download-on-demand, un-bundled) ────────────
+
+let _alignDownloading = false;
+
+/**
+ * Render the align-model card: status (Pobrany + size, or Brak) and a
+ * "Pobierz model wyrównania" button when it's not yet downloaded. Mirrors
+ * `renderModelManager`'s shape but reads `align_model_status` (a cheap
+ * presence glob, no spawn) instead of `list_models`.
+ * @returns {Promise<void>}
+ */
+async function renderAlignModelCard() {
+  const container = document.getElementById('alignModelCard');
+  if (!container) return;
+  const { ALIGN_MODEL, formatBytes } =
+    await import('../../transcription/model-registry.js');
+  let status = { downloaded: false, size_bytes: 0 };
+  try {
+    status = await invoke('align_model_status');
+  } catch (e) {}
+  const disabledAttr = _alignDownloading ? 'disabled' : '';
+  const statusLabel = status.downloaded
+    ? `Pobrany (${formatBytes(status.size_bytes)})`
+    : 'Brak';
+
+  container.innerHTML = `
+<div style="display:flex;gap:8px;align-items:center;">
+  <div style="flex:1;min-width:0;font-size:13px;">${escHtml(ALIGN_MODEL.label)} — ${statusLabel}</div>
+  ${
+    !status.downloaded
+      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" id="downloadAlignModelBtn" ${disabledAttr}>Pobierz model wyrównania</button>`
+      : ''
+  }
+</div>
+<div class="align-dl-progress" id="alignDlProgress" style="display:none;font-size:11px;color:var(--text2);margin-top:6px;"></div>`;
+
+  const dlBtn = container.querySelector('#downloadAlignModelBtn');
+  if (dlBtn) {
+    dlBtn.addEventListener('click', () =>
+      downloadAlignModel(ALIGN_MODEL.language),
+    );
+  }
+}
+
+/**
+ * Drive the proactive alignment-model download and render its progress. The
+ * engine reports percent only (no byte counts — see `download_align_model` in
+ * whisper.rs), so `MB/s`/`ETA` are derived here from the percent delta over
+ * wall-clock time against the registry's approximate `sizeBytes`.
+ * @param {string} language
+ * @returns {Promise<void>}
+ */
+async function downloadAlignModel(language) {
+  _alignDownloading = true;
+  // Must await: renderAlignModelCard() is async (awaits a dynamic import
+  // before rewriting container.innerHTML) — see downloadModel's identical note.
+  await renderAlignModelCard();
+  const progEl = document.getElementById('alignDlProgress');
+  if (progEl) progEl.style.display = 'block';
+
+  const { ALIGN_MODEL } = await import('../../transcription/model-registry.js');
+  let lastPercent = 0;
+  let lastTime = performance.now();
+
+  let unlisten;
+  try {
+    unlisten = await listen('align-download-progress', (e) => {
+      if (e.payload.language !== language) return;
+      const { percent } = e.payload;
+      const now = performance.now();
+      const dtSec = Math.max((now - lastTime) / 1000, 0.001);
+      const deltaPercent = Math.max(percent - lastPercent, 0);
+      const bytesPerSec =
+        ((deltaPercent / 100) * ALIGN_MODEL.sizeBytes) / dtSec;
+      const remainingPercent = Math.max(100 - percent, 0);
+      const etaSec =
+        bytesPerSec > 0
+          ? ((remainingPercent / 100) * ALIGN_MODEL.sizeBytes) / bytesPerSec
+          : 0;
+      lastPercent = percent;
+      lastTime = now;
+      if (progEl) {
+        const mb = (bytesPerSec / 1024 / 1024).toFixed(1);
+        const eta = etaSec ? `${Math.round(etaSec)}s` : '—';
+        progEl.textContent = `${Math.round(percent)}% · ${mb} MB/s · ETA ${eta}`;
+      }
+    });
+    await invoke('download_align_model', { language });
+    if (progEl) progEl.textContent = 'Pobrano';
+    // Clear the readiness badge's stale download hint immediately, without
+    // waiting for the next full re-selftest (Phase 3 §3).
+    refreshEngineReadiness();
+  } catch (e) {
+    if (progEl) progEl.textContent = 'Błąd: ' + e;
+    toast('Pobieranie modelu wyrównania nieudane: ' + e, 'error');
+  } finally {
+    if (unlisten) unlisten();
+    _alignDownloading = false;
+    renderAlignModelCard();
   }
 }
 
