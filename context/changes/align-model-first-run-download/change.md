@@ -1,7 +1,7 @@
 ---
 change_id: align-model-first-run-download
 title: Align model first run download
-status: implementing
+status: implemented
 created: 2026-06-28
 updated: 2026-07-03
 archived_at: null

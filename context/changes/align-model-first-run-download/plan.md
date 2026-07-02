@@ -593,5 +593,5 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 #### Manual
 
 - [x] 4.3 Full rebuild → DMG ~400 MB, no `align_models/` in bundle — 31ab4f7
-- [x] 4.4 Fresh-install run downloads model once into the app cache
-- [x] 4.5 Second run fully offline, identical alignment + exports verify
+- [x] 4.4 Fresh-install run downloads model once into the app cache — 2cb98d2
+- [x] 4.5 Second run fully offline, identical alignment + exports verify — 2cb98d2
