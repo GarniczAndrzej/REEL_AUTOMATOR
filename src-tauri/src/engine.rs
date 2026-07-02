@@ -45,6 +45,33 @@ pub fn with_hf_offline(cmd: Command) -> Command {
         .env("TRANSFORMERS_OFFLINE", "1")
 }
 
+/// Prepend the directory that holds the bundled `ffmpeg` sidecar to the engine
+/// command's `PATH`. The whisperx engine's `load_audio` shells out to a **bare
+/// `ffmpeg`** looked up on `PATH`; a Finder-launched macOS `.app` inherits only
+/// the minimal `/usr/bin:/bin:/usr/sbin:/sbin`, so the bundled ffmpeg — which
+/// sits right next to the app + engine binaries in `…/Contents/MacOS` — is
+/// invisible and audio decode dies with `EXIT_AUDIO_DECODE_FAIL` (11). The
+/// externalBin files live next to the running executable, so `current_exe()`'s
+/// parent is that directory. The inherited PATH is kept as the appended fallback
+/// (in `tauri dev` the arch-suffixed `ffmpeg-…` there is not literally `ffmpeg`,
+/// but the terminal's Homebrew ffmpeg on the inherited PATH covers dev). See the
+/// [[resolve-electron-gui-path-ffmpeg]] lesson — same class of bug, main-app path.
+pub fn with_ffmpeg_path(cmd: Command) -> Command {
+    let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    else {
+        return cmd;
+    };
+    let existing = std::env::var_os("PATH");
+    let mut parts = vec![dir];
+    if let Some(existing) = existing.as_ref() {
+        parts.extend(std::env::split_paths(existing));
+    }
+    match std::env::join_paths(parts) {
+        Ok(joined) => cmd.env("PATH", joined),
+        Err(_) => cmd,
+    }
+}
+
 /// Resolve the **writable** per-user directory where the wav2vec2 alignment model
 /// is cached, and ensure it exists. The model is no longer bundled with the app:
 /// the 2.4 GB HF cache (further doubled to ~4.7 GB by Tauri dereferencing the HF
@@ -178,12 +205,12 @@ pub async fn run_engine(
     // Both callers (self-test, capability) are report-only and must never trigger
     // the S-29 first-run align-model download — force HF offline so they read
     // whatever is (or isn't) already cached instead of stalling on network checks.
-    let sidecar = with_hf_offline(
+    let sidecar = with_ffmpeg_path(with_hf_offline(
         app.shell()
             .sidecar(ENGINE_SIDECAR)
             .map_err(|e| format!("Silnik WhisperX niedostępny: {e}"))?
             .args(arg_vec),
-    );
+    ));
     let (mut rx, child) = sidecar
         .spawn()
         .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;

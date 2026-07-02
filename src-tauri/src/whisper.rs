@@ -566,14 +566,15 @@ pub async fn transcribe_video(
         args.push(dir);
     }
 
-    let sidecar = app
-        .shell()
-        .sidecar(crate::engine::ENGINE_SIDECAR)
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&wav_path);
-            format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
-        })?
-        .args(args);
+    let sidecar = crate::engine::with_ffmpeg_path(
+        app.shell()
+            .sidecar(crate::engine::ENGINE_SIDECAR)
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&wav_path);
+                format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
+            })?
+            .args(args),
+    );
     // The transcription model is always local (gated above), and the engine now
     // gates the align-model load/download itself per language via
     // `model_cache_only` (Phase 1) — so no blanket offline env here lets a
@@ -815,14 +816,15 @@ pub async fn align_transcript(
         let _ = std::fs::remove_file(&transcript_path);
     };
 
-    let sidecar = app
-        .shell()
-        .sidecar(crate::engine::ENGINE_SIDECAR)
-        .map_err(|e| {
-            cleanup_temps();
-            format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
-        })?
-        .args(align_args);
+    let sidecar = crate::engine::with_ffmpeg_path(
+        app.shell()
+            .sidecar(crate::engine::ENGINE_SIDECAR)
+            .map_err(|e| {
+                cleanup_temps();
+                format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
+            })?
+            .args(align_args),
+    );
 
     let (rx, child) = sidecar.spawn().map_err(|e| {
         cleanup_temps();
