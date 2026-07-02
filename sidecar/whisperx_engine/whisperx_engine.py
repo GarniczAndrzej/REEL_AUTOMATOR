@@ -29,18 +29,25 @@ Modes:
   (default)        transcribe + forced-align (+ optional --diarize)
   --align-only     force-align an existing transcript to the audio
                    (skips transcription; requires --transcript)
+  --fetch-align-model  download (or confirm cached) one language's alignment
+                   model and exit; no --audio/--model required. Drives the
+                   model manager's proactive "Pobierz model wyrównania" button.
   --selftest       readiness probe; prints {ok, version, gpu,
                    alignment_model_ready} and exits 0. Must NOT require a
-                   downloaded transcription model. `alignment_model_ready` is a
-                   *real* check: it loads the bundled align model and runs one
-                   tiny forced-align, so a broken bundling of the wav2vec2 import
-                   chain reports false instead of a misleading true.
+                   downloaded transcription model and must NEVER download the
+                   align model. `alignment_model_ready` is a *real* check: when
+                   the align model is already cached, it loads it and runs one
+                   tiny forced-align, so a broken import chain reports false
+                   instead of a misleading true; when not cached, it reports
+                   false without attempting a download.
 
 This script is intentionally dependency-light at import time: heavy deps
 (`whisperx`, `torch`) are imported lazily inside the functions that need them so
 `--version` stays fast and works before any model is downloaded. `--selftest`
-loads the (bundled, offline) align model to verify alignment really works, so it
-takes a few seconds — still no downloaded transcription model required.
+loads the align model ONLY if already cached (offline) to verify alignment
+really works; on a fresh install (no download yet) it reports
+`alignment_model_ready: false` without downloading — still no downloaded
+transcription model required either way.
 """
 
 import argparse
@@ -61,11 +68,13 @@ EXIT_ALIGN_MODEL_DOWNLOAD_FAIL = 15
 
 ENGINE_VERSION = "1.0.0"
 
-# Per-language wav2vec2 alignment model. It is NOT baked into the frozen binary:
-# a multi-GB onefile Mach-O fails to load on macOS, so the model ships *beside*
-# the sidecar (Tauri bundle.resources) and its directory is passed in via
-# `--align-model-dir` (env ENGINE_ALIGN_DIR). Resolution order: explicit override
-# → next to the executable → PyInstaller _MEIPASS (legacy) → next to this script.
+# Per-language wav2vec2 alignment model. It is NOT baked into the frozen binary
+# (a multi-GB onefile Mach-O fails to load on macOS) and, since S-29, is no
+# longer bundled beside the sidecar either — it downloads once on first use
+# into a writable per-user cache dir (see `_ensure_align_model`). The cache
+# dir is passed in via `--align-model-dir` (env ENGINE_ALIGN_DIR). Resolution
+# order: explicit override → next to the executable (legacy pre-S-29 layout,
+# harmless if absent) → PyInstaller _MEIPASS (legacy) → next to this script.
 ALIGN_MODEL_SUBDIR = "align_models"
 
 
@@ -74,7 +83,8 @@ def _align_models_base():
     override = os.environ.get("ENGINE_ALIGN_DIR")
     if override:
         return override
-    # Beside the executable — frozen sidecar with align_models/ shipped next to it.
+    # Legacy pre-S-29 layout: a prior build.sh staged align_models/ beside the
+    # executable. Harmless fallback — a fresh S-29 build never populates this.
     exe_dir = os.path.dirname(os.path.abspath(sys.executable))
     cand = os.path.join(exe_dir, ALIGN_MODEL_SUBDIR)
     if os.path.isdir(cand):
@@ -180,8 +190,11 @@ def _selftest_align_runs(whisperx, language="pl"):
     Wav2Vec2ForCTC) is broken — exactly the bundling gap that shipped a binary
     self-reporting `alignment_model_ready: true` yet failing every real --align-only
     with exit 12. So load the model and run one tiny align; if it raises, alignment
-    is NOT ready. Runs on CPU (the failure mode was an import error, device-agnostic)
-    and offline (the model ships beside the binary).
+    is NOT ready. Runs on CPU (the failure mode was an import error, device-agnostic).
+    The presence check below returns False before ever loading anything when the
+    model isn't cached — this function never downloads (S-29: the model is no
+    longer bundled beside the binary, so "not cached" is the normal fresh-install
+    state, not an error).
     """
     model_dir = _alignment_model_dir(language)
     if not (os.path.isdir(model_dir) and os.listdir(model_dir)):

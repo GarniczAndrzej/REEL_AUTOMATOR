@@ -37,6 +37,6 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/ffmpeg", "binaries/whisperx-engine"],
-    "resources": ["binaries/align_models"]
+    "resources": []
   }
 }

@@ -574,8 +574,8 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Automated
 
-- [x] 3.1 Prettier clean
-- [x] 3.2 Regression suite green
+- [x] 3.1 Prettier clean — f286223
+- [x] 3.2 Regression suite green — f286223
 
 #### Manual
 
@@ -587,8 +587,8 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Automated
 
-- [ ] 4.1 `cargo check` clean
-- [ ] 4.2 `tauri.conf.json` valid JSON
+- [x] 4.1 `cargo check` clean
+- [x] 4.2 `tauri.conf.json` valid JSON
 
 #### Manual
 

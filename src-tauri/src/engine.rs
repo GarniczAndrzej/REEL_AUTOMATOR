@@ -27,13 +27,19 @@ const SELFTEST_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Apply `HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` to an engine command so
 /// huggingface_hub/transformers skip per-launch network etag checks and use only
-/// the locally-present model files. Without this the bundled wav2vec2 align model
-/// still triggers blocking HEAD requests to huggingface.co on every spawn — ~50s
-/// of pure network wait on the cold `--selftest` that gates the readiness badge.
+/// the locally-present model files. Without this a present-but-uncached-elsewhere
+/// wav2vec2 align model would still trigger blocking HEAD requests to
+/// huggingface.co on every spawn — ~50s of pure network wait on the cold
+/// `--selftest` that gates the readiness badge.
 ///
-/// Safe for the self-test, align-only, and *non-diarize* transcription paths —
-/// all use bundled/local models. Do NOT apply when diarization is requested:
-/// pyannote may still need to be fetched from HuggingFace.
+/// Used ONLY by the report-only `run_engine` paths (self-test, capability) — both
+/// must never trigger the S-29 first-run align-model download. The transcribe
+/// (non-diarize) and align-only paths (`whisper.rs`) deliberately do NOT wrap
+/// their spawn with this: the engine now gates offline-vs-download itself per
+/// language via `model_cache_only` (Phase 1), and a first-run download needs
+/// network, so forcing this env there would block it before it could start. Do
+/// NOT apply when diarizing either: pyannote may still need to be fetched from
+/// HuggingFace.
 pub fn with_hf_offline(cmd: Command) -> Command {
     cmd.env("HF_HUB_OFFLINE", "1")
         .env("TRANSFORMERS_OFFLINE", "1")
@@ -162,8 +168,9 @@ pub async fn run_engine(
     timeout: Duration,
 ) -> Result<(String, String, Option<i32>), String> {
     let arg_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    // Both callers (self-test, capability) use only the bundled align model (or
-    // no model at all) — force HF offline so they don't stall on network checks.
+    // Both callers (self-test, capability) are report-only and must never trigger
+    // the S-29 first-run align-model download — force HF offline so they read
+    // whatever is (or isn't) already cached instead of stalling on network checks.
     let sidecar = with_hf_offline(
         app.shell()
             .sidecar(ENGINE_SIDECAR)
