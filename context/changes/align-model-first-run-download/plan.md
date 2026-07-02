@@ -579,9 +579,9 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Manual
 
-- [ ] 3.3 Align-model card shows size + correct Pobrany/Brak
-- [ ] 3.4 "Pobierz model wyrównania" shows `N% · MB/s · ETA`, flips to Pobrany
-- [ ] 3.5 Badge shows download hint on fresh install, ready text after download
+- [x] 3.3 Align-model card shows size + correct Pobrany/Brak
+- [x] 3.4 "Pobierz model wyrównania" shows `N% · MB/s · ETA`, flips to Pobrany
+- [x] 3.5 Badge shows download hint on fresh install, ready text after download
 
 ### Phase 4: Packaging — un-bundle the model
 

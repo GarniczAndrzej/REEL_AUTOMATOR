@@ -501,6 +501,9 @@ async function renderAlignModelCard() {
     status = await invoke('align_model_status');
   } catch (e) {}
   const disabledAttr = _alignDownloading ? 'disabled' : '';
+  const btnLabel = _alignDownloading
+    ? 'Trwa pobieranie…'
+    : 'Pobierz model wyrównania';
   const statusLabel = status.downloaded
     ? `Pobrany (${formatBytes(status.size_bytes)})`
     : 'Brak';
@@ -510,7 +513,7 @@ async function renderAlignModelCard() {
   <div style="flex:1;min-width:0;font-size:13px;">${escHtml(ALIGN_MODEL.label)} — ${statusLabel}</div>
   ${
     !status.downloaded
-      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" id="downloadAlignModelBtn" ${disabledAttr}>Pobierz model wyrównania</button>`
+      ? `<button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;white-space:nowrap;" id="downloadAlignModelBtn" ${disabledAttr}>${btnLabel}</button>`
       : ''
   }
 </div>
