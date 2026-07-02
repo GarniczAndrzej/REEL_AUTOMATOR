@@ -95,6 +95,10 @@ for pkg in (
     "speechbrain",
     "torchaudio",
     "transformers",
+    # snapshot_download (align-model first-run download) is only reached at
+    # runtime once a language is uncached — not import-time visible to
+    # PyInstaller's static analysis without this.
+    "huggingface_hub",
     # Native Cohere ASR import chain. transformers' collect_submodules already
     # pulls models.cohere_asr; librosa/soundfile/sentencepiece/accelerate and
     # librosa's lazy numba/soxr/audioread backends need explicit collection since

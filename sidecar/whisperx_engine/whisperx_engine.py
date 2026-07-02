@@ -57,6 +57,7 @@ EXIT_AUDIO_DECODE_FAIL = 11
 EXIT_ALIGN_FAIL = 12
 EXIT_DIARIZE_FAIL = 13
 EXIT_TRANSCRIBE_FAIL = 14
+EXIT_ALIGN_MODEL_DOWNLOAD_FAIL = 15
 
 ENGINE_VERSION = "1.0.0"
 
@@ -274,15 +275,128 @@ def _load_audio(whisperx, audio_path):
         sys.exit(EXIT_AUDIO_DECODE_FAIL)
 
 
+# Weight files at/above this size drive the download percent; the small
+# config/tokenizer/vocab files in the same snapshot would otherwise spam the
+# bar to 100% almost instantly (the aggregation guard from the plan).
+_DOWNLOAD_PROGRESS_MIN_BYTES = 50 * 1024 * 1024
+
+
+def _ensure_align_model(whisperx, language, model_dir, allow_download, device="cpu"):
+    """Load the per-language wav2vec2 alignment model, downloading it once into
+    `model_dir` when it isn't cached yet. Returns (align_model, metadata) exactly
+    like `whisperx.load_align_model`.
+
+    Offline reuse goes through `model_cache_only=True`, which gives the same
+    no-network cold-path benefit the blanket Rust `HF_HUB_OFFLINE` used to
+    provide, but per-language and deterministically ([[whisperx-cold-spawn-cost]]).
+
+    When `allow_download` is False and the model isn't cached, the
+    `model_cache_only=True` failure is re-raised untouched — callers that only
+    want a report (e.g. the selftest) never trigger a download.
+    """
+    try:
+        return whisperx.load_align_model(
+            language_code=language, device=device, model_dir=model_dir, model_cache_only=True
+        )
+    except Exception as e:
+        if not allow_download:
+            raise
+        _log("alignment model for %r not cached (%s) — downloading" % (language, e))
+
+    from whisperx.alignment import DEFAULT_ALIGN_MODELS_HF
+
+    _emit_progress("download", 0)
+    if language in DEFAULT_ALIGN_MODELS_HF:
+        try:
+            from huggingface_hub import snapshot_download
+            from huggingface_hub.utils import tqdm as hf_tqdm
+
+            class ProgressTqdm(hf_tqdm):
+                """Reports the dominant weight file's download percent on stderr;
+                ignores small bars (config/tokenizer) per the aggregation guard.
+
+                huggingface_hub's `_create_progress_bar` auto-disables tqdm
+                whenever stderr isn't a TTY — always true for this frozen
+                sidecar, which Tauri always spawns with piped stdio. A
+                disabled tqdm's `update()` returns before touching `self.n`
+                (see tqdm.std.tqdm.update), so without this override `self.n`
+                would never advance and every percent read would be frozen at
+                0 until a single misleading jump at close(). Force it enabled
+                so the byte counter actually moves; redirect its own ANSI bar
+                text to devnull since only the `PROGRESS phase=download`
+                lines this class emits are meant for `drive_engine` to parse.
+                """
+
+                def __init__(self, *args, **kwargs):
+                    kwargs["disable"] = False
+                    kwargs["file"] = open(os.devnull, "w")
+                    super().__init__(*args, **kwargs)
+
+                def update(self, n=1):
+                    result = super().update(n)
+                    total = self.total
+                    if total and total >= _DOWNLOAD_PROGRESS_MIN_BYTES:
+                        _emit_progress("download", 100 * self.n / total)
+                    return result
+
+            snapshot_download(
+                DEFAULT_ALIGN_MODELS_HF[language],
+                cache_dir=model_dir,
+                # Accept whichever single weight format the repo's `main`
+                # actually ships. jonatasgrosman/wav2vec2-large-xlsr-53-polish
+                # (the Polish model) only has pytorch_model.bin on main — no
+                # safetensors variant (a safetensors copy exists only on an
+                # unofficial, unmerged community PR revision, too fragile to
+                # pin to). A repo carrying both would be genuinely redundant,
+                # but that's not the case here, so there is nothing to exclude.
+                allow_patterns=[
+                    "*.safetensors",
+                    "*.bin",
+                    "*.json",
+                    "*.txt",
+                    "vocab*",
+                    "tokenizer*",
+                    "preprocessor*",
+                ],
+                tqdm_class=ProgressTqdm,
+            )
+        except Exception as e:
+            _log("alignment model download failed: %s" % e)
+            if os.environ.get("ENGINE_DEBUG"):
+                import traceback
+
+                _log(traceback.format_exc())
+            sys.exit(EXIT_ALIGN_MODEL_DOWNLOAD_FAIL)
+        try:
+            result = whisperx.load_align_model(
+                language_code=language, device=device, model_dir=model_dir, model_cache_only=True
+            )
+        except Exception as e:
+            _log("alignment model unusable after download: %s" % e)
+            sys.exit(EXIT_ALIGN_MODEL_DOWNLOAD_FAIL)
+    else:
+        # torchaudio-backed language (e.g. en): whisperx downloads-or-reuses via
+        # dl_kwargs={"model_dir": model_dir} internally; there is no offline gate
+        # on this path (documented limitation — Polish/HF is the shipping scope).
+        try:
+            result = whisperx.load_align_model(
+                language_code=language, device=device, model_dir=model_dir, model_cache_only=False
+            )
+        except Exception as e:
+            _log("alignment model download failed: %s" % e)
+            sys.exit(EXIT_ALIGN_MODEL_DOWNLOAD_FAIL)
+    _emit_progress("download", 100)
+    return result
+
+
 def _align(whisperx, segments, audio, language, device):
     """Forced-align segments; emits align progress; exits EXIT_ALIGN_FAIL on error."""
     _emit_progress("align", 0)
     try:
         model_dir = _alignment_model_dir(language)
-        kwargs = {"language_code": language, "device": device}
-        if os.path.isdir(model_dir) and os.listdir(model_dir):
-            kwargs["model_dir"] = model_dir
-        align_model, metadata = whisperx.load_align_model(**kwargs)
+        align_model, metadata = _ensure_align_model(
+            whisperx, language, model_dir, allow_download=True, device=device
+        )
         result = whisperx.align(
             segments,
             align_model,
@@ -378,6 +492,11 @@ def cmd_transcribe(args):
         load_kwargs = dict(
             compute_type=compute_type,
             language=None if args.language in (None, "", "auto") else args.language,
+            # The transcription model dir is always local (EXIT_MODEL_NOT_FOUND
+            # already guards absence) — forcing this offline restores the
+            # no-network cold-path benefit that the blanket Rust HF_HUB_OFFLINE
+            # used to provide for this load too ([[whisperx-cold-spawn-cost]]).
+            local_files_only=True,
         )
         if asr_options:
             load_kwargs["asr_options"] = asr_options
@@ -615,6 +734,24 @@ def cmd_align_only(args):
     return EXIT_OK
 
 
+def cmd_fetch_align_model(args):
+    """Proactive, non-transcribing entry point: download (or confirm cached) the
+    alignment model for one language. Drives the model-manager's "Pobierz model
+    wyrównania" button — no --audio/--model required. Writes no JSON result
+    document (nothing for the caller to parse besides the exit code + the
+    PROGRESS lines), mirroring the fact that the caller only cares about
+    completion, not a data payload.
+    """
+    import whisperx
+
+    language = None if args.language in (None, "", "auto") else (args.language or "pl")
+    if not language:
+        language = "pl"
+    model_dir = _alignment_model_dir(language)
+    _ensure_align_model(whisperx, language, model_dir, allow_download=True, device="cpu")
+    return EXIT_OK
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="whisperx-engine", description="WhisperX engine sidecar")
     p.add_argument("--audio", help="path to a 16 kHz mono WAV (or any ffmpeg-decodable file)")
@@ -662,7 +799,12 @@ def build_parser():
     p.add_argument(
         "--align-model-dir",
         default=None,
-        help="directory holding per-language alignment models (ships beside the sidecar)",
+        help="directory holding per-language alignment models (downloaded on first use)",
+    )
+    p.add_argument(
+        "--fetch-align-model",
+        action="store_true",
+        help="download (or confirm cached) the --language alignment model and exit; no --audio/--model required",
     )
     p.add_argument("--selftest", action="store_true", help="print readiness JSON and exit")
     p.add_argument(
@@ -693,6 +835,8 @@ def main(argv=None):
             return cmd_capability()
         if args.selftest or args.version:
             return cmd_selftest()
+        if args.fetch_align_model:
+            return cmd_fetch_align_model(args)
         if args.align_only:
             if not args.audio:
                 _log("--align-only requires --audio")
