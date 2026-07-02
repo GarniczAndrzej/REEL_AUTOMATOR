@@ -565,10 +565,10 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Manual
 
-- [ ] 2.3 `download_align_model` emits `align-download-progress`, lands the model
-- [ ] 2.4 First transcription on empty cache shows the download band then aligns
-- [ ] 2.5 First transcription offline → exit-15 Polish message
-- [ ] 2.6 Second transcription performs no re-download (offline)
+- [x] 2.3 `download_align_model` emits `align-download-progress`, lands the model — c9cfcd4
+- [x] 2.4 First transcription on empty cache shows the download band then aligns — c9cfcd4
+- [x] 2.5 First transcription offline → exit-15 Polish message — c9cfcd4
+- [x] 2.6 Second transcription performs no re-download (offline) — c9cfcd4
 
 ### Phase 3: Frontend — align-model card + progress + badge wording
 
