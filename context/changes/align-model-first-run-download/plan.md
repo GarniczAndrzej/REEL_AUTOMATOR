@@ -579,9 +579,9 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 
 #### Manual
 
-- [x] 3.3 Align-model card shows size + correct Pobrany/Brak
-- [x] 3.4 "Pobierz model wyrównania" shows `N% · MB/s · ETA`, flips to Pobrany
-- [x] 3.5 Badge shows download hint on fresh install, ready text after download
+- [x] 3.3 Align-model card shows size + correct Pobrany/Brak — e1e43cd
+- [x] 3.4 "Pobierz model wyrównania" shows `N% · MB/s · ETA`, flips to Pobrany — e1e43cd
+- [x] 3.5 Badge shows download hint on fresh install, ready text after download — e1e43cd
 
 ### Phase 4: Packaging — un-bundle the model
 
@@ -593,5 +593,5 @@ sidecar build + Tauri build + a real 1.2 GB download and an offline re-run.
 #### Manual
 
 - [x] 4.3 Full rebuild → DMG ~400 MB, no `align_models/` in bundle — 31ab4f7
-- [ ] 4.4 Fresh-install run downloads model once into the app cache
-- [ ] 4.5 Second run fully offline, identical alignment + exports verify
+- [x] 4.4 Fresh-install run downloads model once into the app cache
+- [x] 4.5 Second run fully offline, identical alignment + exports verify
