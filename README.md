@@ -19,8 +19,11 @@ Zbudowana w Tauri 2 (backend w Rust + frontend Vite/vanilla-JS). Cały interfejs
 | **macOS 11 Big Sur lub nowszy** | Minimalna wersja wymagana przez Tauri 2 / WebView. |
 | **Klucz API OpenRouter** | Potrzebny do etapu doboru rolek przez AI. Pobierz na https://openrouter.ai/keys |
 
-Wszystko inne (FFmpeg, silnik transkrypcji WhisperX, modele wyrównania) jest **dołączone
-wewnątrz aplikacji** — nie trzeba instalować niczego więcej.
+Silnik transkrypcji (WhisperX) i FFmpeg są **dołączone wewnątrz aplikacji** — nie trzeba
+instalować ich osobno. Same **modele** (model transkrypcji + model wyrównania) nie są
+zaszyte w pliku DMG — aplikacja **pobiera je jednorazowo przy pierwszym użyciu** wprost z
+własnego okna (patrz krok 5 poniżej). Wymaga to połączenia z internetem tylko za pierwszym
+razem; potem transkrypcja działa offline.
 
 ### Kroki
 
@@ -42,6 +45,19 @@ wewnątrz aplikacji** — nie trzeba instalować niczego więcej.
    (Opcjonalnie: klucz HuggingFace, jeśli chcesz rozpoznawanie mówców / diaryzację.) Klucz
    jest przechowywany bezpiecznie w **Pęku kluczy macOS (Keychain)** — nigdy nie opuszcza
    Twojego komputera i nie jest częścią żadnego pliku do pobrania.
+5. **Pobierz modele (jednorazowo, wymaga internetu).** Zanim uruchomisz pierwszą
+   transkrypcję, w sekcji **„Transkrypcja wideo (WhisperX)"** pobierz **dwa** modele — bez
+   nich transkrypcja się nie uruchomi:
+   - **Model transkrypcji** — w polu **„Model transkrypcji"** wybierz model z listy i kliknij
+     pobieranie (~1,5–4 GB, zależnie od modelu). To on zamienia mowę na tekst.
+   - **Model wyrównania (alignment)** — w polu **„Model wyrównania (alignment)"** kliknij
+     **„Pobierz model wyrównania"** (polski, ~1,2 GB). To on nadaje słowom dokładne czasy,
+     dzięki czemu osie montażowe trafiają w klatki. *(Jeśli pominiesz ten krok, aplikacja i
+     tak pobierze model automatycznie przy pierwszej transkrypcji — pobranie z wyprzedzeniem
+     tylko skraca pierwsze oczekiwanie.)*
+
+   Oba modele pobierają się **raz** i są zapisywane lokalnie — kolejne transkrypcje
+   działają bez internetu.
 
 To wszystko. Transkrypcja działa **offline** na Twoim Macu; tylko etap doboru rolek przez AI
 łączy się z OpenRouter.
@@ -74,12 +90,16 @@ npm install
 # 1. Pobierz statyczny sidecar FFmpeg (~52 MB)
 sidecar/fetch-ffmpeg.sh
 
-# 2. Zbuduj sidecar silnika WhisperX + przygotuj modele wyrównania (~290 MB, chwilę trwa)
+# 2. Zbuduj sidecar silnika WhisperX (chwilę trwa)
 sidecar/build.sh
 
 # 3. Uruchom w trybie deweloperskim
 npm run tauri dev
 ```
+
+> **Modele nie są bundlowane.** `build.sh` przygotowuje tylko silnik — model transkrypcji
+> i model wyrównania aplikacja pobiera przy pierwszym użyciu do lokalnego cache użytkownika
+> (tak samo jak w wersji dla użytkowników, krok 5 powyżej).
 
 ### Najczęstsze polecenia
 
@@ -159,7 +179,6 @@ Szczegóły techniczne (układ katalogów, przywracanie plików wykluczonych z g
 | --- | --- |
 | macOS — Apple Silicon | ✅ Obsługiwana |
 | macOS — Intel (x86_64) | ❌ Jeszcze nie — wymaga buildów sidecarów x86_64 |
-| Windows | 🚧 Port w toku — zob. `context/foundation/windows-port-guide.md` |
 
 ---
 
