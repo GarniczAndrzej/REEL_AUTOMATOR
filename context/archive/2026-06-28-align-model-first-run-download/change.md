@@ -1,10 +1,10 @@
 ---
 change_id: align-model-first-run-download
 title: Align model first run download
-status: impl_reviewed
+status: archived
 created: 2026-06-28
 updated: 2026-07-03
-archived_at: null
+archived_at: 2026-07-03T09:03:26Z
 ---
 
 ## Notes

@@ -3,7 +3,7 @@ project: Reels Automator
 version: 1
 status: draft
 created: 2026-06-10
-updated: 2026-06-28
+updated: 2026-07-03
 prd_version: 1
 main_goal: quality
 top_blocker: decisions
@@ -55,7 +55,7 @@ Reels Automator is pivoting from "transcribe + select + render" to a **local-fir
 | S-26  | refactor-ai-prompts         | get noticeably better reels — each AI-analysis phase ships a re-engineered rubric prompt, plus a built-in prompt preset per BRAVE Education cohort | S-01, S-03, S-25 | FR-015, FR-016 (extends) | done |
 | S-27  | local-cohere-transcription  | transcribe locally with the Cohere Transcribe model (higher accuracy) and keep WhisperX word-level timestamps via a VAD → Cohere → Wav2Vec2 pipeline | S-05 | FR-001, FR-002, FR-006 (extends) | done |
 | S-28  | brave-design-system         | use the app re-skinned to the BRAVE brand — monochrome `#141313`/`#DDDDDD` palette, DM Sans type, BRAVE logo (replacing the REEL AUTOMATOR wordmark), tokenized via CSS custom properties | S-16 | — (visual rebrand; supports US-01 review-speed via a cleaner surface) | done |
-| S-29  | align-model-first-run-download | install a ~400 MB app (instead of ~4.7 GB) that downloads the ~1.2 GB wav2vec2 alignment model once on first transcription, with a progress bar, then runs offline | S-05 | — (packaging/distribution; enables GitHub-release delivery under the 2 GB asset cap) | in-progress |
+| S-29  | align-model-first-run-download | install a ~400 MB app (instead of ~4.7 GB) that downloads the ~1.2 GB wav2vec2 alignment model once on first transcription, with a progress bar, then runs offline | S-05 | — (packaging/distribution; enables GitHub-release delivery under the 2 GB asset cap) | done |
 
 ## Streams
 
@@ -536,7 +536,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
   - **PyInstaller hiddenimports** — the frozen sidecar must still import `huggingface_hub.snapshot_download`; add it to `whisperx_engine.spec` hiddenimports if the frozen `--selftest` import fails. — Owner: team. Block: no.
   - **`--selftest` 300 s timeout on a cold 1.2 GB download** — may be tight; acceptable because the primary download path is transcription, not selftest. — Owner: team. Block: no.
 - **Risk:** Moderate, mostly packaging + engine bring-up — no parser/exporter/frame-math touch, so the regression suite stays green by construction (run `node --experimental-vm-modules test/regression.js` before/after to confirm nothing leaked into logic; `~/.cargo/bin/cargo check` for the Rust changes). The real verification is heavy and cannot be done cheaply in-session: a full `sidecar/build.sh` + `npm run tauri build` (confirm DMG ~400 MB, no `align_models/`), then a fresh-launch first-transcription download (progress bar + model lands in the cache), a second offline transcription (no re-download), and a word-level alignment + EDL/XML/Lua export check. Sharp edges: (1) HF-offline must be gated on `align_model_present` everywhere it's currently forced (`run_engine` selftest/capability, transcribe non-diarize path, align-only path) or the first download is blocked; (2) the tqdm progress aggregation must be guarded to the dominant >50 MB weight so tiny config files don't spam the bar to 100%; (3) the readiness badge honestly shows not-ready until the first download. All new user-facing strings stay Polish. The bundled sidecars + (now downloaded) model dir remain git-ignored — restore via the S-05 build scripts ([[whisperx-sidecar-build]]).
-- **Status:** in-progress
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -610,6 +610,7 @@ Footprint-reduction refactors carried over from `streams.md`. They are not user-
 - **S-17: run a recurring pass to identify, decide on, and remove backlog/feature bloat** — Archived 2026-06-15 → `context/archive/2026-06-15-s-17/`. Lesson: —.
 - **S-16: move through a simpler, decluttered flow with fewer visible steps** — Archived 2026-06-16 → `context/archive/2026-06-15-s-16/`. Lesson: —.
 - **S-18: start transcribing without a long wait — the WhisperX engine check is fast (cached/async)** — Archived 2026-06-16 → `context/archive/2026-06-16-s-18/`. Cheap `--capability` sidecar probe + content-addressed verdict cache + bounded timeout; launch badge is cache-read-only (never spawns), green earned only by the manual full self-test. Lesson: every `whisperx-engine` sidecar spawn pays a 37–67s cold cost (onefile extraction + torch import) regardless of the probe's own work — never put a sidecar spawn on the launch/critical path.
+- **S-29: Editor installs a ~400 MB macOS app/DMG instead of the ~4.7 GB bundle; the ~1.2 GB wav2vec2 alignment model is un-bundled and downloaded once on first use into a writable per-user cache (Polish progress bar), then reused offline** — Archived 2026-07-03 → `context/archive/2026-06-28-align-model-first-run-download/`. Engine owns the per-language offline/download decision (`model_cache_only`); torch-free proactive fetch. Lesson: don't assume which weight format a HF repo ships — the Polish align repo's `main` has only `pytorch_model.bin` (no `.safetensors`), so `allow_patterns` accepts either and pulls exactly one.
 - **S-03: edit the system prompt and manage reusable prompt presets** — Archived 2026-06-18 → `context/archive/2026-06-16-s-03/`. Editable (no-longer-hardcoded) system prompt split from the user prompt + reusable preset library (save-as/duplicate/rename/delete, JSON import/export, built-in Polish starters); empty system prompt is meaningful (omits scoring guidance). Lesson: synchronous JS dialogs (`window.prompt/confirm/alert`) hard-crash Tauri's macOS WKWebView — use an in-app modal + async `@tauri-apps/plugin-dialog` `ask()` + `toast()` instead.
 - **S-02: Scoring-first reel list UI** — Archived 2026-06-18 → `context/archive/2026-06-18-scoring-first-reel-list/`. Lesson: —.
 - **S-28: app re-skinned to the BRAVE brand — monochrome palette, DM Sans, BRAVE logo** — Archived 2026-06-26 → `context/archive/2026-06-25-brave-design-system/`. Lesson: —.
