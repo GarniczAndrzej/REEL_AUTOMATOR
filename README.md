@@ -102,6 +102,57 @@ npx prettier --write "src/**/*.{js,css,html}"
 
 ---
 
+## Wtyczka do DaVinci Resolve (Workflow Integration)
+
+Oprócz samodzielnej aplikacji projekt zawiera **wtyczkę Workflow Integration (WI) do
+DaVinci Resolve** (`resolve-plugin/`) — ten sam interfejs Reels Automator, ale osadzony
+jako panel **wewnątrz DaVinci Resolve Studio**. Zamiast eksportować plik EDL/XML/Lua i
+importować go ręcznie, wtyczka steruje projektem Resolve bezpośrednio przez skryptowe API:
+
+- **Rolki → oś czasu** — tworzy w otwartym projekcie jedną oś czasu ze wszystkimi rolkami
+  (rozdzielonymi ustawioną przerwą), z markerami — bez eksportu pliku pośredniego.
+- **Napisy** — wstawia napisy na ścieżkę napisów, startując od punktu In osi czasu.
+- **Transkrypcja (WhisperX)** — ta sama lokalna transkrypcja co w aplikacji desktopowej.
+- **Audio z osi czasu Resolve** — przycisk „Z osi czasu Resolve" renderuje audio zakresu
+  In/Out bieżącej osi czasu (przez preset renderowania) i podaje je do transkrypcji.
+
+### Wymagania
+
+- **DaVinci Resolve Studio** — panele Workflow Integration działają tylko w wersji **Studio**
+  (płatnej), nie w darmowym DaVinci Resolve.
+- **Mac z Apple Silicon** oraz natywny plik pomostowy `WorkflowIntegration.node` z pakietu
+  DaVinci Resolve Developer SDK (dołączony do instalacji Resolve Studio).
+
+### Budowanie i instalacja (dla programistów)
+
+Wtyczka WI to zwykły **folder**, który hostuje sam Resolve (HTML/JS + backend Node +
+natywny `WorkflowIntegration.node`) — nie jest osobną aplikacją `.app`, więc nie ma czego
+podpisywać. Zbuduj i zainstaluj jednym skryptem z katalogu repozytorium:
+
+```bash
+# Zbuduj renderer + zainstaluj wtyczkę do katalogu WI Resolve
+sidecar/install-resolve-plugin.sh
+```
+
+Skrypt: buduje frontend (`npm run build:resolve`), kopiuje pliki wtyczki do
+`/Library/Application Support/Blackmagic Design/DaVinci Resolve/Workflow Integration Plugins/Reels-Automator/`,
+tworzy dowiązanie `binaries` → `src-tauri/binaries` (sidecary FFmpeg/WhisperX nie są
+kopiowane, tylko linkowane) i czyści atrybut kwarantanny.
+
+> **Zanim uruchomisz skrypt:** upewnij się, że masz pobrane sidecary (`sidecar/fetch-ffmpeg.sh`
+> + `sidecar/build.sh`) oraz skopiowany `resolve-plugin/WorkflowIntegration.node` z SDK Resolve
+> (`…/DaVinci Resolve/Developer/Workflow Integrations/Examples/SamplePlugin/`). Bez pliku
+> pomostowego panel się załaduje, ale zgłosi, że Resolve jest niedostępny.
+
+Resolve skanuje katalog wtyczek tylko przy starcie — po instalacji **całkowicie zamknij
+(⌘Q) i uruchom ponownie DaVinci Resolve**, następnie otwórz
+**Workspace → Workflow Integrations → Reels Automator**.
+
+Szczegóły techniczne (układ katalogów, przywracanie plików wykluczonych z gita) opisuje
+`resolve-plugin/README.md`.
+
+---
+
 ## Obsługiwane platformy
 
 | Platforma | Status |
