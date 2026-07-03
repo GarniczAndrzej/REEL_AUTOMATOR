@@ -2,11 +2,11 @@
 #
 # PyInstaller spec for the WhisperX engine sidecar.
 #
-# Produces a single standalone executable. The per-language wav2vec2 alignment
-# model(s) staged under sidecar/whisperx_engine/align_models/ at build time are
-# bundled as data so forced alignment works offline immediately (Phase 1 user
-# decision). Large faster-whisper transcription models are NOT bundled — those
-# are downloaded on demand (Phase 4).
+# Produces a single standalone executable. Neither the per-language wav2vec2
+# alignment model nor the faster-whisper transcription models are bundled — both
+# are downloaded on first use into a writable per-user cache and reused offline
+# afterward. The align model in particular is fetched on the first transcription
+# (or via the "Pobierz model wyrównania" button) into app_cache_dir()/align_models.
 #
 # Driven by sidecar/build.sh, which sets ENGINE_OUT_NAME to the Tauri
 # arch-suffixed binary name (e.g. whisperx-engine-aarch64-apple-darwin).
@@ -20,9 +20,9 @@ HERE = os.path.abspath(os.getcwd())
 SRC = os.path.join(HERE, "whisperx_engine", "whisperx_engine.py")
 
 # The per-language wav2vec2 alignment model is deliberately NOT baked in: a
-# multi-GB onefile Mach-O fails to load on macOS (dyld aborts before main).
-# build.sh stages it BESIDE the sidecar binary instead, and the Rust layer passes
-# its path via --align-model-dir. Keep this freeze model-free (small + loadable).
+# multi-GB onefile Mach-O fails to load on macOS (dyld aborts before main). It is
+# downloaded on first use into app_cache_dir()/align_models, whose path the Rust
+# layer passes via --align-model-dir. Keep this freeze model-free (small + loadable).
 datas = []
 
 # WhisperX / pyannote / faster-whisper pull in models + assets dynamically.

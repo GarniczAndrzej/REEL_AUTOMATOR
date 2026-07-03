@@ -13,6 +13,20 @@ static WHISPER_CALL: AtomicU64 = AtomicU64::new(0);
 static TRANSCRIBE_CHILD: Mutex<Option<CommandChild>> = Mutex::new(None);
 static TRANSCRIBE_CANCELLED: AtomicBool = AtomicBool::new(false);
 
+// Single-flight guard for the proactive align-model fetch. This path is not
+// routed through TRANSCRIBE_CHILD, so it needs its own in-flight flag to keep a
+// double-click (or a second invoke from devtools/another window) from spawning
+// two cold sidecars writing the same cache dir.
+static ALIGN_DOWNLOAD_INFLIGHT: AtomicBool = AtomicBool::new(false);
+
+// Resets ALIGN_DOWNLOAD_INFLIGHT on every exit path of download_align_model.
+struct AlignDownloadGuard;
+impl Drop for AlignDownloadGuard {
+    fn drop(&mut self) {
+        ALIGN_DOWNLOAD_INFLIGHT.store(false, Ordering::SeqCst);
+    }
+}
+
 // A single global child handle can only track/cancel one process, so a second
 // concurrent run would orphan the first (cancel could no longer reach it).
 // Reject a new run while one is in flight — the app drives one run at a time.
@@ -193,7 +207,7 @@ fn engine_error_message(code: Option<i32>, stderr: &str) -> String {
         Some(12) => "Dopasowanie słów (alignment) nie powiodło się. Spróbuj ponownie lub zmień język.".to_string(),
         Some(13) => "Rozpoznawanie mówców (diaryzacja) nie powiodło się. Sprawdź token Hugging Face i dostęp do modelu pyannote.".to_string(),
         Some(14) => "Transkrypcja nie powiodła się. Sprawdź model i plik audio.".to_string(),
-        Some(15) => "Pierwsze uruchomienie wymaga połączenia z internetem, aby pobrać model wyrównania (~1,2 GB). Połącz się z siecią i spróbuj ponownie.".to_string(),
+        Some(15) => "Nie udało się pobrać modelu wyrównania (~1,2 GB). Sprawdź połączenie z internetem oraz ilość wolnego miejsca na dysku i uprawnienia do zapisu, a następnie spróbuj ponownie.".to_string(),
         Some(2) => "Nieprawidłowe wywołanie silnika WhisperX (błąd argumentów).".to_string(),
         _ => {
             let tail: String = stderr.lines().rev().take(3).collect::<Vec<_>>().join(" | ");
@@ -897,6 +911,15 @@ async fn reap_engine_child(c: CommandChild) {
 /// forced-offline env here — the entire point is to allow the network.
 #[tauri::command]
 pub async fn download_align_model(app: AppHandle, language: Option<String>) -> Result<(), String> {
+    // Reject a second concurrent fetch; the guard resets on every return path.
+    if ALIGN_DOWNLOAD_INFLIGHT
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Err("Pobieranie modelu wyrównania już trwa. Poczekaj na jego zakończenie.".into());
+    }
+    let _inflight = AlignDownloadGuard;
+
     let lang = language
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "pl".to_string());
@@ -916,14 +939,29 @@ pub async fn download_align_model(app: AppHandle, language: Option<String>) -> R
         .map_err(|e| format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh"))?
         .args(args);
 
-    let (mut rx, _child) = sidecar
+    let (mut rx, child) = sidecar
         .spawn()
         .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
+
+    // Idle (no-event) timeout, not an overall cap: active downloading emits
+    // PROGRESS lines steadily, and the slow ~4-min cold start (spawn + repo
+    // resolve) stays well under this, so it only fires on a genuine silent
+    // stall — a hung-but-alive connection mid-pull that would otherwise wedge
+    // the command forever with no cancel path.
+    const ALIGN_DL_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
     let mut stderr_buf = String::new();
     let mut stderr_line = String::new();
     let mut exit_code: Option<i32> = None;
-    while let Some(ev) = rx.recv().await {
+    loop {
+        let ev = match tokio::time::timeout(ALIGN_DL_IDLE_TIMEOUT, rx.recv()).await {
+            Ok(Some(ev)) => ev,
+            Ok(None) => break, // engine closed the stream
+            Err(_) => {
+                let _ = child.kill();
+                return Err("Pobieranie modelu wyrównania przekroczyło limit czasu (brak postępu przez 15 minut). Sprawdź połączenie z internetem i spróbuj ponownie.".into());
+            }
+        };
         match ev {
             CommandEvent::Stderr(b) => {
                 let chunk = String::from_utf8_lossy(&b);

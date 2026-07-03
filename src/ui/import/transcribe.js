@@ -536,6 +536,10 @@ async function renderAlignModelCard() {
  * @returns {Promise<void>}
  */
 async function downloadAlignModel(language) {
+  // Guard before the first `await`: renderAlignModelCard() is async, so a fast
+  // double-click can re-enter here before the button is disabled and fire a
+  // second download. Single-flight it (mirrors the Rust in-flight guard).
+  if (_alignDownloading) return;
   _alignDownloading = true;
   // Must await: renderAlignModelCard() is async (awaits a dynamic import
   // before rewriting container.innerHTML) — see downloadModel's identical note.
@@ -546,6 +550,10 @@ async function downloadAlignModel(language) {
   const { ALIGN_MODEL } = await import('../../transcription/model-registry.js');
   let lastPercent = 0;
   let lastTime = performance.now();
+  // Seed the rate baseline on the FIRST progress event, not now: the ~37–67 s
+  // cold spawn happens during `await invoke(...)` below and would otherwise be
+  // counted as download time, deflating the first MB/s sample.
+  let firstSample = true;
 
   let unlisten;
   try {
@@ -553,6 +561,13 @@ async function downloadAlignModel(language) {
       if (e.payload.language !== language) return;
       const { percent } = e.payload;
       const now = performance.now();
+      if (firstSample) {
+        firstSample = false;
+        lastPercent = percent;
+        lastTime = now;
+        if (progEl) progEl.textContent = `${Math.round(percent)}%`;
+        return;
+      }
       const dtSec = Math.max((now - lastTime) / 1000, 0.001);
       const deltaPercent = Math.max(percent - lastPercent, 0);
       const bytesPerSec =

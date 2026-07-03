@@ -360,9 +360,14 @@ def _download_align_snapshot(repo_id, model_dir):
         are meant for `drive_engine` to parse.
         """
 
+        # One shared sink for every bar this download creates, instead of a
+        # fresh unclosed handle per instance. tqdm never closes a caller-passed
+        # `file`, so a per-instance open() would leak one fd per bar.
+        _NULL_SINK = open(os.devnull, "w")
+
         def __init__(self, *args, **kwargs):
             kwargs["disable"] = False
-            kwargs["file"] = open(os.devnull, "w")
+            kwargs["file"] = ProgressTqdm._NULL_SINK
             super().__init__(*args, **kwargs)
 
         def update(self, n=1):
