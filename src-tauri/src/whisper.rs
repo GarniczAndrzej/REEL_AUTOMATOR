@@ -1,16 +1,17 @@
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter};
 use tauri::Manager;
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
-use tauri_plugin_shell::ShellExt;
+use tauri::{AppHandle, Emitter};
+use tokio::io::AsyncReadExt;
 
 static WHISPER_CALL: AtomicU64 = AtomicU64::new(0);
 
 // Tracks the in-flight engine child so `cancel_transcription` can kill it, plus
-// a flag the run loop checks to report a cancelled (not failed) state.
-static TRANSCRIBE_CHILD: Mutex<Option<CommandChild>> = Mutex::new(None);
+// a flag the run loop checks to report a cancelled (not failed) state. Since the
+// spawn-path rework (Phase 3) this is a raw `tokio::process::Child`, not the
+// shell plugin's `CommandChild`.
+static TRANSCRIBE_CHILD: Mutex<Option<tokio::process::Child>> = Mutex::new(None);
 static TRANSCRIBE_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 // A single global child handle can only track/cancel one process, so a second
@@ -291,80 +292,118 @@ fn append_bounded_tail(buf: &mut String, chunk: &str, max_bytes: usize) {
 /// every 250 ms fixes that.
 async fn drive_engine(
     app: &AppHandle,
-    mut rx: tauri::async_runtime::Receiver<CommandEvent>,
-    child: CommandChild,
+    mut child: tokio::process::Child,
 ) -> (String, String, Option<i32>) {
+    // Take the pipe readers out of the child so we can pump them while the child
+    // itself is parked in the global handle for `cancel_transcription` to kill.
+    let mut stdout = child.stdout.take();
+    let mut stderr = child.stderr.take();
     *TRANSCRIBE_CHILD.lock().unwrap() = Some(child);
 
-    let mut stdout_buf = String::new();
+    // Accumulate stdout as raw bytes and lossy-decode once at the end so a
+    // multibyte UTF-8 sequence split across two `read()` chunks is never mangled
+    // (the JSON payload must stay byte-faithful). stderr is decoded per chunk for
+    // PROGRESS line parsing (those lines are ASCII).
+    let mut stdout_raw: Vec<u8> = Vec::new();
     let mut stderr_buf = String::new();
     let mut stderr_line = String::new();
-    let mut exit_code: Option<i32> = None;
     let mut cancelled = false;
 
-    loop {
-        if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
-            cancelled = true;
-            break;
-        }
-        let ev =
-            match tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv()).await {
-                Ok(Some(ev)) => ev,
-                Ok(None) => break,  // stream closed normally
-                Err(_) => continue, // timeout — re-check the cancel flag
-            };
-        match ev {
-            CommandEvent::Stdout(b) => stdout_buf.push_str(&String::from_utf8_lossy(&b)),
-            CommandEvent::Stderr(b) => {
-                let chunk = String::from_utf8_lossy(&b);
-                // Bound the retained stderr to a tail so a chatty run can't grow
-                // this buffer without limit (S-21 OOM amplifier). PROGRESS parsing
-                // below consumes lines as they arrive and never accumulates.
-                append_bounded_tail(&mut stderr_buf, &chunk, STDERR_TAIL_MAX_BYTES);
-                // Line-buffer stderr to parse PROGRESS lines reliably.
-                stderr_line.push_str(&chunk);
-                while let Some(nl) = stderr_line.find('\n') {
-                    let line: String = stderr_line.drain(..=nl).collect();
-                    let line = line.trim_end();
-                    if let Some(rest) = line.strip_prefix("PROGRESS ") {
-                        let mut phase = "";
-                        let mut percent = 0.0_f64;
-                        for tok in rest.split_whitespace() {
-                            if let Some(v) = tok.strip_prefix("phase=") {
-                                phase = v;
-                            } else if let Some(v) = tok.strip_prefix("percent=") {
-                                percent = v.parse().unwrap_or(0.0);
+    let mut obuf = [0u8; 8192];
+    let mut ebuf = [0u8; 8192];
+    let mut out_open = stdout.is_some();
+    let mut err_open = stderr.is_some();
+    // Re-check the cancel flag every 250 ms. The engine is a PyInstaller onefile:
+    // a SIGKILL of the bootloader orphans its worker child, which keeps the pipes
+    // open — a plain read-to-EOF would then block until the orphan finishes the
+    // whole (multi-minute) run. Polling the flag lets a cancel break out promptly.
+    let mut tick = tokio::time::interval(std::time::Duration::from_millis(250));
+    tick.tick().await; // consume the immediate first tick
+
+    while out_open || err_open {
+        tokio::select! {
+            biased;
+            _ = tick.tick() => {
+                if TRANSCRIBE_CANCELLED.load(Ordering::SeqCst) {
+                    cancelled = true;
+                    break;
+                }
+            }
+            k = read_some(&mut stdout, &mut obuf), if out_open => {
+                if k == 0 {
+                    out_open = false;
+                } else {
+                    stdout_raw.extend_from_slice(&obuf[..k]);
+                }
+            }
+            k = read_some(&mut stderr, &mut ebuf), if err_open => {
+                if k == 0 {
+                    err_open = false;
+                } else {
+                    let chunk = String::from_utf8_lossy(&ebuf[..k]);
+                    // Bound the retained stderr to a tail so a chatty run can't
+                    // grow this buffer without limit (S-21 OOM amplifier).
+                    append_bounded_tail(&mut stderr_buf, &chunk, STDERR_TAIL_MAX_BYTES);
+                    // Line-buffer stderr to parse PROGRESS lines reliably.
+                    stderr_line.push_str(&chunk);
+                    while let Some(nl) = stderr_line.find('\n') {
+                        let line: String = stderr_line.drain(..=nl).collect();
+                        let line = line.trim_end();
+                        if let Some(rest) = line.strip_prefix("PROGRESS ") {
+                            let mut phase = "";
+                            let mut percent = 0.0_f64;
+                            for tok in rest.split_whitespace() {
+                                if let Some(v) = tok.strip_prefix("phase=") {
+                                    phase = v;
+                                } else if let Some(v) = tok.strip_prefix("percent=") {
+                                    percent = v.parse().unwrap_or(0.0);
+                                }
                             }
+                            let (label, overall) = map_progress(phase, percent);
+                            let _ = app.emit(
+                                "transcribe-progress",
+                                serde_json::json!({ "phase": phase, "label": label, "percent": overall }),
+                            );
                         }
-                        let (label, overall) = map_progress(phase, percent);
-                        let _ = app.emit(
-                            "transcribe-progress",
-                            serde_json::json!({ "phase": phase, "label": label, "percent": overall }),
-                        );
                     }
                 }
             }
-            CommandEvent::Terminated(p) => {
-                exit_code = p.code;
-                break;
-            }
-            _ => {}
         }
     }
 
     // The driver is the single owner of the child. On cancel it reaps the child
-    // itself BEFORE nulling the handle — closing the race where the old code
-    // nulled the handle at completion and cancel_transcription then took `None`
-    // and never killed the orphaned torch worker (S-21). `take()` is atomic under
-    // the lock, so whoever wins (driver here, or cancel_transcription's fallback)
-    // is the sole reaper — no double-kill. Normal completion just drops the handle.
-    let child = TRANSCRIBE_CHILD.lock().unwrap().take();
-    if cancelled {
-        if let Some(c) = child {
+    // itself; on normal completion (pipes hit EOF ⇒ process exited) it reaps via
+    // `wait()` to collect the exit code. `take()` is atomic under the lock, so
+    // whoever wins (driver here, or cancel_transcription's fallback) is the sole
+    // reaper — no double-kill.
+    let held = TRANSCRIBE_CHILD.lock().unwrap().take();
+    let exit_code = if cancelled {
+        if let Some(c) = held {
             reap_engine_child(c).await;
         }
+        None
+    } else {
+        match held {
+            Some(mut c) => c.wait().await.ok().and_then(|s| s.code()),
+            None => None, // cancel_transcription took and reaped it
+        }
+    };
+    (
+        String::from_utf8_lossy(&stdout_raw).into_owned(),
+        stderr_buf,
+        exit_code,
+    )
+}
+
+/// Read from an optional child pipe into `buf`, returning the byte count (0 on
+/// EOF or error ⇒ the caller closes that stream). Parks forever when the pipe is
+/// `None`; the `select!` branch is gated by `out_open`/`err_open` so that arm is
+/// never actually polled once closed.
+async fn read_some<R: tokio::io::AsyncRead + Unpin>(r: &mut Option<R>, buf: &mut [u8]) -> usize {
+    match r.as_mut() {
+        Some(rr) => rr.read(buf).await.unwrap_or(0),
+        None => std::future::pending().await,
     }
-    (stdout_buf, stderr_buf, exit_code)
 }
 
 #[tauri::command]
@@ -557,33 +596,30 @@ pub async fn transcribe_video(
         args.push(dir);
     }
 
-    let sidecar = app
-        .shell()
-        .sidecar(crate::engine::engine_sidecar())
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&wav_path);
-            format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
-        })?
-        .args(args);
+    let bin = crate::engine::engine_bin_path(&app).map_err(|e| {
+        let _ = std::fs::remove_file(&wav_path);
+        e
+    })?;
+    let mut cmd = crate::proc::build_command(&bin, &args);
     // Transcription model is local and the align model is bundled, so force HF
     // offline (skips slow network etag checks) — except when diarizing, where
-    // pyannote may still need to be fetched from HuggingFace.
-    let sidecar = if diarize {
-        // pyannote may still need HuggingFace; pass the token via env (not argv).
-        sidecar.env("HF_TOKEN", hf_token.clone())
+    // pyannote may still need to be fetched from HuggingFace (pass the token via
+    // env, not argv, so it is not visible in `ps`).
+    if diarize {
+        cmd.env("HF_TOKEN", hf_token.clone());
     } else {
-        crate::engine::with_hf_offline(sidecar)
-    };
+        crate::engine::with_hf_offline(&mut cmd);
+    }
     // UTF-8 stdio so Polish diacritics in the JSON result survive Windows' cp1250
     // pipe default (see engine::with_utf8_io).
-    let sidecar = crate::engine::with_utf8_io(sidecar);
+    crate::engine::with_utf8_io(&mut cmd);
 
-    let (rx, child) = sidecar.spawn().map_err(|e| {
+    let child = cmd.spawn().map_err(|e| {
         let _ = std::fs::remove_file(&wav_path);
         format!("Nie udało się uruchomić silnika WhisperX: {e}")
     })?;
 
-    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, rx, child).await;
+    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, child).await;
 
     let _ = tokio::fs::remove_file(&wav_path).await;
 
@@ -806,22 +842,20 @@ pub async fn align_transcript(
         let _ = std::fs::remove_file(&transcript_path);
     };
 
-    let sidecar = crate::engine::with_utf8_io(crate::engine::with_hf_offline(
-        app.shell()
-            .sidecar(crate::engine::engine_sidecar())
-            .map_err(|e| {
-                cleanup_temps();
-                format!("Silnik WhisperX niedostępny: {e}. Zbuduj go: sidecar/build.sh")
-            })?
-            .args(align_args),
-    ));
+    let bin = crate::engine::engine_bin_path(&app).map_err(|e| {
+        cleanup_temps();
+        e
+    })?;
+    let mut cmd = crate::proc::build_command(&bin, &align_args);
+    crate::engine::with_hf_offline(&mut cmd);
+    crate::engine::with_utf8_io(&mut cmd);
 
-    let (rx, child) = sidecar.spawn().map_err(|e| {
+    let child = cmd.spawn().map_err(|e| {
         cleanup_temps();
         format!("Nie udało się uruchomić silnika WhisperX: {e}")
     })?;
 
-    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, rx, child).await;
+    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, child).await;
 
     let _ = tokio::fs::remove_file(&wav_path).await;
     let _ = std::fs::remove_file(&transcript_path);
@@ -860,19 +894,22 @@ pub async fn align_transcript(
 /// hard-kill the bootloader as a fallback. The single reaper used by both the
 /// `drive_engine` cancel-break path and the `cancel_transcription` fallback, so
 /// the escalation lives in exactly one place (S-21).
-async fn reap_engine_child(c: CommandChild) {
+async fn reap_engine_child(mut c: tokio::process::Child) {
     #[cfg(unix)]
     {
-        let pid = c.pid() as i32;
-        unsafe {
-            libc::kill(pid, libc::SIGTERM);
+        if let Some(pid) = c.id() {
+            unsafe {
+                libc::kill(pid as i32, libc::SIGTERM);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        let _ = c.kill();
+        let _ = c.kill().await;
+        let _ = c.wait().await;
     }
     #[cfg(not(unix))]
     {
-        let _ = c.kill();
+        let _ = c.kill().await;
+        let _ = c.wait().await;
     }
 }
 

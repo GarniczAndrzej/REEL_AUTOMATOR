@@ -4,6 +4,7 @@ mod ffmpeg;
 mod keychain;
 mod metadata;
 mod models;
+mod proc;
 mod project;
 mod whisper;
 mod waveform;

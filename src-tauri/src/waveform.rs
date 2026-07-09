@@ -1,10 +1,15 @@
+use crate::proc::ProcError;
 use std::io::Read;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::process::CommandEvent;
-use tauri_plugin_shell::ShellExt;
 
 static WAVEFORM_CALL: AtomicU64 = AtomicU64::new(0);
+
+/// Bound for a single clip-span PCM decode. A waveform extract covers one trim
+/// span (seconds, not the whole video), so a generous ceiling still catches a
+/// wedged FFmpeg without ever killing a legitimate decode.
+const WAVEFORM_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[tauri::command]
 pub async fn extract_waveform(
@@ -108,28 +113,29 @@ async fn extract(
     let end_str = format!("{:.6}", end_s);
     let sr_str = sr.to_string();
 
-    let sidecar = app
-        .shell()
-        .sidecar("ffmpeg")
-        .map_err(|e| e.to_string())?
-        .args([
-            "-y",
-            "-ss", &start_str,
-            "-to", &end_str,
-            "-i", video_path,
-            "-ac", "1",
-            "-ar", &sr_str,
-            "-f", "f32le",
-            "-vn",
-            &raw_path_str,
-        ]);
-
-    let (mut rx, _child) = sidecar.spawn().map_err(|e| e.to_string())?;
-    while let Some(ev) = rx.recv().await {
-        if matches!(ev, CommandEvent::Terminated(_)) {
-            break;
-        }
-    }
+    // FFmpeg writes raw f32le PCM to `raw_path`; we ignore its stdout/stderr and
+    // only need it to finish (bounded). The shared helper drains both pipes so a
+    // chatty decode never deadlocks, then we read the file.
+    let ff_args: Vec<String> = vec![
+        "-y".into(),
+        "-ss".into(), start_str,
+        "-to".into(), end_str,
+        "-i".into(), video_path.to_string(),
+        "-ac".into(), "1".into(),
+        "-ar".into(), sr_str,
+        "-f".into(), "f32le".into(),
+        "-vn".into(),
+        raw_path_str.clone(),
+    ];
+    let bin = crate::ffmpeg::ffmpeg_bin_path(app)?;
+    let cmd = crate::proc::build_command(&bin, &ff_args);
+    crate::proc::spawn_and_collect(cmd, Some(WAVEFORM_TIMEOUT))
+        .await
+        .map_err(|e| match e {
+            ProcError::TimedOut => "Ekstrakcja przebiegu audio przekroczyła limit czasu.".to_string(),
+            ProcError::Spawn(e) => format!("Nie udało się uruchomić FFmpeg: {e}"),
+            ProcError::Io(e) => e,
+        })?;
 
     let raw_bytes = std::fs::read(&raw_path).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(&raw_path);

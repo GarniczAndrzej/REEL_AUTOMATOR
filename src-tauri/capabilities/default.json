@@ -1,13 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Capability for the main window. NOTE: shell:allow-execute was dropped in the Phase 3 spawn-path rework — the heavy sidecars (WhisperX engine, FFmpeg) are now spawned by absolute path via std/tokio process::Command (see src/proc.rs), not the shell plugin, so no capability grants sidecar execution. shell:default is retained for the plugin's non-execute surface.",
   "windows": ["main"],
   "permissions": [
     "core:default",
     "dialog:default",
     "fs:default",
-    "shell:default",
-    "shell:allow-execute"
+    "shell:default"
   ]
 }

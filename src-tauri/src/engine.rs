@@ -5,14 +5,13 @@
 // Phase 1 only needs the readiness self-check; transcription wiring lands in
 // Phase 2.
 
+use crate::proc::ProcError;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::process::{Command, CommandEvent};
-use tauri_plugin_shell::ShellExt;
 
 /// Base names of the two engine sidecar variants; Tauri appends the host triple
 /// (e.g. `-x86_64-pc-windows-msvc.exe`). The `-gpu` build ships cu128/CUDA torch;
@@ -94,9 +93,9 @@ const SELFTEST_TIMEOUT: Duration = Duration::from_secs(300);
 /// Safe for the self-test, align-only, and *non-diarize* transcription paths —
 /// all use bundled/local models. Do NOT apply when diarization is requested:
 /// pyannote may still need to be fetched from HuggingFace.
-pub fn with_hf_offline(cmd: Command) -> Command {
+pub fn with_hf_offline(cmd: &mut tokio::process::Command) {
     cmd.env("HF_HUB_OFFLINE", "1")
-        .env("TRANSFORMERS_OFFLINE", "1")
+        .env("TRANSFORMERS_OFFLINE", "1");
 }
 
 /// Force the engine's stdio to UTF-8. The result JSON uses `ensure_ascii=False`
@@ -107,8 +106,8 @@ pub fn with_hf_offline(cmd: Command) -> Command {
 /// the embedded interpreter encode stdio as UTF-8. The engine script also self-
 /// reconfigures its streams to UTF-8; this is belt-and-suspenders that *also*
 /// fixes an exe frozen before that change. Apply at every engine spawn site.
-pub fn with_utf8_io(cmd: Command) -> Command {
-    cmd.env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8")
+pub fn with_utf8_io(cmd: &mut tokio::process::Command) {
+    cmd.env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8");
 }
 
 /// Resolve the external wav2vec2 alignment-model directory that ships *beside*
@@ -118,11 +117,26 @@ pub fn with_utf8_io(cmd: Command) -> Command {
 /// engine via `--align-model-dir`.
 ///
 /// Resolution order:
+///   0. the staged deps root (thin-installer download) — highest priority so a
+///      downloaded align model wins over any stale bundled/dev copy (Phase 3),
 ///   1. bundled resource dir (production app bundle), then
 ///   2. the repo `src-tauri/binaries/align_models` (covers `tauri dev`, where
 ///      `build.sh` stages the model next to the sidecar binary).
 /// Returns `None` when neither exists (engine then falls back to next-to-exe).
 pub fn align_model_dir(app: &AppHandle) -> Option<String> {
+    // 0. staged deps root — matches where the Phase 2 downloader placed it
+    //    (`deps_root/engine/<variant>/align_models`), keyed by the same variant.
+    if let Ok(root) = crate::deps::deps_root(app) {
+        let staged = crate::deps::staged_path(
+            &root,
+            "align-models",
+            crate::deps::detect_variant(),
+            host_triple(),
+        );
+        if staged.is_dir() {
+            return Some(staged.to_string_lossy().into_owned());
+        }
+    }
     if let Ok(p) = app.path().resolve("align_models", BaseDirectory::Resource) {
         if p.is_dir() {
             return Some(p.to_string_lossy().into_owned());
@@ -135,6 +149,74 @@ pub fn align_model_dir(app: &AppHandle) -> Option<String> {
         return Some(dev.to_string_lossy().into_owned());
     }
     None
+}
+
+/// Resolve one engine variant's absolute exe across the three-way precedence
+/// (staged deps root → beside the main exe → repo `binaries/`), or `None` if it
+/// is present nowhere. The staged and repo copies carry the host-triple suffix;
+/// Tauri's `externalBin` bundler drops the triple for the beside-exe copy, so we
+/// look for the stripped name there.
+fn resolve_engine_variant(app: &AppHandle, variant: &str, triple: &str) -> Option<PathBuf> {
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+    let base = if variant == "gpu" {
+        ENGINE_SIDECAR_GPU
+    } else {
+        ENGINE_SIDECAR_CPU
+    };
+    // 1. staged deps root (thin-installer download).
+    if let Ok(root) = crate::deps::deps_root(app) {
+        let staged = crate::deps::staged_path(&root, "engine-bin", variant, triple);
+        if staged.is_file() {
+            return Some(staged);
+        }
+    }
+    // 2. beside the main exe (production bundle — triple stripped).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let p = dir.join(format!("{base}{ext}"));
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+    // 3. repo binaries/ (dev / `tauri dev` — triple-suffixed).
+    let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join(format!("{base}-{triple}{ext}"));
+    if dev.is_file() {
+        return Some(dev);
+    }
+    None
+}
+
+/// Resolve the absolute engine exe to spawn. Picks the variant from
+/// `deps::detect_variant()` (the SAME shared resolver `engine_sidecar()` folds
+/// into the readiness cache key), then resolves that variant's binary across
+/// staged → beside-exe → repo. Fail-safe: a `gpu` selection whose binary is not
+/// present anywhere falls back to the CPU binary (never spawns a missing exe);
+/// conversely, if only the GPU build is staged, it is used (the GPU build
+/// self-falls-back to `device=cpu`). Resolving independently of
+/// `engine_sidecar()`'s repo/beside-exe presence guard is what lets a
+/// staged-only GPU install (thin installer) actually spawn the GPU engine.
+pub fn engine_bin_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let triple = host_triple();
+    let want_gpu = crate::deps::detect_variant() == "gpu";
+    if want_gpu {
+        if let Some(p) = resolve_engine_variant(app, "gpu", triple) {
+            return Ok(p);
+        }
+    }
+    if let Some(p) = resolve_engine_variant(app, "cpu", triple) {
+        return Ok(p);
+    }
+    if !want_gpu {
+        if let Some(p) = resolve_engine_variant(app, "gpu", triple) {
+            return Ok(p);
+        }
+    }
+    Err(format!(
+        "Silnik WhisperX niedostępny dla {triple}. Pobierz zależności lub zbuduj go: sidecar/build.sh"
+    ))
 }
 
 /// Readiness report returned by the engine `--selftest` / `--capability` probe.
@@ -171,42 +253,20 @@ pub async fn run_engine(
     timeout: Duration,
 ) -> Result<(String, String, Option<i32>), String> {
     let arg_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    let bin = engine_bin_path(app)?;
+    let mut cmd = crate::proc::build_command(&bin, &arg_vec);
     // Both callers (self-test, capability) use only the bundled align model (or
-    // no model at all) — force HF offline so they don't stall on network checks.
-    let sidecar = with_utf8_io(with_hf_offline(
-        app.shell()
-            .sidecar(engine_sidecar())
-            .map_err(|e| format!("Silnik WhisperX niedostępny: {e}"))?
-            .args(arg_vec),
-    ));
-    let (mut rx, child) = sidecar
-        .spawn()
-        .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))?;
-    let mut out = String::new();
-    let mut err = String::new();
-    let mut code: Option<i32> = None;
-
-    let recv_loop = async {
-        while let Some(ev) = rx.recv().await {
-            match ev {
-                CommandEvent::Stdout(b) => out.push_str(&String::from_utf8_lossy(&b)),
-                CommandEvent::Stderr(b) => err.push_str(&String::from_utf8_lossy(&b)),
-                CommandEvent::Terminated(p) => {
-                    code = p.code;
-                    break;
-                }
-                _ => {}
-            }
+    // no model at all) — force HF offline so they don't stall on network checks,
+    // and UTF-8 stdio so any Polish diacritics survive Windows' cp1250 default.
+    with_hf_offline(&mut cmd);
+    with_utf8_io(&mut cmd);
+    match crate::proc::spawn_and_collect(cmd, Some(timeout)).await {
+        Ok(triple) => Ok(triple),
+        Err(ProcError::TimedOut) => Err("Sprawdzanie silnika przekroczyło limit czasu".to_string()),
+        Err(ProcError::Spawn(e)) => {
+            Err(format!("Nie udało się uruchomić silnika WhisperX: {e}"))
         }
-    };
-
-    match tokio::time::timeout(timeout, recv_loop).await {
-        Ok(()) => Ok((out, err, code)),
-        Err(_) => {
-            // Elapsed — kill the child explicitly (not via drop) and report.
-            let _ = child.kill();
-            Err("Sprawdzanie silnika przekroczyło limit czasu".to_string())
-        }
+        Err(ProcError::Io(e)) => Err(e),
     }
 }
 

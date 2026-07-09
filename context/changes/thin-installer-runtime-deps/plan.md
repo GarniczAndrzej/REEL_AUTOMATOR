@@ -453,10 +453,10 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [x] 2.1 Rust type-check passes (`cargo check`)
-- [x] 2.2 Existing `models.rs` checksum test still passes
-- [x] 2.3 New downloader unit test (mismatch deletes partial, atomic swap leaves no `.part`) passes
-- [x] 2.4 Regression suite green
+- [x] 2.1 Rust type-check passes (`cargo check`) — 56715f4
+- [x] 2.2 Existing `models.rs` checksum test still passes — 56715f4
+- [x] 2.3 New downloader unit test (mismatch deletes partial, atomic swap leaves no `.part`) passes — 56715f4
+- [x] 2.4 Regression suite green — 56715f4
 
 #### Manual
 
@@ -469,9 +469,9 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [ ] 3.1 Rust type-check + build pass
-- [ ] 3.2 No surviving `.shell().sidecar(` references for engine/ffmpeg
-- [ ] 3.3 Regression suite green
+- [x] 3.1 Rust type-check + build pass
+- [x] 3.2 No surviving `.shell().sidecar(` references for engine/ffmpeg
+- [x] 3.3 Regression suite green
 
 #### Manual
 
