@@ -3,7 +3,7 @@ change_id: thin-installer-runtime-deps
 title: Thin installer runtime deps
 status: implementing
 created: 2026-06-28
-updated: 2026-07-09
+updated: 2026-07-10
 archived_at: null
 ---
 

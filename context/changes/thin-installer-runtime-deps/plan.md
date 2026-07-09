@@ -485,9 +485,9 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [x] 4.1 Prettier check clean
-- [x] 4.2 Regression suite green
-- [x] 4.3 No non-Polish user-facing strings introduced
+- [x] 4.1 Prettier check clean — 0234966
+- [x] 4.2 Regression suite green — 0234966
+- [x] 4.3 No non-Polish user-facing strings introduced — 0234966
 
 #### Manual
 
@@ -501,9 +501,9 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [ ] 5.1 Windows `tauri build` installer is tens-of-MB (< ~80 MB)
-- [ ] 5.2 Rust type-check passes
-- [ ] 5.3 Regression suite green
+- [x] 5.1 Windows `tauri build` installer is tens-of-MB (< ~80 MB)
+- [x] 5.2 Rust type-check passes
+- [x] 5.3 Regression suite green
 
 #### Manual
 

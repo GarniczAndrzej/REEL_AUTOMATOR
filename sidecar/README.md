@@ -18,13 +18,31 @@ Automator. It replaces the PATH-dependent `whisper-cli` (whisper.cpp) path.
 
 ## Fresh-clone bootstrap
 
-Both sidecars are git-ignored, and Tauri hard-fails `cargo check` / build if a
-registered `externalBin` is missing for the host triple. After cloning, run:
+Both sidecars are git-ignored. On **macOS**, Tauri hard-fails `cargo check` /
+build if a registered `externalBin` is missing for the host triple, so after
+cloning run:
 
 ```bash
 sidecar/fetch-ffmpeg.sh   # static FFmpeg (audio extraction + waveform)
 sidecar/build.sh          # freeze the WhisperX engine (see below)
 ```
+
+### Windows: thin, download-on-demand distribution (S-29)
+
+Windows ships a **thin installer** — the heavy deps (FFmpeg, the CPU + GPU
+WhisperX engines, `align_models/`) are **not** bundled. `src-tauri/tauri.windows.conf.json`
+is a Tauri platform overlay (merged over `tauri.conf.json`) that sets
+`bundle.externalBin: []` and `bundle.resources: []`, so a Windows `tauri build`
+does **not** require anything in `src-tauri/binaries/`. On first run the app
+detects the hardware, downloads the matching variant (CUDA `-gpu` build on a
+supported NVIDIA GPU, CPU build otherwise), SHA-256-verifies it against the
+**embedded** `src/deps/deps-spec.json`, and stages it under the **deps root**
+(`app_data_dir()/deps` by default; overridable + persisted in
+`app_config_dir()/deps-settings.json`). The Rust spawn layer resolves each
+binary by absolute path — **staged deps root → bundle resource → repo
+`binaries/`** — so a Windows dev checkout can *either* populate `binaries/` via
+`build.sh` / `fetch-ffmpeg.sh` (the fallback) *or* rely on the first-run
+download. macOS keeps bundling and is unaffected.
 
 The FFmpeg binary **must be statically linked** — a dynamic Homebrew copy breaks
 the moment that exact Homebrew ffmpeg version is gone (dyld can't find its
