@@ -608,6 +608,50 @@ pub async fn set_deps_root(path: String) -> Result<(), String> {
     write_settings_field("depsRoot", &p.to_string_lossy())
 }
 
+// ── Variant override + readiness (Phase 4 §2/§3) ─────────────────────
+
+/// The resolved engine variant for the host (`gpu`|`cpu`), honoring the full
+/// precedence (env → UI override → hardware). The first-run UI shows this as the
+/// auto-picked variant. Spawn-free (the `nvidia-smi -L` probe is memoized).
+#[tauri::command]
+pub fn get_variant() -> String {
+    detect_variant().to_string()
+}
+
+/// The persisted UI variant override (`gpu`|`cpu`), or an empty string when unset
+/// (⇒ automatic/hardware detection). Lets the first-run dropdown reflect the
+/// stored choice rather than only the effective variant.
+#[tauri::command]
+pub fn get_variant_override() -> String {
+    variant_override().unwrap_or_default()
+}
+
+/// Persist (or clear) the UI variant override in `deps-settings.json`. `"gpu"` or
+/// `"cpu"` forces that variant; any other value (including an empty string)
+/// clears the override so detection falls back to env → hardware. `detect_variant`
+/// reads it ahead of `nvidia-smi`, so a change re-resolves the required set on the
+/// next `deps_status` — no restart needed.
+#[tauri::command]
+pub fn set_variant_override(variant: String) -> Result<(), String> {
+    let v = variant.trim();
+    let normalized = if v == "gpu" || v == "cpu" { v } else { "" };
+    write_settings_field("variantOverride", normalized)
+}
+
+/// Spawn-free (S-18) readiness read gating ONLY transcription: are the engine and
+/// FFmpeg binaries resolvable anywhere in the three-way precedence (staged deps
+/// root → beside the main exe → repo `binaries/`)? This deliberately does NOT
+/// require the artifacts to be *staged* — until Phase 5 strips the bundle, an
+/// existing install runs off the bundled/dev fallback, and gating transcription on
+/// staged-only presence would wrongly disable a working engine. `deps_status`
+/// stays the per-artifact staged-presence report the first-run UI paints; this is
+/// the boolean the transcribe button consults. Both are pure file stats — neither
+/// spawns the multi-GB engine.
+#[tauri::command]
+pub fn transcription_ready(app: AppHandle) -> bool {
+    crate::engine::engine_bin_path(&app).is_ok() && crate::ffmpeg::ffmpeg_bin_path(&app).is_ok()
+}
+
 // ── Generalized artifact downloader (Phase 2 §2) ─────────────────────
 
 /// Sibling path `<file>.<ext>` used for the atomic `.part` staging dir/file and

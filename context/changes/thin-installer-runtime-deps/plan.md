@@ -469,9 +469,9 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [x] 3.1 Rust type-check + build pass
-- [x] 3.2 No surviving `.shell().sidecar(` references for engine/ffmpeg
-- [x] 3.3 Regression suite green
+- [x] 3.1 Rust type-check + build pass — 59da561
+- [x] 3.2 No surviving `.shell().sidecar(` references for engine/ffmpeg — 59da561
+- [x] 3.3 Regression suite green — 59da561
 
 #### Manual
 
@@ -485,9 +485,9 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [ ] 4.1 Prettier check clean
-- [ ] 4.2 Regression suite green
-- [ ] 4.3 No non-Polish user-facing strings introduced
+- [x] 4.1 Prettier check clean
+- [x] 4.2 Regression suite green
+- [x] 4.3 No non-Polish user-facing strings introduced
 
 #### Manual
 

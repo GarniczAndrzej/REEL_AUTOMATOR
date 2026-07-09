@@ -19,6 +19,7 @@ import {
   resolveCollectTimelineAudio,
 } from '../../platform/adapter.js';
 import { exportTranscriptSrt } from '../export-srt.js';
+import { openFirstRunDeps } from '../first-run-deps.js';
 import { populateVideoMeta } from '../../util/video-meta.js';
 import {
   renderSegments,
@@ -82,6 +83,17 @@ export function initTranscribe() {
   if (fullVerifyBtn) fullVerifyBtn.addEventListener('click', fullEngineVerify);
   initModelManager();
   initWhisperAdvanced();
+
+  // S-29 Phase 4 — transcription readiness gate. Transcription needs the heavy
+  // engine/ffmpeg deps (thin installer downloads them on first run); import,
+  // SRT-paste and export do NOT. Wire the "Pobierz zależności" CTA to the setup
+  // screen and re-check readiness whenever deps change (a download or a variant
+  // switch dispatches `deps-changed`).
+  const depsCtaBtn = document.getElementById('openDepsSetupBtn');
+  if (depsCtaBtn)
+    depsCtaBtn.addEventListener('click', () => openFirstRunDeps());
+  document.addEventListener('deps-changed', refreshTranscribeReadiness);
+  refreshTranscribeReadiness();
 
   // S-09 Mode A — wire the "Z osi czasu Resolve" button. It renders the active
   // timeline's audio mix as the transcription input ON CLICK (not on panel open),
@@ -162,7 +174,35 @@ async function collectTimelineAudioFromResolve() {
 function syncTranscribeBtn() {
   const hasVideo = !!state._whisperVideoPath;
   const hasModel = !!state.modelId && !!_modelStatus[state.modelId]?.downloaded;
-  document.getElementById('transcribeBtn').disabled = !(hasVideo && hasModel);
+  document.getElementById('transcribeBtn').disabled = !(
+    hasVideo &&
+    hasModel &&
+    _depsReady
+  );
+}
+
+// S-29 Phase 4: are the heavy engine/ffmpeg deps resolvable (spawn-free read)?
+// Defaults true so plain browser dev (no backend) and existing bundled installs
+// are never falsely gated — `transcription_ready` reports true whenever the
+// engine resolves anywhere (staged deps → bundle → repo binaries/), so only a
+// truly deps-less thin install disables transcription.
+let _depsReady = true;
+
+/**
+ * Re-read the spawn-free deps-readiness gate (S-18) and reflect it on the
+ * transcribe button + the "Pobierz zależności" CTA. Never throws — a missing
+ * backend leaves transcription un-gated.
+ * @returns {Promise<void>}
+ */
+async function refreshTranscribeReadiness() {
+  try {
+    _depsReady = await invoke('transcription_ready');
+  } catch (e) {
+    _depsReady = true; // no backend / can't tell → don't gate
+  }
+  const cta = document.getElementById('depsMissingCta');
+  if (cta) cta.style.display = _depsReady ? 'none' : '';
+  syncTranscribeBtn();
 }
 
 // ── S-05 model manager ────────────────────────────────────────────────

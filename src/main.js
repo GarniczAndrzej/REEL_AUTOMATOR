@@ -12,6 +12,7 @@ import {
 } from './ai/prompt-presets.js';
 import { initSurface } from './ui/surface.js';
 import { initSettingsModal } from './ui/settings-modal.js';
+import { initFirstRunDeps } from './ui/first-run-deps.js';
 import { initAutoMode } from './ui/auto-mode/index.js';
 import { hydrateKeys } from './ai/api-key.js';
 import { toast } from './ui/toast.js';
@@ -116,6 +117,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSurface();
   } catch (e) {
     console.error('[initSurface]', e);
+  }
+
+  // S-29 Phase 4: first-run dependency setup (thin installer). Auto-opens on
+  // first launch when the heavy deps are absent; spawn-free readiness reads keep
+  // it off the launch path (S-18). No-op outside Tauri/Electron.
+  try {
+    await initFirstRunDeps();
+  } catch (e) {
+    console.error('[initFirstRunDeps]', e);
   }
 
   // Subscribe to state changes → update sidebar status
