@@ -20,21 +20,10 @@ use tauri_plugin_shell::ShellExt;
 pub const ENGINE_SIDECAR_CPU: &str = "whisperx-engine";
 pub const ENGINE_SIDECAR_GPU: &str = "whisperx-engine-gpu";
 
-/// Host target triple, matching `sidecar/build.sh`'s naming. Used to locate the
-/// arch-suffixed GPU sidecar file on disk for the spawn-free presence check.
-fn host_triple() -> &'static str {
-    if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        "x86_64-pc-windows-msvc"
-    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        "aarch64-apple-darwin"
-    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        "x86_64-apple-darwin"
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        "x86_64-unknown-linux-gnu"
-    } else {
-        ""
-    }
-}
+/// Host target triple: lifted to `deps.rs` so the spawn-side and the download-side
+/// share one definition. Re-exported here under the original private name to keep
+/// this module's call sites unchanged.
+use crate::deps::host_triple;
 
 /// True if the GPU sidecar binary is present for the host triple. Checks the dev
 /// staging dir (`src-tauri/binaries/`) and the production location (beside the
@@ -59,23 +48,16 @@ fn gpu_sidecar_present() -> bool {
     false
 }
 
-/// True if a usable NVIDIA GPU + driver is present (cheap, ~instant): `nvidia-smi`
-/// runs and lists ≥1 GPU. This only shells out to the always-installed driver
-/// tool — it does NOT spawn the multi-GB engine. Any error/absence ⇒ false.
-fn nvidia_gpu_present() -> bool {
-    std::process::Command::new("nvidia-smi")
-        .arg("-L")
-        .output()
-        .map(|o| o.status.success() && !o.stdout.is_empty())
-        .unwrap_or(false)
-}
-
 /// Choose the engine variant ONCE per process (memoized). Selection is cheap and
 /// spawn-free so the launch badge (`whisperx_engine_cached`, which must never
-/// spawn the engine) can fold the chosen variant into its readiness cache key:
-///   1. `REEL_ENGINE_VARIANT=cpu|gpu` env override (debugging),
-///   2. else GPU iff the gpu sidecar binary is present AND `nvidia-smi` finds a GPU,
-///   3. else CPU.
+/// spawn the engine) can fold the chosen variant into its readiness cache key.
+/// The hardware/override decision is delegated to `deps::detect_variant()` (the
+/// SINGLE shared resolver — env override → UI override → `nvidia-smi` → cpu) so
+/// the spawn-side here and the download-side (`deps::deps_status`) never disagree.
+/// This module still applies a binary-presence guard on top: a resolved `gpu`
+/// only picks the GPU sidecar when that binary is actually staged/bundled,
+/// otherwise it falls back to CPU (never spawns a missing binary).
+///
 /// The engine's own `--selftest`/`--capability` provides the *authoritative*
 /// `gpu:true`/`device` confirmation for the readiness badge; this routing only
 /// decides which binary to spawn. The GPU build is a safe superset — if CUDA is
@@ -84,11 +66,10 @@ fn nvidia_gpu_present() -> bool {
 pub fn engine_sidecar() -> &'static str {
     static SELECTED: OnceLock<&'static str> = OnceLock::new();
     SELECTED.get_or_init(|| {
-        match std::env::var("REEL_ENGINE_VARIANT").ok().as_deref() {
-            Some("gpu") => ENGINE_SIDECAR_GPU,
-            Some("cpu") => ENGINE_SIDECAR_CPU,
-            _ if gpu_sidecar_present() && nvidia_gpu_present() => ENGINE_SIDECAR_GPU,
-            _ => ENGINE_SIDECAR_CPU,
+        if crate::deps::detect_variant() == "gpu" && gpu_sidecar_present() {
+            ENGINE_SIDECAR_GPU
+        } else {
+            ENGINE_SIDECAR_CPU
         }
     })
 }

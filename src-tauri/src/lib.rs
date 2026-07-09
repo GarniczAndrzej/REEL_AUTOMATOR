@@ -1,3 +1,4 @@
+mod deps;
 mod engine;
 mod ffmpeg;
 mod keychain;
@@ -48,6 +49,8 @@ pub fn run() {
             engine::whisperx_engine_check,
             engine::whisperx_engine_capability,
             engine::whisperx_engine_cached,
+            deps::load_deps_spec,
+            deps::deps_status,
             models::list_models,
             models::download_model,
             models::delete_model,
