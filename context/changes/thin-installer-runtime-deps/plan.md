@@ -438,10 +438,10 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes (`cargo check`)
-- [x] 1.2 Unit tests for variant filtering + host-match pass (`cargo test deps`)
-- [x] 1.3 Embedded `deps-spec.json` deserializes into `DepsSpec` (unit test)
-- [x] 1.4 Regression suite green
+- [x] 1.1 Rust type-check passes (`cargo check`) — 989847c
+- [x] 1.2 Unit tests for variant filtering + host-match pass (`cargo test deps`) — 989847c
+- [x] 1.3 Embedded `deps-spec.json` deserializes into `DepsSpec` (unit test) — 989847c
+- [x] 1.4 Regression suite green — 989847c
 
 #### Manual
 
@@ -453,10 +453,10 @@ Strip the heavy `externalBin`/`resources` entries from the Windows bundle (via a
 
 #### Automated
 
-- [ ] 2.1 Rust type-check passes (`cargo check`)
-- [ ] 2.2 Existing `models.rs` checksum test still passes
-- [ ] 2.3 New downloader unit test (mismatch deletes partial, atomic swap leaves no `.part`) passes
-- [ ] 2.4 Regression suite green
+- [x] 2.1 Rust type-check passes (`cargo check`)
+- [x] 2.2 Existing `models.rs` checksum test still passes
+- [x] 2.3 New downloader unit test (mismatch deletes partial, atomic swap leaves no `.part`) passes
+- [x] 2.4 Regression suite green
 
 #### Manual
 

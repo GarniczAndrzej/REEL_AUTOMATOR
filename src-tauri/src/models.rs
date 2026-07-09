@@ -138,8 +138,10 @@ pub async fn list_models(app: AppHandle, models: Vec<ModelQuery>) -> Result<Vec<
 }
 
 /// Verify a file's SHA-256; on mismatch delete it and return a Polish error.
-/// `expected` is hex (lowercase); empty/None-like skips verification.
-fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
+/// `expected` is hex (lowercase); empty/None-like skips verification. `pub(crate)`
+/// so the Phase 2 dependency downloader (`deps.rs`) reuses the exact same
+/// verify-then-delete gate rather than re-implementing it.
+pub(crate) fn verify_sha256(path: &Path, expected: &str) -> Result<(), String> {
     if expected.trim().is_empty() {
         return Ok(());
     }
