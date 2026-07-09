@@ -1,5 +1,5 @@
 {
-  "_note": "EMBEDDED dependency spec — the checksum trust anchor (ships inside the code-signed installer). Windows-first; macOS keeps bundling this slice, so no macOS entries yet (the schema supports platform:'macos' for later adoption). PHASE 0 (STUBBED): every `url` below is a placeholder pointing at the intended release-host layout, and every `sha256` is intentionally EMPTY. An empty sha256 means 'not yet pinned' → the Phase 2 downloader fail-closes and REFUSES to stage the artifact, which is the safe default until real bytes are uploaded and hashes are computed. To finish Phase 0: upload each artifact at its versioned URL, compute SHA-256 (`Get-FileHash -Algorithm SHA256` / `sha256sum`), and replace each `url` + `sha256` (+ verify `sizeBytes`) here.",
+  "_note": "EMBEDDED dependency spec — the checksum trust anchor (ships inside the code-signed installer). Windows-first; macOS keeps bundling this slice, so no macOS entries yet (the schema supports platform:'macos' for later adoption). PHASE 0 (PARTIAL): the CPU engine + FFmpeg are LIVE — hosted on the public GitHub repo GarniczAndrzej/reel-automator-deps (release deps-v1.0.0) with real pinned SHA-256. STILL STUBBED: the GPU engine (`engine-gpu-windows-x86_64`) keeps a placeholder RELEASE_HOST url + empty sha256 because the 3.3 GB artifact exceeds GitHub's 2 GB per-asset cap — it needs a no-cap host (e.g. HuggingFace) before it can be pinned; and `align-models` still needs its per-file manifest finalized. An empty sha256 means 'not yet pinned' → the Phase 2 downloader fail-closes and REFUSES to stage that artifact (safe default). On a GPU machine, force the CPU variant (UI override / REEL_ENGINE_VARIANT=cpu) to exercise the live download path until the GPU host is chosen. To pin a new artifact: upload at its versioned URL, compute SHA-256 (`Get-FileHash -Algorithm SHA256` / `sha256sum`), replace `url` + `sha256` (+ verify `sizeBytes`).",
   "specVersion": 1,
   "dependencies": [
     {
@@ -21,9 +21,9 @@
       "platform": "windows",
       "arch": "x86_64",
       "variantPredicate": "cpu",
-      "url": "https://RELEASE_HOST/reel-automator/deps/v1.0.0/whisperx-engine-x86_64-pc-windows-msvc.exe",
+      "url": "https://github.com/GarniczAndrzej/reel-automator-deps/releases/download/deps-v1.0.0/whisperx-engine-x86_64-pc-windows-msvc.exe",
       "sizeBytes": 464628987,
-      "sha256": "",
+      "sha256": "f75339c80f249858bc0c83e5c8279235d224f01e37fe4e5c9d8f467d5a489993",
       "version": "1.0.0",
       "sentinel": "whisperx-engine-x86_64-pc-windows-msvc.exe",
       "stageTo": "engine-bin"
@@ -34,9 +34,9 @@
       "platform": "windows",
       "arch": "x86_64",
       "variantPredicate": "any",
-      "url": "https://RELEASE_HOST/reel-automator/deps/v1.0.0/ffmpeg-x86_64-pc-windows-msvc.exe",
+      "url": "https://github.com/GarniczAndrzej/reel-automator-deps/releases/download/deps-v1.0.0/ffmpeg-x86_64-pc-windows-msvc.exe",
       "sizeBytes": 143308288,
-      "sha256": "",
+      "sha256": "6a85768af62f9b3b41bdae22b5a4a57175b83a951c6c901738a6fc8017a8a62b",
       "version": "1.0.0",
       "sentinel": "ffmpeg-x86_64-pc-windows-msvc.exe",
       "stageTo": "ffmpeg-bin"
