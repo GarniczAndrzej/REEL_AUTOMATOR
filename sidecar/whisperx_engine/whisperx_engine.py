@@ -11,12 +11,15 @@ Contract (stable — the Rust layer parses exactly this):
   stdout  ── one normalized JSON document on success:
             {
               "language": str,
+              "device": str,   # transcription (CT2) device actually used: cuda|cpu
               "segments": [
                 { "start": float, "end": float, "text": str,
                   "words": [ { "text": str, "start": float, "end": float,
                               "score": float|null, "speaker": str|null } ] }
               ]
             }
+            (the Rust layer parses this as an untyped Value, so `device` is an
+            additive field older consumers simply ignore.)
 
   stderr  ── greppable progress lines, one per update:
             PROGRESS phase=<transcribe|align|diarize> percent=<0-100>
@@ -542,6 +545,7 @@ def cmd_transcribe(args):
         )
 
     out = _normalize(language, aligned)
+    out["device"] = ct2_device  # transcription device actually used (criterion 1.9)
     _write_result(json.dumps(out, ensure_ascii=False))
     return EXIT_OK
 
