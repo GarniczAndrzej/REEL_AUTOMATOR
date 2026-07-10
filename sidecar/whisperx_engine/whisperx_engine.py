@@ -128,33 +128,69 @@ def _alignment_model_dir(language):
     return os.path.join(_align_models_base(), language or "")
 
 
-def _detect_device():
-    """Return ('cuda'|'mps'|'cpu', gpu_bool, compute_type)."""
+def _ct2_cuda_available():
+    """True iff CTranslate2 can see a CUDA device. Any import/call failure ⇒ False.
+
+    This is the *transcription* device probe. CT2's stock PyPI wheel is CUDA-capable
+    on its own (it links cuBLAS lazily via LoadLibrary), so this is independent of
+    torch's build — a torch+cpu process can still transcribe on CUDA through CT2.
+    """
+    try:
+        import ctranslate2
+
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+def _detect_devices():
+    """Probe the transcription (CT2) device and the torch (VAD/align/diarize) device
+    independently. They may legitimately differ: on the shipping Windows GPU build
+    CT2 runs on CUDA while torch is CPU-only.
+
+    Returns (ct2_device, torch_device, gpu, compute_type):
+      - ct2_device   : 'cuda' if CT2 sees a CUDA device else 'cpu'
+      - torch_device : 'cuda' | 'mps' | 'cpu' from torch's own capability
+      - gpu          : ct2_device == 'cuda' or torch_device in ('cuda', 'mps')
+      - compute_type : 'float16' when CT2 is on CUDA, else 'int8'
+    """
+    ct2_device = "cuda" if _ct2_cuda_available() else "cpu"
     try:
         import torch
+
+        if torch.cuda.is_available():
+            torch_device = "cuda"
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            torch_device = "mps"
+        else:
+            torch_device = "cpu"
     except Exception:
-        return "cpu", False, "int8"
-    if torch.cuda.is_available():
-        return "cuda", True, "float16"
-    # Apple Metal. faster-whisper/CTranslate2 has no MPS backend yet, so we run
-    # CT2 transcription on CPU but report GPU availability for align/diarize.
-    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-        return "mps", True, "int8"
-    return "cpu", False, "int8"
+        torch_device = "cpu"
+    gpu = ct2_device == "cuda" or torch_device in ("cuda", "mps")
+    compute_type = "float16" if ct2_device == "cuda" else "int8"
+    return ct2_device, torch_device, gpu, compute_type
 
 
-def _resolve_device_compute(args):
-    """Auto-detected device/compute, with the optional --device/--compute-type
-    overrides applied (Phase 7). Returns ('cuda'|'mps'|'cpu', gpu_bool, compute)."""
-    device, gpu, compute_type = _detect_device()
+def _resolve_devices(args):
+    """_detect_devices() with the optional --device/--compute-type overrides applied.
+    Returns the same 4-tuple (ct2_device, torch_device, gpu, compute_type).
+
+    --device overrides the CT2 (transcription) device ONLY — never torch's, so the
+    override cannot push VAD/align onto a CUDA torch it doesn't have. compute_type is
+    derived from the POST-override ct2_device (so `--device cpu` on a CUDA box yields
+    int8, not a float16 that CT2 would silently demote to a slower float32); an
+    explicit --compute-type still wins over that.
+    """
+    ct2_device, torch_device, gpu, compute_type = _detect_devices()
     override = getattr(args, "device", None)
     if override:
-        device = override
-        gpu = device != "cpu"
+        ct2_device = override
+        gpu = ct2_device == "cuda" or torch_device in ("cuda", "mps")
+    compute_type = "float16" if ct2_device == "cuda" else "int8"
     ct_override = getattr(args, "compute_type", None)
     if ct_override:
         compute_type = ct_override
-    return device, gpu, compute_type
+    return ct2_device, torch_device, gpu, compute_type
 
 
 def _build_asr_options(args):
@@ -224,7 +260,7 @@ def _selftest_align_runs(whisperx, language="pl"):
 
 
 def cmd_selftest():
-    device, gpu, _ = _detect_device()
+    ct2_device, torch_device, gpu, _ = _detect_devices()
     align_ready = False
     try:
         import whisperx  # noqa: F401
@@ -240,7 +276,12 @@ def cmd_selftest():
         "ok": ok,
         "version": str(version),
         "gpu": gpu,
-        "device": device,
+        # `device` stays as an alias of ct2_device so no existing consumer breaks;
+        # ct2_device/torch_device are the truthful pair (macOS: cpu/mps, Windows
+        # GPU: cuda/cpu, gpu-full: cuda/cuda).
+        "device": ct2_device,
+        "ct2_device": ct2_device,
+        "torch_device": torch_device,
         # Truthful now: reflects an actual tiny align run, not just file presence.
         "alignment_model_ready": align_ready,
     }
@@ -251,25 +292,33 @@ def cmd_selftest():
 def cmd_capability():
     """Lightweight readiness probe — same JSON shape as cmd_selftest, but cheap.
 
-    Reports {ok, version, gpu, device, alignment_model_ready} from a device
-    detection (torch only) plus an align-dir *existence* check. It deliberately
-    does NOT `import whisperx`, `load_align_model`, or run a real `align()`, so it
-    cannot block on a model deserialize or an HF network call. Because it never
-    imports whisperx, its `__version__` is unavailable — we report ENGINE_VERSION.
+    Reports {ok, version, gpu, device, ct2_device, torch_device, cublas,
+    alignment_model_ready} from a device detection (CT2 device count + torch) plus
+    an align-dir *existence* check. It deliberately does NOT `import whisperx`,
+    `load_align_model`, or run a real `align()`, so it cannot block on a model
+    deserialize or an HF network call. Because it never imports whisperx, its
+    `__version__` is unavailable — we report ENGINE_VERSION.
 
     Trade-off: a dir check can report `alignment_model_ready: true` for a binary
     whose frozen import chain is broken (the false-positive cmd_selftest guards
     against). The Rust/frontend layer renders this verdict as a non-authoritative
     tier; the authoritative green is earned only by --selftest.
     """
-    device, gpu, _ = _detect_device()
+    ct2_device, torch_device, gpu, _ = _detect_devices()
     model_dir = _alignment_model_dir("pl")
     align_ready = os.path.isdir(model_dir) and bool(os.listdir(model_dir))
+    # cuBLAS preload verdict from the §4 runtime hook (GPU build only). "ok" ⇒ the
+    # two cuBLAS DLLs loaded; anything else (including absent, i.e. the CPU build,
+    # where the field is meaningless) ⇒ false.
+    cublas = os.environ.get("REEL_CUBLAS_PRELOAD") == "ok"
     out = {
         "ok": True,  # device detection always completes (cpu fallback on failure)
         "version": str(ENGINE_VERSION),
         "gpu": gpu,
-        "device": device,
+        "device": ct2_device,
+        "ct2_device": ct2_device,
+        "torch_device": torch_device,
+        "cublas": cublas,
         "alignment_model_ready": align_ready,
     }
     _write_result(json.dumps(out))
@@ -378,8 +427,12 @@ def _diarize(whisperx, aligned, audio, hf_token, device, min_speakers=None, max_
 
 def cmd_transcribe(args):
     import whisperx
+    from faster_whisper import WhisperModel
 
-    device, _, compute_type = _resolve_device_compute(args)
+    ct2_device, torch_device, _, compute_type = _resolve_devices(args)
+    # VAD runs on torch's device, but CT2/whisperx has no MPS backend for VAD, so
+    # 'mps' collapses to 'cpu' (preserving the pre-decoupling behavior exactly).
+    vad_device = torch_device if torch_device != "mps" else "cpu"
     audio = _load_audio(whisperx, args.audio)
 
     # Phase 7 — optional tuning. Empty dicts ⇒ whisperx keeps its own defaults.
@@ -396,9 +449,15 @@ def cmd_transcribe(args):
             load_kwargs["asr_options"] = asr_options
         if vad_options:
             load_kwargs["vad_options"] = vad_options
+        # Build the CT2 ASR model on ct2_device (may be CUDA under a CPU-torch
+        # build) and hand it to whisperx via its `model=` seam, while load_model's
+        # positional device — which it forwards to the torch-based VAD — gets
+        # vad_device. This is what lets CT2 sit on CUDA with VAD on CPU torch.
+        asr_model = WhisperModel(args.model, device=ct2_device, compute_type=compute_type)
         model = whisperx.load_model(
             args.model,
-            device if device != "mps" else "cpu",  # CT2 has no MPS backend
+            vad_device,
+            model=asr_model,
             **load_kwargs,
         )
     except TypeError as e:
@@ -423,7 +482,7 @@ def cmd_transcribe(args):
 
     language = result.get("language") or args.language or "unknown"
 
-    aligned = _align(whisperx, result["segments"], audio, language, device)
+    aligned = _align(whisperx, result["segments"], audio, language, torch_device)
 
     if args.diarize:
         if not args.hf_token:
@@ -434,7 +493,7 @@ def cmd_transcribe(args):
             aligned,
             audio,
             args.hf_token,
-            device,
+            torch_device,
             min_speakers=getattr(args, "min_speakers", None),
             max_speakers=getattr(args, "max_speakers", None),
         )
@@ -503,7 +562,7 @@ def cmd_transcribe_cohere(args):
         _log("cohere engine requires an explicit --language")
         sys.exit(EXIT_USAGE)
 
-    device, _, _ = _resolve_device_compute(args)
+    _, torch_device, _, _ = _resolve_devices(args)
     audio = _load_audio(whisperx, args.audio)  # float32 16 kHz mono np array
     audio_dur = float(len(audio)) / 16000.0
 
@@ -571,7 +630,7 @@ def cmd_transcribe_cohere(args):
         _log("cohere produced an empty transcript")
         sys.exit(EXIT_TRANSCRIBE_FAIL)
 
-    aligned = _align(whisperx, segments, audio, language, device)
+    aligned = _align(whisperx, segments, audio, language, torch_device)
     out = _normalize(language, aligned)
     _write_result(json.dumps(out, ensure_ascii=False))
     return EXIT_OK
@@ -610,7 +669,7 @@ def cmd_align_only(args):
         _log("align-only requires an existing --transcript file")
         sys.exit(EXIT_USAGE)
 
-    device, _, _ = _resolve_device_compute(args)
+    _, torch_device, _, _ = _resolve_devices(args)
     audio = _load_audio(whisperx, args.audio)
     language = None if args.language in (None, "", "auto") else args.language
     if not language:
@@ -622,7 +681,7 @@ def cmd_align_only(args):
         _log("no segments parsed from transcript")
         sys.exit(EXIT_USAGE)
 
-    aligned = _align(whisperx, segments, audio, language, device)
+    aligned = _align(whisperx, segments, audio, language, torch_device)
     out = _normalize(language, aligned)
     _write_result(json.dumps(out, ensure_ascii=False))
     return EXIT_OK
@@ -656,7 +715,12 @@ def build_parser():
     # Exposed, user-tunable knobs. Each maps to a real whisperx/faster-whisper
     # option, verified against the pinned versions. Anything not passed here keeps
     # whisperx's own default, so an untouched modal reproduces current behavior.
-    p.add_argument("--device", default=None, help="override device: 'cpu' forces CPU")
+    p.add_argument(
+        "--device",
+        default=None,
+        help="override the CT2 transcription device only ('cpu' forces CPU); "
+        "torch's VAD/align/diarize device is unaffected",
+    )
     p.add_argument(
         "--compute-type",
         default=None,

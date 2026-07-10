@@ -9,15 +9,26 @@
 # the FFmpeg sidecar) and copies it into src-tauri/binaries/.
 #
 # Usage:
-#   sidecar/build.sh                # build CPU variant for the host triple
-#   GPU=1 sidecar/build.sh          # build GPU/Metal variant (suffix -gpu)
+#   sidecar/build.sh                       # build CPU variant for the host triple
+#   GPU=1 sidecar/build.sh                 # build GPU variant (suffix -gpu)
+#   GPU=1 ENGINE_TORCH_CUDA=1 sidecar/build.sh   # build gpu-full (CUDA torch)
 #   ALIGN_LANGS="pl en" sidecar/build.sh   # which alignment models to bundle
 #
+# NOTE: On Windows, GPU=1 alone NO LONGER implies a CUDA torch wheel. It builds
+# CT2-CUDA + torch-CPU: transcription runs on CUDA via CTranslate2 (whose stock
+# PyPI wheel is CUDA-capable and only needs two cuBLAS DLLs, sourced from a pinned
+# nvidia-cublas-cu12 wheel), while alignment/diarization run on CPU torch. This
+# freezes to ~984 MB (vs 3.08 GB for the cu128 build), under GitHub's 2 GB cap.
+# The old cu128 build lives on behind GPU=1 ENGINE_TORCH_CUDA=1 as the dormant
+# `whisperx-engine-gpu-full` variant (GPU alignment too, ~3.08 GB). On macOS,
+# GPU=1 still builds the Metal variant (Metal torch from the lock, no cuBLAS).
+#
 # Targets produced (per the plan):
-#   src-tauri/binaries/whisperx-engine-aarch64-apple-darwin            (macOS CPU)
-#   src-tauri/binaries/whisperx-engine-gpu-aarch64-apple-darwin        (macOS Metal)
-#   src-tauri/binaries/whisperx-engine-x86_64-pc-windows-msvc.exe      (Windows CPU)
-#   src-tauri/binaries/whisperx-engine-gpu-x86_64-pc-windows-msvc.exe  (Windows CUDA)
+#   src-tauri/binaries/whisperx-engine-aarch64-apple-darwin                 (macOS CPU)
+#   src-tauri/binaries/whisperx-engine-gpu-aarch64-apple-darwin             (macOS Metal)
+#   src-tauri/binaries/whisperx-engine-x86_64-pc-windows-msvc.exe           (Windows CPU)
+#   src-tauri/binaries/whisperx-engine-gpu-x86_64-pc-windows-msvc.exe       (Windows CT2-CUDA)
+#   src-tauri/binaries/whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe  (Windows cu128, dormant)
 #
 # Prerequisites: Python 3.10/3.11, pip, internet (first build pulls wheels +
 # the alignment model). See sidecar/README.md.
@@ -31,6 +42,18 @@ ENGINE_PKG="$SIDECAR_DIR/whisperx_engine"
 ALIGN_DIR="$ENGINE_PKG/align_models"
 ALIGN_LANGS="${ALIGN_LANGS:-pl}"
 GPU="${GPU:-0}"
+ENGINE_TORCH_CUDA="${ENGINE_TORCH_CUDA:-0}"
+
+# ── Pinned cuBLAS wheel (CT2-CUDA GPU build only) ───────────────────────────
+# Supply-chain input to a signed artifact: pin the exact nvidia-cublas-cu12 wheel
+# version AND its sha256 so the build is reproducible, not floating. CUDA 12.8 line
+# to match the DLLs the research measured against (torch cu128). Verified on PyPI
+# 2026-07-10.
+#   nvidia_cublas_cu12-12.8.4.1-py3-none-win_amd64.whl
+#   size 567,544,208 B
+#   sha256 47e9b82132fa8d2b4944e708049229601448aaad7e6f296f630f2d1a32de35af
+CUBLAS_WHEEL_VERSION="12.8.4.1"
+CUBLAS_WHEEL_SHA256="47e9b82132fa8d2b4944e708049229601448aaad7e6f296f630f2d1a32de35af"
 
 mkdir -p "$BIN_DIR"
 
@@ -57,15 +80,23 @@ esac
 # triple to a base name, so only `whisperx-engine-gpu-<triple>` (not
 # `whisperx-engine-<triple>-gpu`) is resolvable as its own sidecar.
 BASE_NAME="whisperx-engine"
-[ "$GPU" = "1" ] && BASE_NAME="whisperx-engine-gpu"
+if [ "$GPU" = "1" ]; then
+  if [ "$ENGINE_TORCH_CUDA" = "1" ]; then
+    BASE_NAME="whisperx-engine-gpu-full"   # cu128 torch, GPU align (dormant)
+  else
+    BASE_NAME="whisperx-engine-gpu"        # CT2-CUDA + torch-CPU (shipping)
+  fi
+fi
 OUT_NAME="${BASE_NAME}-${TRIPLE}"
-echo "==> Building $OUT_NAME (GPU=$GPU, align langs: $ALIGN_LANGS)"
+echo "==> Building $OUT_NAME (GPU=$GPU, ENGINE_TORCH_CUDA=$ENGINE_TORCH_CUDA, align langs: $ALIGN_LANGS)"
 
 # ── Python venv ─────────────────────────────────────────────────────────────
-# CPU and GPU torch builds cannot co-exist in one venv (same package, different
-# +cpu/+cuXXX local version), so the GPU build gets its own venv.
+# CPU and CUDA torch builds cannot co-exist in one venv (same package, different
+# +cpu/+cuXXX local version), so ONLY the CUDA-torch build (gpu-full) gets its own
+# venv. The shipping GPU build uses torch+cpu and therefore shares the CPU .venv —
+# its CUDA comes from CTranslate2 + the cuBLAS wheel, not from torch.
 VENV="$SIDECAR_DIR/.venv"
-[ "$GPU" = "1" ] && VENV="$SIDECAR_DIR/.venv-gpu"
+[ "$ENGINE_TORCH_CUDA" = "1" ] && VENV="$SIDECAR_DIR/.venv-gpu"
 if [ ! -d "$VENV" ]; then
   python3 -m venv "$VENV"
 fi
@@ -97,9 +128,11 @@ TORCH_TRIO="torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0"  # MUST match re
 LOCK="$ENGINE_PKG/requirements.lock.txt"
 if [ -f "$LOCK" ]; then
   if [ "$uname_s" != "Darwin" ]; then
-    if [ "$GPU" = "1" ]; then
-      # CUDA build (Linux/Windows). cu128 carries Blackwell sm_120 kernels (RTX 50xx);
-      # cu121 has none and fails at runtime with "no kernel image available".
+    if [ "$ENGINE_TORCH_CUDA" = "1" ]; then
+      # CUDA-torch build (gpu-full only). cu128 carries Blackwell sm_120 kernels
+      # (RTX 50xx); cu121 has none and fails at runtime with "no kernel image
+      # available". The shipping GPU build (GPU=1 without ENGINE_TORCH_CUDA) takes
+      # the +cpu branch below — its CUDA rides on CTranslate2 + the cuBLAS wheel.
       TORCH_INDEX="https://download.pytorch.org/whl/${CUDA:-cu128}"
     else
       TORCH_INDEX="https://download.pytorch.org/whl/cpu"
@@ -121,7 +154,7 @@ else
   # transformers cross-resolve; keep a lock checked in to avoid this path).
   if [ "$uname_s" = "Darwin" ]; then
     python -m pip install torch torchaudio
-  elif [ "$GPU" = "1" ]; then
+  elif [ "$ENGINE_TORCH_CUDA" = "1" ]; then
     python -m pip install torch torchaudio --index-url "https://download.pytorch.org/whl/${CUDA:-cu128}"
   else
     python -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
@@ -152,6 +185,56 @@ except TypeError:
 print("staged", lang)
 PY
 done
+
+# ── cuBLAS DLLs for the shipping GPU build (CT2-CUDA + torch-CPU) ────────────
+# CT2's stock wheel is CUDA-capable but links cuBLAS lazily; under torch+cpu
+# nothing preloads it, so ship cublas64_12.dll + cublasLt64_12.dll (the ONLY CUDA
+# DLLs CT2 4.8.0 needs — it statically links the rest). Source them from a PINNED
+# nvidia-cublas-cu12 win_amd64 wheel and verify its sha256 before extracting; the
+# .spec picks them up via ENGINE_CUBLAS_DIR. gpu-full skips this (its CUDA rides in
+# the cu128 torch wheel), as do the CPU and macOS builds.
+unset ENGINE_CUBLAS_DIR || true
+if [ "$GPU" = "1" ] && [ "$ENGINE_TORCH_CUDA" != "1" ] && [ "$EXE_EXT" = ".exe" ]; then
+  CUBLAS_SCRATCH="$SIDECAR_DIR/build/cublas-wheel"
+  rm -rf "$CUBLAS_SCRATCH"
+  mkdir -p "$CUBLAS_SCRATCH"
+  echo "==> Downloading pinned nvidia-cublas-cu12==$CUBLAS_WHEEL_VERSION (win_amd64)"
+  python -m pip download --no-deps --only-binary=:all: \
+    --platform win_amd64 --python-version 3 --implementation py --abi none \
+    -d "$CUBLAS_SCRATCH" "nvidia-cublas-cu12==$CUBLAS_WHEEL_VERSION"
+  WHEEL="$(ls "$CUBLAS_SCRATCH"/nvidia_cublas_cu12-*-win_amd64.whl)"
+  echo "==> Verifying wheel sha256"
+  GOT_SHA="$(python -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$WHEEL")"
+  if [ "$GOT_SHA" != "$CUBLAS_WHEEL_SHA256" ]; then
+    echo "cuBLAS wheel sha256 mismatch!" >&2
+    echo "  expected $CUBLAS_WHEEL_SHA256" >&2
+    echo "  got      $GOT_SHA" >&2
+    exit 1
+  fi
+  echo "==> Extracting cuBLAS DLLs from the wheel"
+  CUBLAS_DIR="$CUBLAS_SCRATCH/dlls"
+  rm -rf "$CUBLAS_DIR"
+  mkdir -p "$CUBLAS_DIR"
+  python - "$WHEEL" "$CUBLAS_DIR" <<'PY'
+import sys, zipfile, os
+wheel, out = sys.argv[1], sys.argv[2]
+wanted = {"cublas64_12.dll", "cublasLt64_12.dll"}
+with zipfile.ZipFile(wheel) as z:
+    found = set()
+    for info in z.infolist():
+        base = os.path.basename(info.filename)
+        if base in wanted:
+            with z.open(info) as src, open(os.path.join(out, base), "wb") as dst:
+                dst.write(src.read())
+            found.add(base)
+    missing = wanted - found
+    if missing:
+        sys.exit("cuBLAS DLLs missing from wheel: %s" % ", ".join(sorted(missing)))
+print("extracted", ", ".join(sorted(found)))
+PY
+  export ENGINE_CUBLAS_DIR="$CUBLAS_DIR"
+  echo "==> ENGINE_CUBLAS_DIR=$ENGINE_CUBLAS_DIR"
+fi
 
 # ── Freeze ──────────────────────────────────────────────────────────────────
 echo "==> Freezing with PyInstaller"

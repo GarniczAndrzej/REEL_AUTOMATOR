@@ -114,14 +114,25 @@ for pkg in (
 
 OUT_NAME = os.environ.get("ENGINE_OUT_NAME", "whisperx-engine")
 
+# GPU build only: bundle the cuBLAS DLLs from ENGINE_CUBLAS_DIR into the bundle
+# root ("."), and register the preload runtime hook. Unset ⇒ binaries=[] and no
+# hook effect, which is exactly the CPU build. build.sh extracts the two DLLs from
+# a pinned nvidia-cublas-cu12 wheel and points ENGINE_CUBLAS_DIR at them.
+binaries = []
+_cublas_dir = os.environ.get("ENGINE_CUBLAS_DIR")
+if _cublas_dir and os.path.isdir(_cublas_dir):
+    for _f in os.listdir(_cublas_dir):
+        if _f.lower().endswith(".dll"):
+            binaries.append((os.path.join(_cublas_dir, _f), "."))
+
 a = Analysis(
     [SRC],
     pathex=[HERE],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=[os.path.join(HERE, "rthook_cublas.py")],
     excludes=[],
     cipher=block_cipher,
     noarchive=False,
