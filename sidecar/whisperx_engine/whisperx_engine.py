@@ -473,7 +473,12 @@ def _diarize(whisperx, aligned, audio, hf_token, device, min_speakers=None, max_
 
 def cmd_transcribe(args):
     import whisperx
-    from faster_whisper import WhisperModel
+
+    # whisperx ships its OWN WhisperModel subclass (whisperx.asr.WhisperModel) that
+    # adds generate_segment_batched(), which the FasterWhisperPipeline calls. A plain
+    # faster_whisper.WhisperModel lacks it and fails transcription with exit 14, so
+    # build the subclass here for the load_model `model=` seam.
+    from whisperx.asr import WhisperModel
 
     ct2_device, torch_device, _, compute_type = _resolve_devices(args)
     # VAD runs on torch's device, but CT2/whisperx has no MPS backend for VAD, so
