@@ -1,5 +1,5 @@
 {
-  "_note": "EMBEDDED dependency spec — the checksum trust anchor (ships inside the code-signed installer). Windows-first; macOS keeps bundling this slice, so no macOS entries yet (the schema supports platform:'macos' for later adoption). PHASE 0 (PARTIAL): the CPU engine + FFmpeg are LIVE — hosted on the public GitHub repo GarniczAndrzej/reel-automator-deps (release deps-v1.0.0) with real pinned SHA-256. STILL STUBBED: the GPU engine (`engine-gpu-windows-x86_64`) keeps a placeholder RELEASE_HOST url + empty sha256 because the 3.3 GB artifact exceeds GitHub's 2 GB per-asset cap — it needs a no-cap host (e.g. HuggingFace) before it can be pinned; and `align-models` still needs its per-file manifest finalized. An empty sha256 means 'not yet pinned' → the Phase 2 downloader fail-closes and REFUSES to stage that artifact (safe default). On a GPU machine, force the CPU variant (UI override / REEL_ENGINE_VARIANT=cpu) to exercise the live download path until the GPU host is chosen. To pin a new artifact: upload at its versioned URL, compute SHA-256 (`Get-FileHash -Algorithm SHA256` / `sha256sum`), replace `url` + `sha256` (+ verify `sizeBytes`).",
+  "_note": "EMBEDDED dependency spec — the checksum trust anchor (ships inside the code-signed installer). Windows-first; macOS keeps bundling this slice, so no macOS entries yet (the schema supports platform:'macos' for later adoption). PHASE 0 (PARTIAL): the CPU engine + FFmpeg are LIVE — hosted on the public GitHub repo GarniczAndrzej/reel-automator-deps (release deps-v1.0.0) with real pinned SHA-256. ALIGN MODELS ARE NOT A MANAGED DEPENDENCY: the wav2vec2 align model is no longer downloaded/staged via this spec — the engine pulls it from the OFFICIAL HuggingFace repo (jonatasgrosman/wav2vec2-large-xlsr-53-polish) into the default HF cache at first transcription (see whisper.rs: HF-offline is only forced when a local align dir is present). STILL STUBBED: the GPU engine (`engine-gpu-windows-x86_64`) keeps a placeholder RELEASE_HOST url + empty sha256 because the 3.3 GB artifact exceeds GitHub's 2 GB per-asset cap — it needs a no-cap host (e.g. HuggingFace) before it can be pinned. An empty sha256 means 'not yet pinned' → the Phase 2 downloader fail-closes and REFUSES to stage that artifact (safe default). On a GPU machine, force the CPU variant (UI override / REEL_ENGINE_VARIANT=cpu) to exercise the live download path until the GPU host is chosen. To pin a new artifact: upload at its versioned URL, compute SHA-256 (`Get-FileHash -Algorithm SHA256` / `sha256sum`), replace `url` + `sha256` (+ verify `sizeBytes`).",
   "specVersion": 1,
   "dependencies": [
     {
@@ -40,26 +40,6 @@
       "version": "1.0.0",
       "sentinel": "ffmpeg-x86_64-pc-windows-msvc.exe",
       "stageTo": "ffmpeg-bin"
-    },
-    {
-      "id": "align-models-pl-windows-x86_64",
-      "kind": "align-models",
-      "platform": "windows",
-      "arch": "x86_64",
-      "variantPredicate": "any",
-      "repo": "RELEASE_HOST/reel-automator/deps/v1.0.0/align_models",
-      "files": [
-        {
-          "name": "pl/CACHEDIR.TAG",
-          "sizeBytes": 195,
-          "sha256": ""
-        }
-      ],
-      "sizeBytes": 1200000000,
-      "version": "1.0.0",
-      "sentinel": "",
-      "stageTo": "align-models",
-      "_note": "PHASE 0: finalize the align_models packaging + per-file manifest (the wav2vec2 xlsr-53-polish HF cache tree) and pin a concrete `sentinel` file + every file's `sha256`. Empty `sentinel` currently means 'staged dir exists' for the presence check; empty `sha256` means the downloader refuses to stage until pinned."
     }
   ]
 }

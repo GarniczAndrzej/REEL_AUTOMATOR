@@ -589,11 +589,15 @@ pub async fn transcribe_video(
         &min_speakers,
         &max_speakers,
     );
-    // Alignment model ships beside the sidecar (not baked in) — tell the engine
-    // where to find it.
-    if let Some(dir) = crate::engine::align_model_dir(&app) {
+    // Alignment model: a local copy (bundled on macOS, or staged from a prior
+    // run) is passed via --align-model-dir and used offline. On a thin Windows
+    // install there is none — we omit the flag AND leave HF reachable (below) so
+    // whisperx pulls the official wav2vec2 align model into the default HF cache
+    // at runtime.
+    let local_align = crate::engine::align_model_dir(&app);
+    if let Some(dir) = &local_align {
         args.push("--align-model-dir".into());
-        args.push(dir);
+        args.push(dir.clone());
     }
 
     let bin = crate::engine::engine_bin_path(&app).map_err(|e| {
@@ -601,13 +605,14 @@ pub async fn transcribe_video(
         e
     })?;
     let mut cmd = crate::proc::build_command(&bin, &args);
-    // Transcription model is local and the align model is bundled, so force HF
-    // offline (skips slow network etag checks) — except when diarizing, where
-    // pyannote may still need to be fetched from HuggingFace (pass the token via
-    // env, not argv, so it is not visible in `ps`).
+    // Force HF offline (skips slow network etag checks) only when the align model
+    // can be served locally. Two cases keep HF reachable: diarizing (pyannote may
+    // be fetched from HuggingFace — token via env, not argv, so it isn't visible
+    // in `ps`), and a thin install with no local align model (whisperx then pulls
+    // the official wav2vec2 align model at runtime into the default HF cache).
     if diarize {
         cmd.env("HF_TOKEN", hf_token.clone());
-    } else {
+    } else if local_align.is_some() {
         crate::engine::with_hf_offline(&mut cmd);
     }
     // UTF-8 stdio so Polish diacritics in the JSON result survive Windows' cp1250
@@ -829,12 +834,15 @@ pub async fn align_transcript(
         align_args.push("--device".into());
         align_args.push(d.clone());
     }
-    if let Some(dir) = crate::engine::align_model_dir(&app) {
+    let local_align = crate::engine::align_model_dir(&app);
+    if let Some(dir) = &local_align {
         align_args.push("--align-model-dir".into());
-        align_args.push(dir);
+        align_args.push(dir.clone());
     }
 
-    // Align-only uses just the bundled wav2vec2 model — always force HF offline.
+    // Align-only uses the wav2vec2 model: a local copy runs offline; on a thin
+    // install (no local model) HF stays reachable so whisperx pulls the official
+    // one at runtime (see the offline gate at the spawn below).
     // Clean up the temp WAV + transcript on the early sidecar/spawn error paths
     // too (the post-loop cleanup at the bottom only runs once the engine starts).
     let cleanup_temps = || {
@@ -847,7 +855,11 @@ pub async fn align_transcript(
         e
     })?;
     let mut cmd = crate::proc::build_command(&bin, &align_args);
-    crate::engine::with_hf_offline(&mut cmd);
+    // Offline only when a local align model is present; otherwise leave HF
+    // reachable so whisperx pulls the official wav2vec2 model at runtime.
+    if local_align.is_some() {
+        crate::engine::with_hf_offline(&mut cmd);
+    }
     crate::engine::with_utf8_io(&mut cmd);
 
     let child = cmd.spawn().map_err(|e| {
