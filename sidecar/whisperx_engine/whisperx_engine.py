@@ -128,19 +128,56 @@ def _alignment_model_dir(language):
     return os.path.join(_align_models_base(), language or "")
 
 
+def _cublas_usable():
+    """True iff the two cuBLAS DLLs CTranslate2 needs for CUDA inference are loadable.
+
+    CUDA *enumeration* needs only the driver (nvcuda.dll), but CT2 inference needs
+    cuBLAS + cuBLASLt — which the CPU build does NOT ship. Without this gate the CPU
+    engine would enumerate CUDA on any NVIDIA box and claim device:cuda, then fail at
+    the first matmul. So ct2_device must require cuBLAS, not just a device count.
+
+    - Shipping GPU build: rthook_cublas.py preloads them → REEL_CUBLAS_PRELOAD == "ok".
+    - Dormant gpu-full build: torch's own cuBLAS is pulled in by `import torch`, so a
+      by-name load resolves the already-loaded module (caller imports torch first).
+    - CPU build: no cuBLAS anywhere → False → CT2 stays on CPU.
+    Non-Windows has no cuBLAS-DLL packaging concept (macOS has no CUDA; Linux GPU is
+    out of scope), so don't let this gate suppress a genuine CT2 CUDA device there.
+    """
+    if sys.platform != "win32":
+        return True
+    if os.environ.get("REEL_CUBLAS_PRELOAD") == "ok":
+        return True
+    base = getattr(sys, "_MEIPASS", None)
+    try:
+        import ctypes
+
+        # cuBLASLt first — cublas64_12.dll depends on it. Prefer the bundled absolute
+        # path (gpu-full ships torch's copy in _MEIPASS); fall back to by-name, which
+        # resolves an already-loaded module (torch's cuBLAS after import).
+        for name in ("cublasLt64_12.dll", "cublas64_12.dll"):
+            cand = os.path.join(base, name) if base else None
+            ctypes.WinDLL(cand if cand and os.path.isfile(cand) else name)
+        return True
+    except Exception:
+        return False
+
+
 def _ct2_cuda_available():
-    """True iff CTranslate2 can see a CUDA device. Any import/call failure ⇒ False.
+    """True iff CTranslate2 can see a CUDA device AND cuBLAS is usable for inference.
 
     This is the *transcription* device probe. CT2's stock PyPI wheel is CUDA-capable
     on its own (it links cuBLAS lazily via LoadLibrary), so this is independent of
-    torch's build — a torch+cpu process can still transcribe on CUDA through CT2.
+    torch's build — a torch+cpu process can still transcribe on CUDA through CT2, as
+    long as the cuBLAS DLLs are present. Any import/call failure ⇒ False.
     """
     try:
         import ctranslate2
 
-        return ctranslate2.get_cuda_device_count() > 0
+        if ctranslate2.get_cuda_device_count() <= 0:
+            return False
     except Exception:
         return False
+    return _cublas_usable()
 
 
 def _detect_devices():
@@ -149,12 +186,14 @@ def _detect_devices():
     CT2 runs on CUDA while torch is CPU-only.
 
     Returns (ct2_device, torch_device, gpu, compute_type):
-      - ct2_device   : 'cuda' if CT2 sees a CUDA device else 'cpu'
+      - ct2_device   : 'cuda' if CT2 sees a CUDA device with usable cuBLAS else 'cpu'
       - torch_device : 'cuda' | 'mps' | 'cpu' from torch's own capability
       - gpu          : ct2_device == 'cuda' or torch_device in ('cuda', 'mps')
       - compute_type : 'float16' when CT2 is on CUDA, else 'int8'
     """
-    ct2_device = "cuda" if _ct2_cuda_available() else "cpu"
+    # Determine torch's device FIRST: on the dormant gpu-full build `import torch`
+    # loads torch's cuBLAS into the process, which _ct2_cuda_available()'s by-name
+    # cuBLAS check then resolves. Harmless for the shipping GPU/CPU builds.
     try:
         import torch
 
@@ -166,6 +205,7 @@ def _detect_devices():
             torch_device = "cpu"
     except Exception:
         torch_device = "cpu"
+    ct2_device = "cuda" if _ct2_cuda_available() else "cpu"
     gpu = ct2_device == "cuda" or torch_device in ("cuda", "mps")
     compute_type = "float16" if ct2_device == "cuda" else "int8"
     return ct2_device, torch_device, gpu, compute_type
