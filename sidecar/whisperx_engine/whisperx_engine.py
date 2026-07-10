@@ -299,8 +299,8 @@ def _selftest_align_runs(whisperx, language="pl"):
         return False
 
 
-def cmd_selftest():
-    ct2_device, torch_device, gpu, _ = _detect_devices()
+def cmd_selftest(args=None):
+    ct2_device, torch_device, gpu, compute_type = _resolve_devices(args or argparse.Namespace())
     align_ready = False
     try:
         import whisperx  # noqa: F401
@@ -322,6 +322,7 @@ def cmd_selftest():
         "device": ct2_device,
         "ct2_device": ct2_device,
         "torch_device": torch_device,
+        "compute_type": compute_type,
         # Truthful now: reflects an actual tiny align run, not just file presence.
         "alignment_model_ready": align_ready,
     }
@@ -329,12 +330,13 @@ def cmd_selftest():
     return EXIT_OK
 
 
-def cmd_capability():
+def cmd_capability(args=None):
     """Lightweight readiness probe — same JSON shape as cmd_selftest, but cheap.
 
-    Reports {ok, version, gpu, device, ct2_device, torch_device, cublas,
-    alignment_model_ready} from a device detection (CT2 device count + torch) plus
-    an align-dir *existence* check. It deliberately does NOT `import whisperx`,
+    Reports {ok, version, gpu, device, ct2_device, torch_device, compute_type,
+    cublas, alignment_model_ready} from a device detection (CT2 device count +
+    torch), with the --device/--compute-type overrides applied, plus an align-dir
+    *existence* check. It deliberately does NOT `import whisperx`,
     `load_align_model`, or run a real `align()`, so it cannot block on a model
     deserialize or an HF network call. Because it never imports whisperx, its
     `__version__` is unavailable — we report ENGINE_VERSION.
@@ -344,7 +346,7 @@ def cmd_capability():
     against). The Rust/frontend layer renders this verdict as a non-authoritative
     tier; the authoritative green is earned only by --selftest.
     """
-    ct2_device, torch_device, gpu, _ = _detect_devices()
+    ct2_device, torch_device, gpu, compute_type = _resolve_devices(args or argparse.Namespace())
     model_dir = _alignment_model_dir("pl")
     align_ready = os.path.isdir(model_dir) and bool(os.listdir(model_dir))
     # cuBLAS preload verdict from the §4 runtime hook (GPU build only). "ok" ⇒ the
@@ -358,6 +360,7 @@ def cmd_capability():
         "device": ct2_device,
         "ct2_device": ct2_device,
         "torch_device": torch_device,
+        "compute_type": compute_type,
         "cublas": cublas,
         "alignment_model_ready": align_ready,
     }
@@ -807,9 +810,9 @@ def main(argv=None):
         os.environ["ENGINE_ALIGN_DIR"] = args.align_model_dir
     try:
         if args.capability:
-            return cmd_capability()
+            return cmd_capability(args)
         if args.selftest or args.version:
-            return cmd_selftest()
+            return cmd_selftest(args)
         if args.align_only:
             if not args.audio:
                 _log("--align-only requires --audio")
