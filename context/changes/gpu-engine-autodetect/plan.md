@@ -631,17 +631,17 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 #### Automated
 
 - [x] 1.1 CPU build still freezes and boots (`--selftest` exit 0, `gpu:false`, `device:cpu`) — caafeb3
-- [x] 1.2 GPU build freezes to `whisperx-engine-gpu-<triple>.exe`
-- [x] 1.3 GPU exe `--capability` reports `gpu:true`, `device:cuda`, `cublas:true`
-- [x] 1.4 GPU exe `--selftest` exits 0 with `alignment_model_ready:true`
-- [x] 1.5 Frozen GPU artifact is under 2 GB (~1.03 GB)
-- [x] 1.6 GPU build's venv contains `torch+cpu`, not `torch+cu128`
-- [x] 1.7 `--device cpu` yields `compute_type: int8`, not `float16` (override-ordering fix)
+- [x] 1.2 GPU build freezes to `whisperx-engine-gpu-<triple>.exe` — b94e54a
+- [x] 1.3 GPU exe `--capability` reports `gpu:true`, `device:cuda`, `cublas:true` — b94e54a
+- [x] 1.4 GPU exe `--selftest` exits 0 with `alignment_model_ready:true` — b94e54a
+- [x] 1.5 Frozen GPU artifact is under 2 GB (~1.03 GB) — b94e54a
+- [x] 1.6 GPU build's venv contains `torch+cpu`, not `torch+cu128` — b94e54a
+- [x] 1.7 `--device cpu` yields `compute_type: int8`, not `float16` (override-ordering fix) — b94e54a
 - [x] 1.8 Regression fence green: `node --experimental-vm-modules test/regression.js` — 6a00e2a
 
 #### Manual
 
-- [ ] 1.9 Real reel transcribes through the frozen GPU exe with `device: "cuda"` in the payload
+- [x] 1.9 Real reel transcribes through the frozen GPU exe with `device: "cuda"` in the payload — 491f788
 - [ ] 1.10 Per-phase timings recorded for all three builds, appended to `research.md`
 - [ ] 1.11 Gate A passes: new GPU exe beats the CPU exe on total wall clock
 - [ ] 1.12 Gate B evaluated; `engine-gpu-full` activate/dormant decision recorded in `change.md`
