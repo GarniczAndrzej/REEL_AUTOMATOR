@@ -5,7 +5,7 @@ status: implementing
 created: 2026-07-10
 updated: 2026-07-11
 archived_at: null
-gate_b_decision: pending — engine-gpu-full stays dormant until Phase 1 Gate B measurement (real reel on RTX 5070 Ti) says otherwise
+gate_b_decision: "FAIL 4.19x (CPU-torch alignment dominates: 107.7s vs 14.3s CUDA). Per user 2026-07-11: ACTIVATE engine-gpu-full. Ship lightweight GPU (984MB, GitHub) as the default GPU variant AND host+PIN gpu-full (3.08GB) on HuggingFace, reachable only via REEL_ENGINE_VARIANT=gpu-full. Phase 2 §2 MUST fill the gpu-full sha256 (real digest, not the empty/dormant stub) and give it a real HF repo+files entry."
 ---
 
 ## Notes
@@ -40,11 +40,23 @@ Scope for the plan:
 
 ## RESUME STATE (2026-07-11) — read this first
 
-**Where we are:** Phase 1 implementation is COMPLETE and committed. Automated
-criteria 1.1–1.9 all PASS (verified on real RTX 5070 Ti builds). The ONLY thing
-left in Phase 1 is the manual measurement gate — 1.10 (timings → research.md),
-1.11 (Gate A), 1.12 (Gate B decision), 1.13 (macOS, needs a Mac). Do NOT start
-Phase 2 until Gate A passes and Gate B's verdict is recorded here.
+**Where we are:** Phase 1 is DONE except the macOS check (1.13, needs a Mac —
+deferred; this is a Windows box). 1.1–1.12 all PASS/recorded. Gate A PASSED (new
+GPU ~4× faster than CPU). Gate B FAILED 4.19× (CPU-torch align dominates) → decision
+recorded above: activate engine-gpu-full. **Phase 2 is cleared to start.**
+
+**Phase 2 must (per Gate B decision):** host the lightweight GPU exe on GitHub
+(deps-v1.1.0) as the default GPU variant AND host+PIN gpu-full (3.08GB) on a
+HuggingFace repo — fill a REAL sha256 for gpu-full (NOT the empty/dormant stub the
+plan's Phase 2 §2 originally specified). gpu-full stays env-only (REEL_ENGINE_VARIANT
+=gpu-full), not in the UI. Compute digests with Get-FileHash -Algorithm SHA256 on the
+exes in src-tauri/binaries/ (byte sizes: gpu 1,031,465,189; gpu-full 3,302,783,700 —
+reconfirm before pinning).
+
+**Known separate defect (NOT this change, needs its own):** diarization is broken in
+ALL frozen builds — `speechbrain.integrations.k2_fsa` lazy-import failure loading
+`pyannote/speaker-diarization-community-1` (exit 13). Pre-existing (fails on cu128
+too). Bundling gap in whisperx_engine.spec. Flag to the user / open a new change.
 
 **Phase 1 commits:** 6a00e2a, caafeb3, b94e54a, 70b7038, 491f788.
 

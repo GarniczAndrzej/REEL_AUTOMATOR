@@ -366,3 +366,45 @@ whole size argument collapses — so this timing is the load-bearing follow-up.
   the repo's `whisperx_engine.spec` with `binaries=_CUBLAS` and a `runtime_hooks=[rthook_cublas.py]`
   preload hook. Nothing under `sidecar/` was mutated — the freeze wrote to scratchpad
   `distpath`/`workpath`.
+
+## Follow-up: measured phase timings (2026-07-11, Phase 1 §7 gate)
+
+Measured through the **frozen exes** (not in-venv) on the RTX 5070 Ti, one real Polish
+reel, large-v3, via `scratchpad/measure_engines.py` (timestamps the engine's
+`PROGRESS phase=` stderr lines). Diarization was requested but **failed on all three
+builds** with an identical pre-existing bundling error —
+`diarization failed: Lazy import of LazyModule(... speechbrain.integrations.k2_fsa ...)` —
+so the diarize column is unmeasured. Because it fails identically on the cu128 build,
+it is **not** caused by the device-decoupling changes; it is a separate defect in the
+frozen diarization path (loading `pyannote/speaker-diarization-community-1`). The
+transcribe and align phases completed on all three and their 0→100 durations are clean
+and directly comparable.
+
+| build | transcribe (s) | align (s) | transcribe+align (s) | load (s) |
+|---|---:|---:|---:|---:|
+| cpu (torch+cpu) | 436.9 | 112.2 | 549.1 | 12.5 |
+| cu128 (torch+cu128, GPU align) | 18.3 | 14.3 | 32.6 | 36.3 |
+| **gpu (CT2-CUDA + torch-CPU)** | 28.8 | **107.7** | **136.5** | 15.3 |
+
+**Gate A — PASS.** New GPU beats CPU on the completed work: 136.5 s vs 549.1 s (~4.0×
+faster). Transcription alone is 28.8 s vs 436.9 s (~15× faster). The lightweight GPU
+build is unambiguously worth shipping over CPU — the change's core goal (a hostable,
+working GPU path) is met.
+
+**Gate B — FAIL.** New GPU vs cu128: 136.5 / 32.6 = **4.19×**, far above the 1.30×
+threshold (2.2× even if load is included). The cause is exactly the plan's load-bearing
+assumption: **CPU-torch alignment dominates** — 107.7 s on CPU vs 14.3 s on CUDA
+(~7.5× slower). Transcription is comparable (both on CUDA CT2; 28.8 vs 18.3 is within
+model-load/thermal noise). Diarization, also moved to CPU torch, would only widen the
+gap, so the verdict holds regardless of the unmeasured diarize column.
+
+**Interpretation.** The lightweight build (984 MB, GitHub-hostable) is a large win over
+the *status quo* (GPU was unusable because the 3.08 GB cu128 build could not be hosted),
+but it is ~4× slower end-to-end than the full cu128 build purely because of CPU
+alignment. Per the plan, a Gate-B failure means `engine-gpu-full` should be activated
+(hosted on HuggingFace, env-only) rather than left dormant — a Phase-2 scope decision
+recorded in `change.md`.
+
+Reproduction: `scratchpad/measure_engines.py --audio <reel> --model large-v3
+--cu128-exe <gpu-full exe> --append-research` (HF_TOKEN set). Note the diarization
+bundling failure must be fixed separately before a diarize-inclusive number exists.
