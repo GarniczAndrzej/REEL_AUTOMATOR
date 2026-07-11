@@ -161,6 +161,41 @@ pub fn with_utf8_io(cmd: &mut tokio::process::Command) {
     cmd.env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8");
 }
 
+/// Provision the engine child's FFmpeg. Apply at every engine spawn site.
+///
+/// The app's FFmpeg contract used to end at the Rust process boundary: every
+/// Rust-side spawn is absolute (`ffmpeg::ffmpeg_bin_path`), but the engine child
+/// re-resolves `ffmpeg` **by bare name** from an inherited `PATH` we never
+/// provisioned — whisperx's `load_audio` is a plain `subprocess.run(["ffmpeg", …])`
+/// with no injection point. On Windows, where no ambient ffmpeg masks it, the lookup
+/// fails and the decode dies with exit 11 on an otherwise fully-provisioned machine.
+///
+/// Two complementary halves, because two engine populations coexist:
+///   - `REEL_FFMPEG_BIN` — the absolute path. A rebuilt engine decodes through it
+///     directly. Inert on an older engine (an unknown env var is simply ignored),
+///     which is exactly why this is an env var and not a CLI flag: a new flag would
+///     make argparse exit 2 on every already-staged engine.
+///   - a `PATH` **prepend** of a shim dir holding a bare-named `ffmpeg[.exe]` — this
+///     is what un-breaks the engines already on users' disks, and it is the only
+///     mechanism that can: staging is presence-only (`deps::dep_present`), so a
+///     staged engine is never auto-replaced.
+///
+/// Best-effort **by design**: if the shim cannot be materialized (read-only dir), we
+/// still set `REEL_FFMPEG_BIN` and leave `PATH` alone rather than clobbering it. A
+/// rebuilt engine never consults `PATH`, so hard-failing there would block precisely
+/// the population that needs the shim least.
+pub fn with_ffmpeg(app: &AppHandle, cmd: &mut tokio::process::Command) {
+    let Ok(bin) = crate::ffmpeg::ffmpeg_bin_path(app) else {
+        return;
+    };
+    cmd.env("REEL_FFMPEG_BIN", &bin);
+    if let Ok(dir) = crate::ffmpeg::ffmpeg_shim_dir(app) {
+        if let Some(path) = crate::ffmpeg::prepend_to_path(&dir, std::env::var_os("PATH")) {
+            cmd.env("PATH", path);
+        }
+    }
+}
+
 /// Resolve the external wav2vec2 alignment-model directory that ships *beside*
 /// the sidecar (Tauri `bundle.resources` → `align_models/`). The model is no
 /// longer baked into the frozen binary: a multi-GB onefile Mach-O fails to load
@@ -360,6 +395,8 @@ pub async fn run_engine(
     // and UTF-8 stdio so any Polish diacritics survive Windows' cp1250 default.
     with_hf_offline(&mut cmd);
     with_utf8_io(&mut cmd);
+    // The self-test now decodes a real WAV, so the probe needs an FFmpeg too.
+    with_ffmpeg(app, &mut cmd);
     match crate::proc::spawn_and_collect(cmd, Some(timeout)).await {
         Ok(triple) => Ok(triple),
         Err(ProcError::TimedOut) => Err("Sprawdzanie silnika przekroczyło limit czasu".to_string()),

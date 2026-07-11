@@ -299,7 +299,7 @@ fn should_retry_on_cpu(
 fn engine_error_message(code: Option<i32>, stderr: &str) -> String {
     match code {
         Some(10) => "Model transkrypcji nie został znaleziony lub nie został jeszcze pobrany. Pobierz model w menedżerze modeli.".to_string(),
-        Some(11) => "Nie udało się zdekodować audio. Sprawdź plik źródłowy.".to_string(),
+        Some(11) => "Nie udało się zdekodować audio. Najczęstsza przyczyna to niedostępny FFmpeg — sprawdź panel ZALEŻNOŚCI i pobierz brakujące składniki. Jeśli FFmpeg jest gotowy, sprawdź plik źródłowy.".to_string(),
         Some(12) => "Dopasowanie słów (alignment) nie powiodło się. Spróbuj ponownie lub zmień język.".to_string(),
         Some(13) => "Rozpoznawanie mówców (diaryzacja) nie powiodło się. Sprawdź token Hugging Face i dostęp do modelu pyannote.".to_string(),
         Some(14) => "Transkrypcja nie powiodła się. Sprawdź model i plik audio.".to_string(),
@@ -745,6 +745,11 @@ pub async fn transcribe_video(
         // UTF-8 stdio so Polish diacritics in the JSON result survive Windows'
         // cp1250 pipe default (see engine::with_utf8_io).
         crate::engine::with_utf8_io(&mut cmd);
+        // The engine decodes the WAV itself, through an ffmpeg IT resolves — hand it
+        // ours (absolute + a PATH shim) instead of letting it guess (see
+        // engine::with_ffmpeg). Inside the shared closure, so the original run and the
+        // CPU retry can never drift.
+        crate::engine::with_ffmpeg(&app, &mut cmd);
         cmd.spawn()
             .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))
     };
@@ -1190,6 +1195,9 @@ pub async fn align_transcript(
         crate::engine::with_hf_offline(&mut cmd);
     }
     crate::engine::with_utf8_io(&mut cmd);
+    // Align-only decodes the WAV too — the second decode entry point (see
+    // engine::with_ffmpeg).
+    crate::engine::with_ffmpeg(&app, &mut cmd);
 
     let child = cmd.spawn().map_err(|e| {
         cleanup_temps();
