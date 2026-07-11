@@ -1,7 +1,7 @@
 ---
 change_id: gpu-engine-autodetect
 title: Autodetect GPU hardware and provision a matching WhisperX engine without self-hosting it
-status: implementing
+status: implemented
 created: 2026-07-10
 updated: 2026-07-11
 archived_at: null

@@ -661,10 +661,10 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 
 #### Manual
 
-- [x] 2.8 Published asset's `Get-FileHash` matches the committed `sha256` — verified in Phase 5's wiped-deps-root sweep
-- [x] 2.9 GPU engine downloads and stages to `deps_root/engine/gpu/` — verified in Phase 5's wiped-deps-root sweep
-- [x] 2.10 A corrupted staged artifact is rejected by the checksum gate — verified in Phase 5's wiped-deps-root sweep
-- [x] 2.11 `REEL_ENGINE_VARIANT=gpu-full` surfaces gpu-full as required and (per Gate B ACTIVATION) downloads+stages+verifies it from HuggingFace to `deps_root/engine/gpu-full/` — note: only fails closed if the HF asset is absent/private or the byte gets altered — verified in Phase 5's wiped-deps-root sweep
+- [x] 2.8 Published asset's `Get-FileHash` matches the committed `sha256` — verified in Phase 5's wiped-deps-root sweep — c72df17
+- [x] 2.9 GPU engine downloads and stages to `deps_root/engine/gpu/` — verified in Phase 5's wiped-deps-root sweep — c72df17
+- [x] 2.10 A corrupted staged artifact is rejected by the checksum gate — verified in Phase 5's wiped-deps-root sweep — c72df17
+- [x] 2.11 `REEL_ENGINE_VARIANT=gpu-full` surfaces gpu-full as required and (per Gate B ACTIVATION) downloads+stages+verifies it from HuggingFace to `deps_root/engine/gpu-full/` — note: only fails closed if the HF asset is absent/private or the byte gets altered — verified in Phase 5's wiped-deps-root sweep — c72df17
 
 ### Phase 3: Honest hardware detection
 
@@ -681,11 +681,11 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 #### Manual
 
 - [x] 3.8 `gpu_info()` on the RTX 5070 Ti reports card, VRAM, compute cap, driver, `cudaUsable:true`, Polish reason — verified live: `nvidia` / "NVIDIA GeForce RTX 5070 Ti" / 17094934528 B / cc 12.0 / driver 610.74 / `cudaUsable:true` / `variant:gpu`; the Polish `reason` came from the **UI-override** branch (a persisted `variantOverride:"gpu"` was in `deps-settings.json`), so `override_reason()` is proven but the hardware sentence is not yet — b842e04
-- [x] 3.9 `REEL_ENGINE_VARIANT=cpu` makes `reason` explain the override — verified in Phase 5's wiped-deps-root sweep (the env-override branch of `override_reason()`; its UI-override sibling was already proven under 3.8)
-- [x] 3.10 A staged-only GPU engine makes the readiness badge report GPU — verified in Phase 5's wiped-deps-root sweep, with `src-tauri/binaries/` emptied so the repo fallback could no longer mask the staged-only case. This is the latent `gpu_sidecar_present()` bug Phase 3 fixed
-- [x] 3.11 `variant_satisfied` false on a GPU box with only the CPU engine, while `transcription_ready` stays true — verified in Phase 5's wiped-deps-root sweep; the split is what lets the window nag while the transcribe button stays enabled (5.12)
-- [x] 3.12 `tauri dev` with only the CPU binary on the NVIDIA dev box: `transcription_ready:true` — not gated — verified in Phase 5's wiped-deps-root sweep (previously PARTIAL: confirmed with all three exes present, not the CPU-only checkout)
-- [x] 3.13 Same checkout: `variant_satisfied:false` and the window auto-opens — verified in Phase 5's wiped-deps-root sweep, now that §3 rewired `maybeAutoOpen` onto `variant_satisfied`
+- [x] 3.9 `REEL_ENGINE_VARIANT=cpu` makes `reason` explain the override — verified in Phase 5's wiped-deps-root sweep (the env-override branch of `override_reason()`; its UI-override sibling was already proven under 3.8) — c72df17
+- [x] 3.10 A staged-only GPU engine makes the readiness badge report GPU — verified in Phase 5's wiped-deps-root sweep, with `src-tauri/binaries/` emptied so the repo fallback could no longer mask the staged-only case. This is the latent `gpu_sidecar_present()` bug Phase 3 fixed — c72df17
+- [x] 3.11 `variant_satisfied` false on a GPU box with only the CPU engine, while `transcription_ready` stays true — verified in Phase 5's wiped-deps-root sweep; the split is what lets the window nag while the transcribe button stays enabled (5.12) — c72df17
+- [x] 3.12 `tauri dev` with only the CPU binary on the NVIDIA dev box: `transcription_ready:true` — not gated — verified in Phase 5's wiped-deps-root sweep (previously PARTIAL: confirmed with all three exes present, not the CPU-only checkout) — c72df17
+- [x] 3.13 Same checkout: `variant_satisfied:false` and the window auto-opens — verified in Phase 5's wiped-deps-root sweep, now that §3 rewired `maybeAutoOpen` onto `variant_satisfied` — c72df17
 
 ### Phase 4: Post-stage verification and the runtime fallback net
 
@@ -702,30 +702,30 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 #### Manual
 
 - [x] 4.8 `verify_staged_engine` returns `gpu:true, cublas:true` and writes no `gpuUnusable` — verified live on the RTX 5070 Ti via `__TAURI__.core.invoke('verify_staged_engine')` (no frontend call site until Phase 5 §4). Proves the `parse_engine_status` hand-mapping actually reads `cublas` off the live engine — the trap the plan names — e645552
-- [x] 4.9 A broken cuBLAS preload persists `gpuUnusable` and shows the Polish explanation — verified in Phase 5's wiped-deps-root sweep by fault injection, now that §4 wired `verify_staged_engine` into `downloadDep()` and gave the explanation a UI to render in
-- [x] 4.10 A simulated CUDA failure triggers exactly one CPU retry, a persisted verdict, a Polish notice, a correct payload — verified in Phase 5's wiped-deps-root sweep (the decision logic was already unit-proven by 4.2–4.4; this exercises it end-to-end)
+- [x] 4.9 A broken cuBLAS preload persists `gpuUnusable` and shows the Polish explanation — verified in Phase 5's wiped-deps-root sweep by fault injection, now that §4 wired `verify_staged_engine` into `downloadDep()` and gave the explanation a UI to render in — c72df17
+- [x] 4.10 A simulated CUDA failure triggers exactly one CPU retry, a persisted verdict, a Polish notice, a correct payload — verified in Phase 5's wiped-deps-root sweep (the decision logic was already unit-proven by 4.2–4.4; this exercises it end-to-end) — c72df17
 - [x] 4.11 Cancelling a GPU transcription fires no retry and writes no `gpuUnusable` — verified live: cancelled mid-`transcribe` on the GPU exe; the run reported ANULOWANO, no second engine spawn, `deps-settings.json` gained no `gpuUnusable` key. The highest-risk interaction in the change, per the plan's own note — e645552
-- [x] 4.12 After demotion with only the GPU engine staged, the next transcription passes `--device cpu` and succeeds first try; `reason` explains why — verified in Phase 5's wiped-deps-root sweep, on the demotion 4.10 produced
-- [x] 4.13 `REEL_ENGINE_VARIANT=cpu` + only the GPU engine staged: a CUDA failure still triggers exactly one CPU retry — verified in Phase 5's wiped-deps-root sweep (the mirror case the variant label hides: `engine_bin_path` cross-falls-back to the GPU exe, so keying the retry on the SPAWNED exe rather than `detect_variant()` is what saves this user)
+- [x] 4.12 After demotion with only the GPU engine staged, the next transcription passes `--device cpu` and succeeds first try; `reason` explains why — verified in Phase 5's wiped-deps-root sweep, on the demotion 4.10 produced — c72df17
+- [x] 4.13 `REEL_ENGINE_VARIANT=cpu` + only the GPU engine staged: a CUDA failure still triggers exactly one CPU retry — verified in Phase 5's wiped-deps-root sweep (the mirror case the variant label hides: `engine_bin_path` cross-falls-back to the GPU exe, so keying the retry on the SPAWNED exe rather than `detect_variant()` is what saves this user) — c72df17
 
 ### Phase 5: ZALEŻNOŚCI window — hardware panel, variant-aware auto-open, dismissal scoping
 
 #### Automated
 
-- [x] 5.1 Prettier clean — green for the three files this phase touched (`index.html`, `first-run-deps.js`, `import/transcribe.js`). The repo-wide `--check` still flags **`src/styles.css`**, a PRE-EXISTING committed violation this phase never touched; left unstaged per the lessons.md rule "Incidental Prettier churn must not ride into a feature commit"
-- [x] 5.2 Regression fence green (272 passed, 0 failed)
-- [x] 5.3 Rust build passes
-- [x] 5.4 No `transcription_ready` reference remains in `maybeAutoOpen` — it now invokes `variant_satisfied`; the surviving mentions of the name are the doc comments the plan itself asked for (stating the ready-vs-satisfied split)
+- [x] 5.1 Prettier clean — green for the three files this phase touched (`index.html`, `first-run-deps.js`, `import/transcribe.js`). The repo-wide `--check` still flags **`src/styles.css`**, a PRE-EXISTING committed violation this phase never touched; left unstaged per the lessons.md rule "Incidental Prettier churn must not ride into a feature commit" — c72df17
+- [x] 5.2 Regression fence green (272 passed, 0 failed) — c72df17
+- [x] 5.3 Rust build passes — c72df17
+- [x] 5.4 No `transcription_ready` reference remains in `maybeAutoOpen` — it now invokes `variant_satisfied`; the surviving mentions of the name are the doc comments the plan itself asked for (stating the ready-vs-satisfied split) — c72df17
 
 #### Manual
 
-- [x] 5.5 Empty deps root: window auto-opens naming card, VRAM, driver, and why GPU was chosen
-- [x] 5.6 GPU download shows a determinate bar, verifies, probes, and toasts Polish success
-- [x] 5.7 Badge flips to the GPU verdict after that download **without a relaunch** — required an ADAPTATION beyond the plan text: `deps-changed` refreshed only the transcribe gate, never the badge, so the badge would have painted the pre-download verdict until relaunch. `import/transcribe.js` now also refreshes `refreshEngineReadiness` on that event
-- [x] 5.8 Interrupted download leaves an explicit "Ponów" button; retrying completes
-- [x] 5.9 After provisioning, relaunch does not open the window
-- [x] 5.10 Dismiss → relaunch stays shut; change variant → opens once; relaunch stays shut
-- [x] 5.11 Upgrade from a legacy `'1'` dismissal opens the window exactly once
-- [x] 5.12 GPU box with only the CPU engine: window opens, transcribe button stays enabled
-- [x] 5.13 Badge names both devices; degrades to the single `device` string on an older cached verdict
-- [x] 5.14 All new strings Polish with correct diacritics in the rendered webview
+- [x] 5.5 Empty deps root: window auto-opens naming card, VRAM, driver, and why GPU was chosen — c72df17
+- [x] 5.6 GPU download shows a determinate bar, verifies, probes, and toasts Polish success — c72df17
+- [x] 5.7 Badge flips to the GPU verdict after that download **without a relaunch** — required an ADAPTATION beyond the plan text: `deps-changed` refreshed only the transcribe gate, never the badge, so the badge would have painted the pre-download verdict until relaunch. `import/transcribe.js` now also refreshes `refreshEngineReadiness` on that event — c72df17
+- [x] 5.8 Interrupted download leaves an explicit "Ponów" button; retrying completes — c72df17
+- [x] 5.9 After provisioning, relaunch does not open the window — c72df17
+- [x] 5.10 Dismiss → relaunch stays shut; change variant → opens once; relaunch stays shut — c72df17
+- [x] 5.11 Upgrade from a legacy `'1'` dismissal opens the window exactly once — c72df17
+- [x] 5.12 GPU box with only the CPU engine: window opens, transcribe button stays enabled — c72df17
+- [x] 5.13 Badge names both devices; degrades to the single `device` string on an older cached verdict — c72df17
+- [x] 5.14 All new strings Polish with correct diacritics in the rendered webview — c72df17
