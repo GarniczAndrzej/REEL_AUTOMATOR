@@ -642,9 +642,9 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 #### Manual
 
 - [x] 1.9 Real reel transcribes through the frozen GPU exe with `device: "cuda"` in the payload — 491f788
-- [x] 1.10 Per-phase timings recorded for all three builds, appended to `research.md`
-- [x] 1.11 Gate A passes: new GPU exe beats the CPU exe on total wall clock
-- [x] 1.12 Gate B evaluated; `engine-gpu-full` activate/dormant decision recorded in `change.md`
+- [x] 1.10 Per-phase timings recorded for all three builds, appended to `research.md` — b67c854
+- [x] 1.11 Gate A passes: new GPU exe beats the CPU exe on total wall clock — b67c854
+- [x] 1.12 Gate B evaluated; `engine-gpu-full` activate/dormant decision recorded in `change.md` — b67c854
 - [ ] 1.13 macOS unaffected: VAD on CPU, alignment on MPS, `--capability` reports `ct2_device:cpu`/`torch_device:mps`, badge still names `mps`
 
 ### Phase 2: Host, pin, and extend the spec
