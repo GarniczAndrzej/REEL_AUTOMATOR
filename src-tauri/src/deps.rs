@@ -97,14 +97,29 @@ pub fn embedded_spec() -> Result<DepsSpec, String> {
         .map_err(|e| format!("Wbudowana specyfikacja zależności jest niepoprawna: {e}"))
 }
 
+/// Does this slot's staged artifact get EXECUTED?
+///
+/// A remote-only id may never claim one. For such an id both the bytes AND the
+/// digest come from the same host, so "verified" would degrade to merely
+/// "self-consistent" — a compromised host could introduce a brand-new id that
+/// stages and spawns an arbitrary binary, and every integrity check downstream
+/// would happily pass. Known ids carry no such risk: the embedded spec pins their
+/// digest and the remote may only re-point their URL.
+fn is_spawnable_slot(slot: &str) -> bool {
+    matches!(slot, "engine-bin" | "ffmpeg-bin")
+}
+
 /// Merge a remote spec over the embedded one under the trust-anchor rule:
 ///   - the embedded copy is authoritative for INTEGRITY: for any `id` present in
 ///     the embedded spec, its `sha256`/`version`/`files` (and other fields) WIN;
 ///     the remote spec may only re-point that id's `url`,
 ///   - a remote-only `id` is a genuinely new dependency, trusted-on-first-use
-///     (its hash comes from the host) and appended as-is.
+///     (its hash comes from the host) — but ONLY if it does not stage into a
+///     spawnable slot. A new *executable* is the one thing TOFU cannot safely
+///     carry, so those ids are dropped and must ship in an app update instead.
 /// This closes the hole where a compromised host serves a malicious binary with a
-/// self-consistent malicious hash: a *known* id can never have its hash swapped.
+/// self-consistent malicious hash: a *known* id can never have its hash swapped,
+/// and an *unknown* id can never become something we run.
 pub fn merge_specs(embedded: &DepsSpec, remote: &DepsSpec) -> DepsSpec {
     let mut deps: Vec<Dependency> = Vec::new();
     for e in &embedded.dependencies {
@@ -117,11 +132,16 @@ pub fn merge_specs(embedded: &DepsSpec, remote: &DepsSpec) -> DepsSpec {
         }
         deps.push(merged);
     }
-    // Append remote-only ids (new deps) verbatim — trusted-on-first-use.
+    // Append remote-only ids (new deps), trusted-on-first-use — except any that
+    // would stage into a slot we execute.
     for r in &remote.dependencies {
-        if !embedded.dependencies.iter().any(|e| e.id == r.id) {
-            deps.push(r.clone());
+        if embedded.dependencies.iter().any(|e| e.id == r.id) {
+            continue;
         }
+        if is_spawnable_slot(&r.stage_to) {
+            continue;
+        }
+        deps.push(r.clone());
     }
     DepsSpec {
         spec_version: remote.spec_version.max(embedded.spec_version),
@@ -445,11 +465,37 @@ pub fn gpu_unusable() -> bool {
 /// and its runtime fallback net (`whisper.rs`, CUDA died at the first matmul).
 ///
 /// Deliberately one-way: nothing clears this automatically. A user who fixes their
-/// driver overrides it explicitly — an env or UI `variantOverride` beats the
-/// verdict in `resolve_variant`, so they are never stuck. Silently re-arming GPU
-/// on a machine that has already failed once would just re-run the failure.
+/// driver overrides it explicitly — an env or UI override beats the verdict in BOTH
+/// places it bites: `resolve_variant` (which exe resolves) and `gpu_forced` (which
+/// CT2 device the spawn sites pin). Silently re-arming GPU on a machine that has
+/// already failed once would just re-run the failure.
 pub fn set_gpu_unusable() -> Result<(), String> {
     write_settings_field("gpuUnusable", "1")
+}
+
+/// Pure "did the user explicitly ask for GPU?", factored out for unit testing.
+/// Mirrors `resolve_variant`'s precedence exactly: a valid env override wins
+/// outright, else the persisted UI override speaks.
+fn resolve_gpu_forced(env_override: Option<&str>, ui_override: Option<&str>) -> bool {
+    match env_override {
+        Some("gpu") | Some("gpu-full") => true,
+        Some("cpu") => false,
+        _ => matches!(ui_override, Some("gpu")),
+    }
+}
+
+/// True when the user explicitly selected a GPU variant (env or UI override).
+///
+/// This is the escape hatch `set_gpu_unusable` promises. Flipping the variant
+/// string back to `gpu` is not enough on its own: `whisper.rs`'s spawn sites also
+/// pin `--device cpu` from the persisted verdict, so without this term a user who
+/// fixed their driver would resolve the GPU exe and still be forced onto the CPU
+/// device — stuck, with hand-editing `deps-settings.json` the only way out. An
+/// explicit override must beat the verdict everywhere or it beats it nowhere.
+pub fn gpu_forced() -> bool {
+    let env = std::env::var("REEL_ENGINE_VARIANT").ok();
+    let ui = variant_override();
+    resolve_gpu_forced(env.as_deref(), ui.as_deref())
 }
 
 /// Pure variant precedence, factored out for unit testing without touching the
@@ -921,13 +967,37 @@ pub fn gpu_info() -> GpuInfo {
         };
     }
 
-    // No NVIDIA — report AMD/Intel (or another discrete adapter) via DXGI, else none.
+    // `nvidia_query()` said nothing — which is NOT the same as "no NVIDIA card".
+    // nvidia-smi is absent, or rejected the query (it only learned `compute_cap` in
+    // R495, so every driver below that exits non-zero). DXGI still sees the card, so
+    // check it BEFORE concluding there is no GPU: telling a user with an old driver
+    // that they have no graphics card is the opposite of the truth, and they are
+    // exactly the user the driver floor exists to help.
     let adapters = dxgi_adapters_cached();
     let picked = adapters
         .iter()
-        .find(|a| a.vendor == "amd" || a.vendor == "intel")
+        .find(|a| a.vendor == "nvidia")
+        .or_else(|| adapters.iter().find(|a| a.vendor == "amd" || a.vendor == "intel"))
         .or_else(|| adapters.iter().find(|a| a.vendor == "unknown"));
     match picked {
+        Some(a) if a.vendor == "nvidia" => {
+            let reason = override_reason(&env_ov, &ui_ov, &variant).unwrap_or_else(|| {
+                format!(
+                    "Wykryto kartę NVIDIA {}, ale nie udało się odczytać jej sterownika (może być zbyt stary) — zaktualizuj sterownik NVIDIA do wersji co najmniej {}, aby włączyć GPU. Na razie używany jest silnik CPU.",
+                    a.name, DRIVER_FLOOR_STR
+                )
+            });
+            GpuInfo {
+                vendor: "nvidia".into(),
+                name: a.name.clone(),
+                vram_bytes: a.vram_bytes,
+                compute_cap: None,
+                driver_version: None,
+                cuda_usable: false,
+                variant,
+                reason,
+            }
+        }
         Some(a) => {
             let vendor_pl = match a.vendor.as_str() {
                 "amd" => "AMD",
@@ -1314,7 +1384,18 @@ pub async fn download_dependency(app: AppHandle, dep_id: String) -> Result<Strin
     // Fail closed before touching the network (F2).
     validate_hashes(&dep)?;
 
-    let variant = detect_variant();
+    // Stage each dep where its OWN predicate says it belongs — NOT where the host's
+    // current variant happens to point. The two can disagree: the variant flips
+    // mid-session (a Phase 4 demotion writes `gpuUnusable`; the UI override changes),
+    // so a row rendered before the flip and clicked after it would file the GPU exe
+    // under `engine/cpu/`. `engine_bin_resolved` would then tag that CUDA binary
+    // `cpu`, and the runtime CUDA net — which keys on the SPAWNED exe precisely so
+    // the label cannot lie — would never fire for it. A cross-variant dep
+    // (`any`, e.g. FFmpeg) has no opinion, so it follows the host.
+    let variant = match dep.variant_predicate.as_str() {
+        "any" => detect_variant(),
+        v => v,
+    };
     let triple = host_triple();
     let root = deps_root(&app)?;
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
@@ -1587,6 +1668,59 @@ mod tests {
     }
 
     #[test]
+    fn gpu_forced_is_the_other_half_of_the_escape_hatch() {
+        // Winning `resolve_variant` only picks the EXE. The spawn sites separately
+        // pin `--device cpu` from the persisted verdict, so an override that does not
+        // also win HERE leaves the user resolving the GPU exe on a CPU device —
+        // permanently, since nothing clears `gpuUnusable`.
+        assert!(resolve_gpu_forced(Some("gpu"), None));
+        assert!(resolve_gpu_forced(Some("gpu-full"), None));
+        assert!(resolve_gpu_forced(None, Some("gpu")));
+        // Env beats UI, in both directions — same precedence as `resolve_variant`.
+        assert!(!resolve_gpu_forced(Some("cpu"), Some("gpu")));
+        assert!(resolve_gpu_forced(Some("gpu"), Some("cpu")));
+        // No override ⇒ the verdict stands.
+        assert!(!resolve_gpu_forced(None, None));
+        assert!(!resolve_gpu_forced(None, Some("cpu")));
+        assert!(!resolve_gpu_forced(Some("nonsense"), None));
+    }
+
+    #[test]
+    fn merge_refuses_a_remote_only_executable() {
+        // A remote-only id is trusted-on-first-use: its bytes AND its digest come
+        // from the same host, so a compromised host could introduce a brand-new
+        // dependency and every integrity check downstream would pass — it is
+        // self-consistent by construction. That is survivable for DATA, and not for
+        // something we spawn. A new executable must ship in an app update.
+        let embedded = sample_spec();
+        let mut remote = sample_spec();
+
+        let mut evil = remote.dependencies[0].clone();
+        evil.id = "engine-backdoor".into();
+        evil.stage_to = "engine-bin".into();
+        evil.sha256 = Some("a".repeat(64));
+        evil.url = Some("https://evil/pwn.exe".into());
+
+        let mut benign = remote.dependencies[0].clone();
+        benign.id = "align-models-extra".into();
+        benign.stage_to = "align-models".into();
+        benign.sha256 = Some("b".repeat(64));
+
+        remote.dependencies.push(evil);
+        remote.dependencies.push(benign);
+
+        let merged = merge_specs(&embedded, &remote);
+        assert!(
+            !merged.dependencies.iter().any(|d| d.id == "engine-backdoor"),
+            "a remote-only id staging into a spawnable slot must be dropped"
+        );
+        assert!(
+            merged.dependencies.iter().any(|d| d.id == "align-models-extra"),
+            "a remote-only NON-executable dep is still trusted-on-first-use"
+        );
+    }
+
+    #[test]
     fn merge_keeps_embedded_hash_repoints_url() {
         let mut embedded = sample_spec();
         embedded.dependencies[0].sha256 = Some("EMBEDDED_HASH".into());
@@ -1595,8 +1729,14 @@ mod tests {
         let mut remote = sample_spec();
         remote.dependencies[0].sha256 = Some("MALICIOUS_HASH".into());
         remote.dependencies[0].url = Some("https://new/e.exe".into());
-        // add a remote-only new dep
-        remote.dependencies.push(dep("new-dep", "ffmpeg", "windows", "x86_64", "any", "ffmpeg-bin"));
+        // A remote-only new dep. NOTE the slot: it must be a NON-spawnable one. This
+        // assertion used to ride on `ffmpeg-bin` and so locked in the very hole
+        // `merge_refuses_a_remote_only_executable` now closes — a remote-only id
+        // whose hash comes from the same host that serves the bytes may add DATA,
+        // never a new executable.
+        remote
+            .dependencies
+            .push(dep("new-dep", "align-models", "windows", "x86_64", "any", "align-models"));
 
         let merged = merge_specs(&embedded, &remote);
         let e0 = merged.dependencies.iter().find(|d| d.id == "engine-gpu").unwrap();

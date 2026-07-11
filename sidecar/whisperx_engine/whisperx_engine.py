@@ -518,6 +518,14 @@ def cmd_transcribe(args):
         sys.exit(EXIT_TRANSCRIBE_FAIL)
     except Exception as e:
         msg = str(e).lower()
+        # CUDA/cuBLAS FIRST. The canonical cuBLAS message — "Library cublas64_12.dll
+        # is not found or cannot be loaded" — contains "not found", so the heuristic
+        # below would claim the MODEL is missing and exit 10. Rust's fallback net
+        # only retries on 14, so that misfile would both suppress the CPU retry and
+        # tell the user to download a model they already have.
+        if "cublas" in msg or "cuda" in msg or "no kernel image" in msg:
+            _log("CUDA init failed while loading the ASR model: %s" % e)
+            sys.exit(EXIT_TRANSCRIBE_FAIL)
         if "not found" in msg or "no such file" in msg or "does not exist" in msg:
             _log("model not found: %s" % e)
             sys.exit(EXIT_MODEL_NOT_FOUND)

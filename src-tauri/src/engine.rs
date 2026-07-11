@@ -49,11 +49,19 @@ pub fn is_gpu_variant(variant: &str) -> bool {
 /// `device=cpu` when CUDA is unusable), so a `cpu` selection may still run a
 /// staged-only GPU build, and `gpu-full` degrades to the lighter `gpu` build
 /// before CPU.
+///
+/// `gpu-full` is always LAST for the other two. It is env-only by design — hardware
+/// detection and the UI dropdown can never choose it — but that rule governs which
+/// dep gets DOWNLOADED, not which exe we run once one is on disk. Without a trailing
+/// `gpu-full`, a user who fetched the 3.08 GB build and then unset
+/// `REEL_ENGINE_VARIANT` would be told "Silnik WhisperX niedostępny" while a perfectly
+/// good engine sat in the deps root. Running the engine we have always beats claiming
+/// we have none; putting it last means it is never PREFERRED over a real match.
 fn variant_fallbacks(variant: &str) -> &'static [&'static str] {
     match variant {
         "gpu-full" => &["gpu", "cpu"],
-        "gpu" => &["cpu"],
-        _ => &["gpu"],
+        "gpu" => &["cpu", "gpu-full"],
+        _ => &["gpu", "gpu-full"],
     }
 }
 
@@ -278,11 +286,21 @@ pub fn engine_bin_path(app: &AppHandle) -> Result<PathBuf, String> {
 /// `deps::transcription_ready` answers the looser "can this machine transcribe at
 /// all" and is what gates the transcribe button — so a GPU box holding only the CPU
 /// engine gets nagged to fetch the GPU engine while still being able to transcribe.
+///
+/// One exception, and it is the whole reason this is not a one-liner: after a Phase 4
+/// demotion (`gpuUnusable`) the resolved variant flips to `cpu`, so a machine holding
+/// ONLY the GPU engine would suddenly be "unsatisfied" and get nagged to download a
+/// ~700 MB CPU engine it does not need — `whisper.rs`'s `push_gpu_demotion` already
+/// runs that staged GPU exe with `--device cpu`, which is exactly what the CPU engine
+/// would do. A demoted box holding a GPU build is satisfied.
 #[tauri::command]
 pub fn variant_satisfied(app: AppHandle) -> bool {
     let variant = crate::deps::detect_variant();
-    resolve_engine_variant(&app, variant, host_triple()).is_some()
-        && crate::ffmpeg::ffmpeg_bin_path(&app).is_ok()
+    let engine_ok = resolve_engine_variant(&app, variant, host_triple()).is_some()
+        || (variant == "cpu"
+            && crate::deps::gpu_unusable()
+            && engine_bin_resolved(&app).is_ok_and(|(_, v)| is_gpu_variant(v)));
+    engine_ok && crate::ffmpeg::ffmpeg_bin_path(&app).is_ok()
 }
 
 /// Readiness report returned by the engine `--selftest` / `--capability` probe.
@@ -579,6 +597,19 @@ mod tests {
         assert_eq!(pick_variant("gpu-full", |v| v == "cpu"), Some("cpu"));
         // Nothing present anywhere ⇒ no spawn (the caller errors out).
         assert_eq!(pick_variant("gpu", |_| false), None);
+    }
+
+    #[test]
+    fn a_stranded_gpu_full_engine_is_still_spawned_rather_than_ignored() {
+        // gpu-full is env-only by DESIGN — but that governs which dep is downloaded,
+        // not which exe we run once one is on disk. A user who fetched the 3.08 GB
+        // build and then unset REEL_ENGINE_VARIANT must not be told "Silnik WhisperX
+        // niedostępny" while a working engine sits in the deps root.
+        assert_eq!(pick_variant("cpu", |v| v == "gpu-full"), Some("gpu-full"));
+        assert_eq!(pick_variant("gpu", |v| v == "gpu-full"), Some("gpu-full"));
+        // ...but it is never PREFERRED over a real match: it is last in both chains.
+        assert_eq!(pick_variant("cpu", |_| true), Some("cpu"));
+        assert_eq!(pick_variant("gpu", |v| v != "gpu"), Some("cpu"));
     }
 
     #[test]

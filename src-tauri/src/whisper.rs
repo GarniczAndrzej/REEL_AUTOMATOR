@@ -138,9 +138,15 @@ fn flatten_words(segments: &[serde_json::Value]) -> Vec<serde_json::Value> {
 /// `get_cuda_device_count()` and fails exactly as before. This flag is what actually
 /// demotes it, whichever exe resolved. `--device` targets the CT2 device only, so
 /// torch (VAD / alignment / diarization) is unaffected.
+///
+/// An explicit GPU override (`deps::gpu_forced`) beats the verdict, exactly as it
+/// does in `resolve_variant`. Without that term the verdict would be unclearable:
+/// there is no writer that resets it, and no UI control emits a CUDA device, so a
+/// user who fixed their driver would resolve the GPU exe and still be pinned to the
+/// CPU device forever.
 fn push_gpu_demotion(args: &mut Vec<String>, device: &Option<String>) {
     let explicit = device.as_ref().is_some_and(|d| !d.trim().is_empty());
-    if !explicit && crate::deps::gpu_unusable() {
+    if !explicit && !crate::deps::gpu_forced() && crate::deps::gpu_unusable() {
         args.push("--device".into());
         args.push("cpu".into());
     }
@@ -202,24 +208,52 @@ fn push_advanced_args(
 /// only one a `--device cpu` retry can rescue.
 const EXIT_TRANSCRIBE_FAIL: i32 = 14;
 
-/// Does this engine stderr tail name a CUDA/cuBLAS runtime failure?
+/// Does this engine stderr tail name a CUDA/cuBLAS failure of ANY kind?
 ///
-/// The two real messages, both observed only at the first matmul inside `encode`:
-///   - `Library cublas64_12.dll is not found or cannot be loaded`
-///   - `no kernel image is available for execution on the device` (the driver has
-///     no compiled kernels for this card's architecture — no cheap probe can
-///     predict it, which is why this net exists at all)
-///
-/// An out-of-memory failure is excluded on purpose. `CUDA out of memory` would
-/// otherwise match the bare `cuda` marker, and OOM is a capacity problem on a
-/// perfectly working GPU — demoting the machine for it would be both wrong and
-/// permanent (the verdict is one-way; see `deps::set_gpu_unusable`).
+/// This is the RETRY gate, deliberately broad: whatever went wrong on the GPU, the
+/// user still wants their transcription, and CPU is the one device we know works.
+/// Retrying is cheap to be wrong about — it costs one slower run. It is NOT the
+/// demotion gate; see `is_permanent_cuda_failure`, which is deliberately narrow
+/// because being wrong there is permanent.
 fn is_cuda_failure(stderr: &str) -> bool {
     let s = stderr.to_lowercase();
-    if s.contains("out of memory") {
+    s.contains("cublas") || s.contains("no kernel image") || s.contains("cuda")
+}
+
+/// Does this stderr tail name a CUDA failure that is STRUCTURAL — i.e. one that
+/// will fail identically on every future run, so the machine should durably stop
+/// choosing GPU (`deps::set_gpu_unusable`)?
+///
+/// Exactly two messages qualify, and they are the two this net was built for:
+///   - `Library cublas64_12.dll is not found or cannot be loaded` — the DLLs did
+///     not load, and nothing about a later run changes that.
+///   - `no kernel image is available for execution on the device` — the driver has
+///     no compiled kernels for this card's architecture. No cheap probe can predict
+///     it, which is why the net exists at all.
+///
+/// Everything else that merely NAMES cuda is excluded, because the verdict is
+/// one-way and a wrong demotion is unrecoverable without an explicit override:
+///   - capacity, not capability: `CUDA out of memory`, and cuBLAS's own allocation
+///     failures (`CUBLAS_STATUS_ALLOC_FAILED`, `CUBLAS_STATUS_NOT_INITIALIZED`),
+///     which carry no "out of memory" text but mean exactly that. These are a batch
+///     size / model size problem on a perfectly working GPU.
+///   - transient driver states: `unknown error` (999, the classic post-sleep/resume
+///     hiccup) and `driver version is insufficient` (an update pending a reboot).
+///     Both are fixed by a reboot; demoting for them would outlive the cause.
+///
+/// Such a run still retries on CPU (`is_cuda_failure`) — it just does not brand the
+/// machine.
+fn is_permanent_cuda_failure(stderr: &str) -> bool {
+    let s = stderr.to_lowercase();
+    let transient = s.contains("out of memory")
+        || s.contains("cublas_status_alloc_failed")
+        || s.contains("cublas_status_not_initialized")
+        || s.contains("unknown error")
+        || s.contains("driver version is insufficient");
+    if transient {
         return false;
     }
-    s.contains("cublas") || s.contains("no kernel image") || s.contains("cuda")
+    s.contains("cannot be loaded") || s.contains("no kernel image")
 }
 
 /// Did this argv already pin the CT2 device? True when the caller set `--device`
@@ -735,14 +769,25 @@ pub async fn transcribe_video(
         argv_pins_device(&args),
         TRANSCRIBE_CANCELLED.load(Ordering::SeqCst),
     ) {
-        // Remember, so no later run pays this failure again. Best-effort: a failed
-        // write only costs the machine another retry next time.
-        let _ = crate::deps::set_gpu_unusable();
+        // Brand the machine ONLY for a structural failure — one that will recur
+        // identically forever. A capacity failure (too large a batch/model) or a
+        // transient driver state must not earn a permanent verdict: it would outlive
+        // its cause, and nothing clears it without an explicit override. Best-effort:
+        // a failed write only costs the machine another retry next time.
+        let permanent = is_permanent_cuda_failure(&stderr_buf);
+        if permanent {
+            let _ = crate::deps::set_gpu_unusable();
+        }
+        let label = if permanent {
+            "GPU okazał się nieużywalny — ponawiam na CPU…"
+        } else {
+            "Transkrypcja na GPU nie powiodła się — ponawiam na CPU…"
+        };
         let _ = app.emit(
             "transcribe-progress",
             serde_json::json!({
                 "phase": "transcribe",
-                "label": "GPU okazał się nieużywalny — ponawiam na CPU…",
+                "label": label,
                 "percent": 5,
             }),
         );
@@ -897,6 +942,13 @@ mod tests {
         "RuntimeError: Library cublas64_12.dll is not found or cannot be loaded";
     const NO_KERNEL_ERR: &str = "no kernel image is available for execution on the device";
 
+    // cuBLAS's own allocation failures carry NO "out of memory" text, but mean
+    // exactly that: too large a batch/model on a perfectly healthy GPU.
+    const CUBLAS_OOM_ERR: &str = "RuntimeError: cuBLAS failed with status CUBLAS_STATUS_ALLOC_FAILED";
+    const OOM_ERR: &str = "torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB";
+    const TRANSIENT_ERR: &str = "RuntimeError: CUDA error: unknown error (999)";
+    const STALE_DRIVER_ERR: &str = "CUDA driver version is insufficient for CUDA runtime version";
+
     #[test]
     fn cuda_marker_fires_on_the_two_real_failures() {
         assert!(is_cuda_failure(CUBLAS_ERR));
@@ -911,12 +963,39 @@ mod tests {
             "ValueError: model not found at C:\\models\\large-v3"
         ));
         assert!(!is_cuda_failure("Nie udało się zdekodować audio"));
-        // An OOM is a capacity problem on a WORKING GPU. It contains "CUDA", so it
-        // would match the bare marker — and demoting the machine for it would be
-        // both wrong and permanent.
-        assert!(!is_cuda_failure(
-            "torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB"
-        ));
+    }
+
+    #[test]
+    fn a_capacity_or_transient_failure_retries_but_never_brands_the_machine() {
+        // The RETRY gate is broad on purpose: whatever died on the GPU, the user
+        // still wants their transcription, and one slower CPU run is a cheap way to
+        // be wrong.
+        assert!(is_cuda_failure(CUBLAS_OOM_ERR));
+        assert!(is_cuda_failure(OOM_ERR));
+        assert!(is_cuda_failure(TRANSIENT_ERR));
+        assert!(is_cuda_failure(STALE_DRIVER_ERR));
+
+        // The DEMOTION gate is narrow on purpose: `gpuUnusable` is one-way, so a
+        // wrong verdict outlives its cause. None of these are the GPU's fault.
+        //   - CUBLAS_STATUS_ALLOC_FAILED is the one that hid here: it names cuBLAS
+        //     but carries no "out of memory" text, so a bare-substring guard would
+        //     permanently demote a healthy card over an oversized batch_size.
+        assert!(!is_permanent_cuda_failure(CUBLAS_OOM_ERR));
+        assert!(!is_permanent_cuda_failure(OOM_ERR));
+        //   - unknown error (999) is the classic post-sleep hiccup; a stale driver is
+        //     fixed by an update. Both survive a reboot; a demotion would not.
+        assert!(!is_permanent_cuda_failure(TRANSIENT_ERR));
+        assert!(!is_permanent_cuda_failure(STALE_DRIVER_ERR));
+    }
+
+    #[test]
+    fn only_a_structural_cuda_failure_brands_the_machine() {
+        // These two recur identically on every future run — the machine really has
+        // no usable CUDA for us, which is the whole point of the verdict.
+        assert!(is_permanent_cuda_failure(CUBLAS_ERR));
+        assert!(is_permanent_cuda_failure(NO_KERNEL_ERR));
+        // A non-CUDA failure never brands anything.
+        assert!(!is_permanent_cuda_failure("Nie udało się zdekodować audio"));
     }
 
     #[test]
