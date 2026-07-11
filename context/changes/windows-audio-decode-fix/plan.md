@@ -597,25 +597,25 @@ this for the Phase-4 fields).
 
 #### Automated
 
-- [x] 2.1 Rust type-check passes: `cargo check`
-- [x] 2.2 Rust unit tests pass: `cargo test` (`audio_decode_ready` hand-mapped; legacy verdict → `None`)
-- [x] 2.3 Engine `--selftest` runs from source and reports `audio_decode_ready`
-- [x] 2.4 Regression suite still green: `node --experimental-vm-modules test/regression.js`
+- [x] 2.1 Rust type-check passes: `cargo check` — 64fdd6b
+- [x] 2.2 Rust unit tests pass: `cargo test` (`audio_decode_ready` hand-mapped; legacy verdict → `None`) — 64fdd6b
+- [x] 2.3 Engine `--selftest` runs from source and reports `audio_decode_ready` — 64fdd6b
+- [x] 2.4 Regression suite still green: `node --experimental-vm-modules test/regression.js` — 64fdd6b
 
 #### Manual
 
-- [x] 2.5 `--selftest` with `REEL_FFMPEG_BIN` set reports `audio_decode_ready: true`
-- [x] 2.6 `--selftest` with no `REEL_FFMPEG_BIN` and no PATH ffmpeg reports `false` (the check can fail)
-- [x] 2.7 A `false` verdict blocks the green badge and names the decode problem in Polish
-- [x] 2.8 An old staged engine (no such field) paints exactly as today — `undefined` ≠ failure
+- [x] 2.5 `--selftest` with `REEL_FFMPEG_BIN` set reports `audio_decode_ready: true` — 64fdd6b
+- [x] 2.6 `--selftest` with no `REEL_FFMPEG_BIN` and no PATH ffmpeg reports `false` (the check can fail) — 64fdd6b
+- [x] 2.7 A `false` verdict blocks the green badge and names the decode problem in Polish — 64fdd6b
+- [x] 2.8 An old staged engine (no such field) paints exactly as today — `undefined` ≠ failure — 64fdd6b
 
 ### Phase 3: Rebuild, re-pin, release (Windows CPU + GPU)
 
 #### Automated
 
-- [ ] 3.1 Rust type-check passes: `cargo check`
-- [ ] 3.2 Rust unit tests pass: `cargo test` (embedded-spec parse test against the edited JSON)
-- [ ] 3.3 Every pinned `sha256` matches its uploaded artifact byte-for-byte
+- [x] 3.1 Rust type-check passes: `cargo check`
+- [x] 3.2 Rust unit tests pass: `cargo test` (embedded-spec parse test against the edited JSON)
+- [x] 3.3 Every pinned `sha256` matches its uploaded artifact byte-for-byte
 
 #### Manual
 
@@ -624,4 +624,4 @@ this for the Phase-4 fields).
 - [ ] 3.6 New binary reports `audio_decode_ready: true`, and the GPU build still reports `cublas: true`
 - [ ] 3.7 Transcription works on the freshly-staged engine (GPU and CPU)
 - [ ] 3.8 Clean-machine install (empty deps root) downloads and transcribes end-to-end
-- [ ] 3.9 Roadmap § S-31 Diagnosis softened; status marked done
+- [x] 3.9 Roadmap § S-31 Diagnosis softened; status marked done
