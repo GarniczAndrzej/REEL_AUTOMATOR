@@ -197,6 +197,70 @@ fn push_advanced_args(
     }
 }
 
+/// The engine's transcription-stage failure code (`EXIT_TRANSCRIBE_FAIL`,
+/// `whisperx_engine.py:62`) — the only stage that runs on CTranslate2, i.e. the
+/// only one a `--device cpu` retry can rescue.
+const EXIT_TRANSCRIBE_FAIL: i32 = 14;
+
+/// Does this engine stderr tail name a CUDA/cuBLAS runtime failure?
+///
+/// The two real messages, both observed only at the first matmul inside `encode`:
+///   - `Library cublas64_12.dll is not found or cannot be loaded`
+///   - `no kernel image is available for execution on the device` (the driver has
+///     no compiled kernels for this card's architecture — no cheap probe can
+///     predict it, which is why this net exists at all)
+///
+/// An out-of-memory failure is excluded on purpose. `CUDA out of memory` would
+/// otherwise match the bare `cuda` marker, and OOM is a capacity problem on a
+/// perfectly working GPU — demoting the machine for it would be both wrong and
+/// permanent (the verdict is one-way; see `deps::set_gpu_unusable`).
+fn is_cuda_failure(stderr: &str) -> bool {
+    let s = stderr.to_lowercase();
+    if s.contains("out of memory") {
+        return false;
+    }
+    s.contains("cublas") || s.contains("no kernel image") || s.contains("cuda")
+}
+
+/// Did this argv already pin the CT2 device? True when the caller set `--device`
+/// explicitly (the "Wymuś CPU" checkbox / advanced settings) or when
+/// `push_gpu_demotion` already appended it from a persisted verdict. Either way
+/// the CT2 device is not ours to retry.
+fn argv_pins_device(args: &[String]) -> bool {
+    args.iter().any(|a| a == "--device")
+}
+
+/// Should this failed run be retried once on the CPU?
+///
+/// Every term is load-bearing:
+///   - `cancelled` first: a cancelled run exits non-zero with whatever the reaper
+///     left on stderr, and must NEVER be retried or demote the machine.
+///   - `spawned_variant` is the tag of the exe that actually ran
+///     (`engine::engine_bin_resolved`), never `deps::detect_variant()`'s label.
+///     The label lies in both directions: a `REEL_ENGINE_VARIANT=cpu` box holding
+///     only the GPU engine runs CUDA under a `cpu` label, and gating on the label
+///     would leave exactly that user with a CUDA crash and no retry.
+///   - `device_pinned`: nothing to fall back to — CT2 is already where the caller
+///     put it.
+///   - the exit code is the transcription stage specifically: align and diarize
+///     run on torch, whose device `--device` does not touch, so a retry could not
+///     rescue them.
+fn should_retry_on_cpu(
+    exit_code: Option<i32>,
+    stderr: &str,
+    spawned_variant: &str,
+    device_pinned: bool,
+    cancelled: bool,
+) -> bool {
+    if cancelled || device_pinned {
+        return false;
+    }
+    if exit_code != Some(EXIT_TRANSCRIBE_FAIL) {
+        return false;
+    }
+    crate::engine::is_gpu_variant(spawned_variant) && is_cuda_failure(stderr)
+}
+
 /// Translate an engine exit code into a distinct Polish error message.
 fn engine_error_message(code: Option<i32>, stderr: &str) -> String {
     match code {
@@ -622,31 +686,80 @@ pub async fn transcribe_video(
         args.push(dir.clone());
     }
 
-    let bin = crate::engine::engine_bin_path(&app).map_err(|e| {
+    // `engine_bin_resolved`, not `engine_bin_path`: the retry gate below must know
+    // whether a CUDA-capable exe is on the other end, and the variant LABEL cannot
+    // answer that (the resolver cross-falls-back in both directions).
+    let (bin, spawned_variant) = crate::engine::engine_bin_resolved(&app).map_err(|e| {
         let _ = std::fs::remove_file(&wav_path);
         e
     })?;
-    let mut cmd = crate::proc::build_command(&bin, &args);
-    // Force HF offline (skips slow network etag checks) only when the align model
-    // can be served locally. Two cases keep HF reachable: diarizing (pyannote may
-    // be fetched from HuggingFace — token via env, not argv, so it isn't visible
-    // in `ps`), and a thin install with no local align model (whisperx then pulls
-    // the official wav2vec2 align model at runtime into the default HF cache).
-    if diarize {
-        cmd.env("HF_TOKEN", hf_token.clone());
-    } else if local_align.is_some() {
-        crate::engine::with_hf_offline(&mut cmd);
-    }
-    // UTF-8 stdio so Polish diacritics in the JSON result survive Windows' cp1250
-    // pipe default (see engine::with_utf8_io).
-    crate::engine::with_utf8_io(&mut cmd);
+    // One spawn recipe, used twice (the original run and the CPU retry) so the two
+    // can never drift in their env.
+    let spawn_engine = |argv: &Vec<String>| -> Result<tokio::process::Child, String> {
+        let mut cmd = crate::proc::build_command(&bin, argv);
+        // Force HF offline (skips slow network etag checks) only when the align
+        // model can be served locally. Two cases keep HF reachable: diarizing
+        // (pyannote may be fetched from HuggingFace — token via env, not argv, so
+        // it isn't visible in `ps`), and a thin install with no local align model
+        // (whisperx then pulls the official wav2vec2 align model at runtime into
+        // the default HF cache).
+        if diarize {
+            cmd.env("HF_TOKEN", hf_token.clone());
+        } else if local_align.is_some() {
+            crate::engine::with_hf_offline(&mut cmd);
+        }
+        // UTF-8 stdio so Polish diacritics in the JSON result survive Windows'
+        // cp1250 pipe default (see engine::with_utf8_io).
+        crate::engine::with_utf8_io(&mut cmd);
+        cmd.spawn()
+            .map_err(|e| format!("Nie udało się uruchomić silnika WhisperX: {e}"))
+    };
 
-    let child = cmd.spawn().map_err(|e| {
+    let child = spawn_engine(&args).map_err(|e| {
         let _ = std::fs::remove_file(&wav_path);
-        format!("Nie udało się uruchomić silnika WhisperX: {e}")
+        e
     })?;
 
-    let (stdout_buf, stderr_buf, exit_code) = drive_engine(&app, child).await;
+    let (mut stdout_buf, mut stderr_buf, mut exit_code) = drive_engine(&app, child).await;
+
+    // ── Runtime CUDA fallback net ───────────────────────────────────────
+    // The post-stage probe proves a driver and a cuBLAS load; neither proves the
+    // driver holds a kernel image for THIS card's architecture. That only ever
+    // surfaces here, at the first real matmul. Retry once on the CPU — capped by
+    // construction, since the retry pins `--device`, which `argv_pins_device`
+    // then reads as "not ours to retry".
+    if should_retry_on_cpu(
+        exit_code,
+        &stderr_buf,
+        spawned_variant,
+        argv_pins_device(&args),
+        TRANSCRIBE_CANCELLED.load(Ordering::SeqCst),
+    ) {
+        // Remember, so no later run pays this failure again. Best-effort: a failed
+        // write only costs the machine another retry next time.
+        let _ = crate::deps::set_gpu_unusable();
+        let _ = app.emit(
+            "transcribe-progress",
+            serde_json::json!({
+                "phase": "transcribe",
+                "label": "GPU okazał się nieużywalny — ponawiam na CPU…",
+                "percent": 5,
+            }),
+        );
+        args.push("--device".into());
+        args.push("cpu".into());
+        match spawn_engine(&args) {
+            Ok(child) => {
+                let (o, e, c) = drive_engine(&app, child).await;
+                stdout_buf = o;
+                stderr_buf = e;
+                exit_code = c;
+            }
+            // The retry could not even start: fall through and surface the
+            // ORIGINAL CUDA failure, which is the more useful error.
+            Err(_) => {}
+        }
+    }
 
     let _ = tokio::fs::remove_file(&wav_path).await;
 
@@ -776,6 +889,120 @@ mod tests {
         assert_eq!(got["srt_content"].as_str().unwrap(), "new");
         assert_eq!(got["segments"].as_array().unwrap().len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Phase 4: the runtime CUDA fallback net ──────────────────────────
+
+    const CUBLAS_ERR: &str =
+        "RuntimeError: Library cublas64_12.dll is not found or cannot be loaded";
+    const NO_KERNEL_ERR: &str = "no kernel image is available for execution on the device";
+
+    #[test]
+    fn cuda_marker_fires_on_the_two_real_failures() {
+        assert!(is_cuda_failure(CUBLAS_ERR));
+        assert!(is_cuda_failure(NO_KERNEL_ERR));
+        // Case-insensitive: the engine spells it CUDA, torch spells it cuda.
+        assert!(is_cuda_failure("CUDA error: device-side assert triggered"));
+    }
+
+    #[test]
+    fn cuda_marker_ignores_unrelated_failures() {
+        assert!(!is_cuda_failure(
+            "ValueError: model not found at C:\\models\\large-v3"
+        ));
+        assert!(!is_cuda_failure("Nie udało się zdekodować audio"));
+        // An OOM is a capacity problem on a WORKING GPU. It contains "CUDA", so it
+        // would match the bare marker — and demoting the machine for it would be
+        // both wrong and permanent.
+        assert!(!is_cuda_failure(
+            "torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB"
+        ));
+    }
+
+    #[test]
+    fn retry_fires_on_a_cuda_failure_from_a_gpu_exe() {
+        assert!(should_retry_on_cpu(
+            Some(EXIT_TRANSCRIBE_FAIL),
+            CUBLAS_ERR,
+            "gpu",
+            false,
+            false
+        ));
+        assert!(should_retry_on_cpu(
+            Some(EXIT_TRANSCRIBE_FAIL),
+            NO_KERNEL_ERR,
+            "gpu-full",
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn retry_never_fires_when_cancelled() {
+        // 4.3 — a cancelled run exits non-zero with arbitrary stderr. It must never
+        // be retried and never demote the machine, whatever the code or the text.
+        assert!(!should_retry_on_cpu(
+            Some(EXIT_TRANSCRIBE_FAIL),
+            CUBLAS_ERR,
+            "gpu",
+            false,
+            true
+        ));
+        assert!(!should_retry_on_cpu(None, NO_KERNEL_ERR, "gpu", false, true));
+    }
+
+    #[test]
+    fn retry_keys_on_the_spawned_exe_not_the_variant_label() {
+        // 4.4 — `detect_variant()` said `cpu` (REEL_ENGINE_VARIANT=cpu), but only
+        // the GPU engine is staged, so the resolver spawned the GPU exe and it ran
+        // CUDA. The label would hide that; the spawned-exe tag does not.
+        assert!(should_retry_on_cpu(
+            Some(EXIT_TRANSCRIBE_FAIL),
+            CUBLAS_ERR,
+            "gpu",
+            false,
+            false
+        ));
+        // A CPU exe cannot fail on CUDA — nothing to fall back to.
+        assert!(!should_retry_on_cpu(
+            Some(EXIT_TRANSCRIBE_FAIL),
+            CUBLAS_ERR,
+            "cpu",
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn retry_respects_a_pinned_device_and_the_failing_stage() {
+        // Already pinned — by the user's "Wymuś CPU", or by a prior demotion.
+        assert!(!should_retry_on_cpu(
+            Some(EXIT_TRANSCRIBE_FAIL),
+            CUBLAS_ERR,
+            "gpu",
+            true,
+            false
+        ));
+        // Align/diarize run on torch, whose device `--device` does not touch — a
+        // CPU retry could not rescue them.
+        assert!(!should_retry_on_cpu(Some(12), CUBLAS_ERR, "gpu", false, false));
+        assert!(!should_retry_on_cpu(Some(13), CUBLAS_ERR, "gpu", false, false));
+        // A missing model is not a CUDA problem.
+        assert!(!should_retry_on_cpu(
+            Some(10),
+            "model not found",
+            "gpu",
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn argv_pins_device_sees_both_writers() {
+        let explicit: Vec<String> = vec!["--audio".into(), "a.wav".into(), "--device".into(), "cpu".into()];
+        assert!(argv_pins_device(&explicit));
+        let plain: Vec<String> = vec!["--audio".into(), "a.wav".into(), "--language".into(), "pl".into()];
+        assert!(!argv_pins_device(&plain));
     }
 
     #[test]

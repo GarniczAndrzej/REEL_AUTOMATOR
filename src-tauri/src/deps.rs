@@ -440,6 +440,18 @@ pub fn gpu_unusable() -> bool {
     read_settings_field("gpuUnusable").as_deref() == Some("1")
 }
 
+/// Persist the "GPU unusable on this machine" verdict. The two writers are Phase
+/// 4's post-stage probe (`engine::verify_staged_engine`, cuBLAS failed to load)
+/// and its runtime fallback net (`whisper.rs`, CUDA died at the first matmul).
+///
+/// Deliberately one-way: nothing clears this automatically. A user who fixes their
+/// driver overrides it explicitly — an env or UI `variantOverride` beats the
+/// verdict in `resolve_variant`, so they are never stuck. Silently re-arming GPU
+/// on a machine that has already failed once would just re-run the failure.
+pub fn set_gpu_unusable() -> Result<(), String> {
+    write_settings_field("gpuUnusable", "1")
+}
+
 /// Pure variant precedence, factored out for unit testing without touching the
 /// environment or the filesystem: env override → UI override → GPU usable ⇒
 /// gpu → cpu. `gpu_usable` is injected so the test doesn't shell out.

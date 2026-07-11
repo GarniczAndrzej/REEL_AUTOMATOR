@@ -42,8 +42,31 @@ Scope for the plan:
 
 **Where we are:** Phase 1 DONE (except macOS 1.13, deferred — needs a Mac). Phase 2
 DONE + committed **e833dd6**. Phase 3 DONE (automated 3.1–3.7 green; 3.8 verified live;
-3.9–3.13 deferred to Phase 5's first-run flow — see the plan rows for why).
-**Phase 4 is next** (post-stage verification + the runtime fallback net).
+3.9–3.13 deferred to Phase 5's first-run flow — see the plan rows for why). Phase 4
+DONE (automated 4.1–4.7 green; 4.8 + 4.11 verified live; 4.9/4.10/4.12/4.13 deferred
+to Phase 5). **Phase 5 is next** (ZALEŻNOŚCI window: hardware panel, variant-aware
+auto-open, dismissal scoping) — and it is the phase that finally builds the
+**staged-only deps root** every deferred manual row from Phases 2/3/4 is waiting on.
+
+**Phase 4 outcome (post-stage verification + the runtime fallback net):**
+- `engine.rs`: `EngineStatus` gained `cublas: Option<bool>`, `ct2_device`,
+  `torch_device` (all `#[serde(default)]`, so pre-Phase-4 cached verdicts on disk
+  stay readable). `parse_engine_status` **hand-maps all three** — the derive only
+  serves the disk cache, so a field not read out there is invisible to Rust. New
+  `verify_staged_engine` command (spawns `--capability`, always — a cached verdict
+  would defeat probing the binary we just wrote — and persists `gpuUnusable` when
+  the exe that ACTUALLY resolved is a GPU build that can't see CUDA). New pure
+  helpers: `is_gpu_variant`, `variant_fallbacks`, `pick_variant` (the testable core
+  extracted from `engine_bin_resolved`), `should_demote_engine`.
+- `whisper.rs`: `is_cuda_failure`, `argv_pins_device`, `should_retry_on_cpu`, and the
+  net itself in `transcribe_video` — one CPU retry, capped by construction (the retry
+  pins `--device`, which the gate then reads as "not ours to retry").
+- `deps.rs`: `set_gpu_unusable()` — a public one-way writer over the private
+  `write_settings_field`. Nothing clears it automatically; an env/UI override beats it.
+- `lib.rs`: `verify_staged_engine` registered.
+
+**Phase 5 MUST wire `verify_staged_engine` into `downloadDep()`** (plan §4) — it has
+no frontend call site yet, so 4.9's Polish demotion explanation has nowhere to render.
 
 **Phase 3 outcome (honest hardware detection):**
 - `deps.rs`: `nvidia_query()` (memoized `nvidia-smi --query-gpu` → name/VRAM/compute-cap/
@@ -105,27 +128,55 @@ ALL frozen builds — `speechbrain.integrations.k2_fsa` lazy-import failure load
 too). Bundling gap in whisperx_engine.spec. Flag to the user / open a new change.
 
 **Phase 1 commits:** 6a00e2a, caafeb3, b94e54a, 70b7038, 491f788. **Phase 2:** e833dd6.
-**Phase 3:** see the SHA on the plan's 3.x Progress rows.
+**Phase 3 / Phase 4:** see the SHAs on the plan's 3.x / 4.x Progress rows.
 
 **Three engine exes remain on disk in src-tauri/binaries/ (git-ignored):**
 - `whisperx-engine-x86_64-pc-windows-msvc.exe` — CPU (torch+cpu)
 - `whisperx-engine-gpu-x86_64-pc-windows-msvc.exe` — CT2-CUDA (1.03 GB, torch+cpu + cuBLAS) [hosted]
 - `whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe` — cu128 baseline (3.08 GB) [hosted on HF]
 
-**Next action = Phase 4 (post-stage verification + the runtime fallback net).** Resume:
-`/10x-implement gpu-engine-autodetect phase 4`. Read plan.md Phase 4 (§1 `EngineStatus`
-gains `cublas`/`ct2_device`/`torch_device` — and `parse_engine_status` must hand-map them
-too, the derive alone is NOT enough; §2 `verify_staged_engine` command + REGISTER it in
-`lib.rs`; §3 the runtime CUDA-failure net in `whisper.rs`). Phase 3 already landed the two
-things Phase 4 depends on: `deps::gpu_unusable()` + its `--device cpu` demotion at both
-spawn sites, and `engine::engine_bin_resolved()` (the variant tag Phase 4's retry gate
-MUST key on instead of `detect_variant()`).
+**Next action = Phase 5 (ZALEŻNOŚCI window).** Resume:
+`/10x-implement gpu-engine-autodetect phase 5`. Read plan.md Phase 5 (§1 hardware-panel
+markup in `index.html`; §2 render `gpu_info` in `first-run-deps.js`; §3 variant-aware
+auto-open on `variant_satisfied` + `{specVersion, variant}` dismissal record; §4
+post-download `verify_staged_engine` + a "Ponów" retry button + a determinate bar; §5 the
+readiness badge renders the device PAIR; §6 docs). Two things to carry in:
+- The backend is fully in place — `gpu_info`, `variant_satisfied`, `verify_staged_engine`
+  are all registered in `lib.rs`. Phase 5 is frontend + docs.
+- Plan §5 says the badge reads `status.ct2Device`/`status.torchDevice` (camelCase). That
+  is WRONG: `EngineStatus` has no `rename_all`, and `transcribe.js:263` already reads
+  `status.alignment_model_ready`. The real keys are **`ct2_device` / `torch_device`**.
+- Phase 5's wiped-deps-root flow is the state that unblocks every deferred manual row:
+  2.9–2.11, 3.9–3.13, 4.9, 4.10, 4.12, 4.13. Plan the run to sweep them.
 
-**Phase 4 TODO (don't lose this):** `gpu-full`'s `--capability` reports
-`cublas:false` (its CUDA comes from torch, not our bundled DLLs) while still
-running on CUDA. Phase 4's plan demotes a `gpu`/`gpu-full` engine when
-`cublas==false` — that would WRONGLY demote a working gpu-full. Scope the cuBLAS
-demotion check to the `gpu` variant only (gpu-full judged by `gpu==false` alone).
+**Phase 4 TODO — DONE:** `gpu-full`'s `--capability` reports `cublas:false` (its CUDA
+comes from torch, not our bundled DLLs) while still running on CUDA. Phase 4's plan
+would have demoted it. `should_demote_engine` now scopes the cuBLAS check to the `gpu`
+variant only; `gpu-full` is judged by `gpu == false` alone.
+
+## Phase 4 deviation (2026-07-11): the runtime net is wired at `transcribe_video` only
+
+Plan §3 said to wire the CUDA-failure → CPU-retry net into BOTH `drive_engine`
+callers. It cannot work at `align_transcript`, and the user ratified scoping it out:
+the retry lever is `--device cpu`, which Phase 1 fixed to override the **CT2** device
+only (torch is deliberately untouchable). `--align-only` is pure torch and never
+touches CT2. So on the shipping GPU build (torch=CPU) a CUDA failure there is
+impossible, and on `gpu-full` (torch=CUDA) the retry would re-run identically and
+fail — a guaranteed-useless second multi-minute run. `align_transcript` keeps Phase
+3's `push_gpu_demotion` (it still honors a persisted `gpuUnusable`); nothing else was
+added. The retry gate is likewise scoped to `EXIT_TRANSCRIBE_FAIL` (14) for the same
+reason: align (12) and diarize (13) run on torch, which `--device` does not move.
+
+**Also implemented (from the Phase 4 TODO above):** `should_demote_engine` judges
+`gpu` on `gpu && cublas != Some(false)` but `gpu-full` on `gpu` alone — gpu-full's
+CUDA comes from the cu128 torch wheel, not our bundled DLLs, so it truthfully reports
+`cublas: false` while running fine. Demoting it on that field would break a working
+engine. `cublas: None` (a `--selftest` verdict, which omits the field) is "unknown",
+never "failed", and never demotes.
+
+**Also excluded:** `CUDA out of memory` does NOT trip the CUDA marker. It contains
+`cuda` and would otherwise match, but OOM is a capacity problem on a working GPU and
+`gpuUnusable` is a one-way, permanent verdict.
 
 ## Phase 1 deviation (2026-07-11): ct2_device gated on cuBLAS, not raw enumeration
 

@@ -36,6 +36,59 @@ fn sidecar_base(variant: &str) -> &'static str {
     }
 }
 
+/// Does this variant tag name a CUDA-capable build? Both GPU builds transcribe
+/// through a CUDA CTranslate2; the CPU build cannot touch CUDA at all. Keyed on
+/// the variant of the exe that ACTUALLY resolved (see `engine_bin_resolved`),
+/// never on `deps::detect_variant()`'s label.
+pub fn is_gpu_variant(variant: &str) -> bool {
+    matches!(variant, "gpu" | "gpu-full")
+}
+
+/// Fallback order when the requested variant's binary is absent. Never spawn a
+/// missing exe: the GPU builds are safe supersets (they self-fall-back to
+/// `device=cpu` when CUDA is unusable), so a `cpu` selection may still run a
+/// staged-only GPU build, and `gpu-full` degrades to the lighter `gpu` build
+/// before CPU.
+fn variant_fallbacks(variant: &str) -> &'static [&'static str] {
+    match variant {
+        "gpu-full" => &["gpu", "cpu"],
+        "gpu" => &["cpu"],
+        _ => &["gpu"],
+    }
+}
+
+/// The variant tag of the binary that would actually be spawned: the requested
+/// one if present, else the first present fallback. `present` is injected so the
+/// precedence is unit-testable without an `AppHandle` or a populated deps root.
+fn pick_variant(requested: &'static str, mut present: impl FnMut(&str) -> bool) -> Option<&'static str> {
+    std::iter::once(requested)
+        .chain(variant_fallbacks(requested).iter().copied())
+        .find(|v| present(v))
+}
+
+/// Should a probed engine be durably demoted to CPU (`gpuUnusable`)?
+///
+/// Judged against the variant of the exe that actually ran, not the label:
+///   - `gpu` (the shipping CT2-CUDA build): CUDA must be visible AND the two
+///     bundled cuBLAS DLLs must have preloaded. `cublas == Some(false)` with
+///     `gpu == true` is precisely the failure this probe exists to catch — CT2
+///     enumerates a device, then dies at the first matmul.
+///   - `gpu-full`: judged by `gpu` alone. Its CUDA comes from the cu128 torch
+///     wheel, not from our bundled DLLs, so its `--capability` reports
+///     `cublas: false` while running perfectly well on CUDA. Demoting it on that
+///     field would break a working engine.
+///   - `cpu`: never demoted — there is nothing to demote.
+///
+/// `cublas == None` (a `--selftest` verdict, which does not emit the field) is
+/// not evidence of failure and never demotes.
+fn should_demote_engine(variant: &str, gpu: bool, cublas: Option<bool>) -> bool {
+    match variant {
+        "gpu" => !gpu || cublas == Some(false),
+        "gpu-full" => !gpu,
+        _ => false,
+    }
+}
+
 /// The sidecar base name of the engine that would ACTUALLY be spawned right now —
 /// i.e. the variant `engine_bin_resolved` lands on, cross-fallbacks included, not
 /// the one `deps::detect_variant()` merely asked for. Folded into the readiness
@@ -193,28 +246,21 @@ fn resolve_engine_variant(app: &AppHandle, variant: &str, triple: &str) -> Optio
 /// `whisper.rs`) consult this tag, never the label.
 pub fn engine_bin_resolved(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
     let triple = host_triple();
-    let variant = crate::deps::detect_variant();
-    // 1. The exact requested variant, if its binary is staged/bundled anywhere.
-    if let Some(p) = resolve_engine_variant(app, variant, triple) {
-        return Ok((p, variant));
-    }
-    // 2. Graceful fallbacks — never spawn a missing exe. The GPU builds are safe
-    //    supersets (they self-fall-back to device=cpu when CUDA is unusable), so a
-    //    `cpu` selection may still run a staged-only GPU build, and `gpu-full`
-    //    degrades to the lighter `gpu` build before CPU.
-    let fallbacks: &[&'static str] = match variant {
-        "gpu-full" => &["gpu", "cpu"],
-        "gpu" => &["cpu"],
-        _ => &["gpu"],
-    };
-    for v in fallbacks {
-        if let Some(p) = resolve_engine_variant(app, v, triple) {
-            return Ok((p, v));
+    let requested = crate::deps::detect_variant();
+    let mut found: Option<PathBuf> = None;
+    let variant = pick_variant(requested, |v| match resolve_engine_variant(app, v, triple) {
+        Some(p) => {
+            found = Some(p);
+            true
         }
+        None => false,
+    });
+    match (found, variant) {
+        (Some(p), Some(v)) => Ok((p, v)),
+        _ => Err(format!(
+            "Silnik WhisperX niedostępny dla {triple}. Pobierz zależności lub zbuduj go: sidecar/build.sh"
+        )),
     }
-    Err(format!(
-        "Silnik WhisperX niedostępny dla {triple}. Pobierz zależności lub zbuduj go: sidecar/build.sh"
-    ))
 }
 
 /// Resolve the absolute engine exe to spawn — the path half of
@@ -256,6 +302,22 @@ pub struct EngineStatus {
     /// `#[serde(default)]` keeps pre-existing cache files (which lack it) readable.
     #[serde(default)]
     pub authoritative: bool,
+    /// Did the two bundled cuBLAS DLLs preload? Emitted by `--capability` only
+    /// (the `--selftest` JSON has no such field ⇒ `None`), so `None` means
+    /// "unknown", never "failed". `Some(false)` on a `gpu` build is the exact
+    /// failure `verify_staged_engine` exists to catch: CT2 enumerates a CUDA
+    /// device without cuBLAS, then dies at the first matmul.
+    #[serde(default)]
+    pub cublas: Option<bool>,
+    /// The device pair (Phase 1). CT2 transcribes on `ct2_device`; torch runs VAD,
+    /// alignment, and diarization on `torch_device`. They legitimately differ:
+    /// macOS `cpu`/`mps`, the shipping Windows GPU build `cuda`/`cpu`, `gpu-full`
+    /// `cuda`/`cuda`. The legacy `device` field above stays an alias of
+    /// `ct2_device`. Empty string when reading a verdict cached by an older build.
+    #[serde(default)]
+    pub ct2_device: String,
+    #[serde(default)]
+    pub torch_device: String,
 }
 
 /// Run the sidecar with the given args, collecting (stdout, stderr, exit_code),
@@ -291,6 +353,13 @@ pub async fn run_engine(
 }
 
 /// Parse the engine's readiness JSON (shared by `--selftest` and `--capability`).
+///
+/// Hand-mapped, field by field — `EngineStatus` is never `serde`-deserialized from
+/// the sidecar's JSON (the `Deserialize` derive serves the disk cache alone). So a
+/// new sidecar field is invisible to Rust until it is read out HERE. Forgetting
+/// `cublas` would leave it `None` on every live probe, `Some(false)` would never
+/// match, and `verify_staged_engine` would green-light the one failure it exists
+/// to catch.
 fn parse_engine_status(out: &str) -> Result<EngineStatus, String> {
     let v: serde_json::Value = serde_json::from_str(out.trim())
         .map_err(|e| format!("Niepoprawna odpowiedź silnika: {e}"))?;
@@ -302,6 +371,10 @@ fn parse_engine_status(out: &str) -> Result<EngineStatus, String> {
         alignment_model_ready: v["alignment_model_ready"].as_bool().unwrap_or(false),
         // Not in the sidecar JSON — the calling command stamps this before caching.
         authoritative: false,
+        // `--capability` only; absent from `--selftest` ⇒ None ("unknown").
+        cublas: v["cublas"].as_bool(),
+        ct2_device: v["ct2_device"].as_str().unwrap_or("").to_string(),
+        torch_device: v["torch_device"].as_str().unwrap_or("").to_string(),
     })
 }
 
@@ -438,4 +511,138 @@ pub async fn whisperx_engine_capability(app: AppHandle) -> Result<EngineStatus, 
     status.authoritative = false;
     write_readiness_cache(&app, &key, &status);
     Ok(status)
+}
+
+/// Post-stage GPU probe: run the freshly-staged engine's `--capability` and, if it
+/// cannot actually see CUDA, durably demote this machine to CPU.
+///
+/// Invoked by the frontend **immediately after an engine download succeeds** —
+/// never at boot. S-18's rule holds: nothing spawns the engine on the launch path.
+/// Unlike `whisperx_engine_capability` this always spawns (a cached verdict would
+/// defeat the point of probing the binary we just wrote) and it acts on the result.
+///
+/// This is only half the verification. `gpu: true` proves a driver, and
+/// `cublas: true` proves the two DLLs load — neither proves the driver holds a
+/// kernel image for THIS card's architecture. That surfaces only at the first real
+/// matmul, which is why `whisper.rs`'s runtime fallback net exists alongside this.
+#[tauri::command]
+pub async fn verify_staged_engine(app: AppHandle) -> Result<EngineStatus, String> {
+    let (_, variant) = engine_bin_resolved(&app)?;
+    let mut args: Vec<String> = vec!["--capability".into()];
+    if let Some(dir) = align_model_dir(&app) {
+        args.push("--align-model-dir".into());
+        args.push(dir);
+    }
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let (out, err, code) = run_engine(&app, &arg_refs, CAPABILITY_TIMEOUT).await?;
+    if code != Some(0) {
+        return Err(format!(
+            "Weryfikacja silnika WhisperX nie powiodła się (kod {:?}): {}",
+            code,
+            err.trim()
+        ));
+    }
+    let mut status = parse_engine_status(&out)?;
+    status.authoritative = false;
+    write_readiness_cache(&app, &readiness_cache_key(&app), &status);
+
+    if should_demote_engine(variant, status.gpu, status.cublas) {
+        // Best-effort: a failed write leaves the machine re-trying GPU, which is
+        // the pre-Phase-4 behavior — never a reason to fail the whole probe.
+        let _ = crate::deps::set_gpu_unusable();
+    }
+    Ok(status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pick_variant_prefers_the_requested_binary() {
+        assert_eq!(pick_variant("gpu", |v| v == "gpu"), Some("gpu"));
+        assert_eq!(pick_variant("cpu", |v| v == "cpu"), Some("cpu"));
+        assert_eq!(pick_variant("gpu-full", |_| true), Some("gpu-full"));
+    }
+
+    #[test]
+    fn pick_variant_tags_the_exe_that_actually_resolves() {
+        // 4.5 — only the GPU binary is present. A `cpu` request cross-falls-back to
+        // it, and the tag must say `gpu`: that exe runs CUDA regardless of the
+        // label `detect_variant()` put on the request, and whisper.rs's retry gate
+        // keys on this tag precisely because the label lies here.
+        assert_eq!(pick_variant("cpu", |v| v == "gpu"), Some("gpu"));
+        // The mirror: a `gpu` request with only the CPU binary staged runs CPU.
+        assert_eq!(pick_variant("gpu", |v| v == "cpu"), Some("cpu"));
+        // gpu-full degrades to the lighter GPU build before CPU.
+        assert_eq!(pick_variant("gpu-full", |v| v != "gpu-full"), Some("gpu"));
+        assert_eq!(pick_variant("gpu-full", |v| v == "cpu"), Some("cpu"));
+        // Nothing present anywhere ⇒ no spawn (the caller errors out).
+        assert_eq!(pick_variant("gpu", |_| false), None);
+    }
+
+    #[test]
+    fn demotion_requires_cublas_on_the_shipping_gpu_build() {
+        // The healthy shipping GPU build: CUDA seen, DLLs loaded.
+        assert!(!should_demote_engine("gpu", true, Some(true)));
+        // The exact catch: CT2 enumerated a device but cuBLAS never loaded — it
+        // would die at the first matmul.
+        assert!(should_demote_engine("gpu", true, Some(false)));
+        // No CUDA at all on a GPU build ⇒ demote.
+        assert!(should_demote_engine("gpu", false, Some(true)));
+        // `--selftest` emits no `cublas` field: unknown is not failure.
+        assert!(!should_demote_engine("gpu", true, None));
+    }
+
+    #[test]
+    fn gpu_full_is_never_demoted_for_a_missing_cublas() {
+        // gpu-full gets its CUDA from the cu128 torch wheel, not our bundled DLLs,
+        // so it reports `cublas: false` while running perfectly. Demoting on that
+        // field would break a working engine.
+        assert!(!should_demote_engine("gpu-full", true, Some(false)));
+        assert!(should_demote_engine("gpu-full", false, Some(false)));
+    }
+
+    #[test]
+    fn cpu_build_is_never_demoted() {
+        assert!(!should_demote_engine("cpu", false, Some(false)));
+        assert!(!should_demote_engine("cpu", false, None));
+    }
+
+    #[test]
+    fn engine_status_reads_a_cached_verdict_without_cublas() {
+        // 4.6 — every verdict already on disk was written before Phase 4 and has
+        // none of the three new fields. The disk cache must stay readable.
+        let legacy = r#"{"ok":true,"version":"3.1.1","gpu":false,"device":"cpu",
+            "alignment_model_ready":true,"authoritative":true}"#;
+        let s: EngineStatus = serde_json::from_str(legacy).expect("legacy verdict must deserialize");
+        assert!(s.ok);
+        assert!(s.authoritative);
+        assert_eq!(s.cublas, None);
+        assert_eq!(s.ct2_device, "");
+        assert_eq!(s.torch_device, "");
+    }
+
+    #[test]
+    fn parse_engine_status_hand_maps_the_new_sidecar_fields() {
+        // The trap: `EngineStatus` is never serde-deserialized from the sidecar's
+        // JSON, so a field the derive knows about is still `None` unless
+        // `parse_engine_status` reads it out explicitly.
+        let capability = r#"{"ok":true,"version":"3.1.1","gpu":true,"device":"cuda",
+            "ct2_device":"cuda","torch_device":"cpu","compute_type":"float16",
+            "cublas":true,"alignment_model_ready":true}"#;
+        let s = parse_engine_status(capability).expect("capability JSON must parse");
+        assert_eq!(s.cublas, Some(true));
+        assert_eq!(s.ct2_device, "cuda");
+        assert_eq!(s.torch_device, "cpu");
+        assert_eq!(s.device, "cuda");
+        assert!(!s.authoritative);
+
+        // A `--selftest` verdict carries the device pair but no `cublas`.
+        let selftest = r#"{"ok":true,"version":"3.1.1","gpu":true,"device":"cpu",
+            "ct2_device":"cpu","torch_device":"mps","alignment_model_ready":true}"#;
+        let s = parse_engine_status(selftest).expect("selftest JSON must parse");
+        assert_eq!(s.cublas, None);
+        assert_eq!(s.torch_device, "mps");
+    }
 }
