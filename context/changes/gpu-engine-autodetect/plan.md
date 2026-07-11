@@ -691,20 +691,20 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 
 #### Automated
 
-- [x] 4.1 Rust type-check passes
-- [x] 4.2 CUDA-marker matcher tests (fires on cuBLAS + no-kernel-image, not on unrelated failures) — also excludes `CUDA out of memory`: it matches the bare `cuda` marker but is a capacity failure on a WORKING GPU, and the demotion it would trigger is permanent
-- [x] 4.3 Retry decision returns false when the cancellation flag is set
-- [x] 4.4 Retry decision keys on the spawned exe, not `detect_variant()`
-- [x] 4.5 `engine_bin_resolved` tags the `gpu` variant when only the GPU binary is present — its variant-picking core was extracted as the pure `pick_variant(requested, present)` so the precedence is testable without an `AppHandle`/populated deps root
-- [x] 4.6 `EngineStatus` deserializes from a cached verdict lacking `cublas`
-- [x] 4.7 Regression fence green (272 passed)
+- [x] 4.1 Rust type-check passes — e645552
+- [x] 4.2 CUDA-marker matcher tests (fires on cuBLAS + no-kernel-image, not on unrelated failures) — also excludes `CUDA out of memory`: it matches the bare `cuda` marker but is a capacity failure on a WORKING GPU, and the demotion it would trigger is permanent — e645552
+- [x] 4.3 Retry decision returns false when the cancellation flag is set — e645552
+- [x] 4.4 Retry decision keys on the spawned exe, not `detect_variant()` — e645552
+- [x] 4.5 `engine_bin_resolved` tags the `gpu` variant when only the GPU binary is present — its variant-picking core was extracted as the pure `pick_variant(requested, present)` so the precedence is testable without an `AppHandle`/populated deps root — e645552
+- [x] 4.6 `EngineStatus` deserializes from a cached verdict lacking `cublas` — e645552
+- [x] 4.7 Regression fence green (272 passed) — e645552
 
 #### Manual
 
-- [x] 4.8 `verify_staged_engine` returns `gpu:true, cublas:true` and writes no `gpuUnusable` — verified live on the RTX 5070 Ti via `__TAURI__.core.invoke('verify_staged_engine')` (no frontend call site until Phase 5 §4). Proves the `parse_engine_status` hand-mapping actually reads `cublas` off the live engine — the trap the plan names
+- [x] 4.8 `verify_staged_engine` returns `gpu:true, cublas:true` and writes no `gpuUnusable` — verified live on the RTX 5070 Ti via `__TAURI__.core.invoke('verify_staged_engine')` (no frontend call site until Phase 5 §4). Proves the `parse_engine_status` hand-mapping actually reads `cublas` off the live engine — the trap the plan names — e645552
 - [ ] 4.9 A broken cuBLAS preload persists `gpuUnusable` and shows the Polish explanation — DEFERRED to Phase 5: fault-injection (rename `cublasLt64_12.dll` in the staged exe's extraction), not covered by the happy-path run. The Polish explanation has no UI until Phase 5 §4 wires `verify_staged_engine` into `downloadDep()`, so the check belongs there
 - [ ] 4.10 A simulated CUDA failure triggers exactly one CPU retry, a persisted verdict, a Polish notice, a correct payload — DEFERRED to Phase 5 (per user 2026-07-11): needs the staged-only deps root that Phase 5's wiped-root download flow builds, the same state 2.9–2.11 and 3.10–3.13 wait on. The decision logic itself is unit-proven (4.2–4.4)
-- [x] 4.11 Cancelling a GPU transcription fires no retry and writes no `gpuUnusable` — verified live: cancelled mid-`transcribe` on the GPU exe; the run reported ANULOWANO, no second engine spawn, `deps-settings.json` gained no `gpuUnusable` key. The highest-risk interaction in the change, per the plan's own note
+- [x] 4.11 Cancelling a GPU transcription fires no retry and writes no `gpuUnusable` — verified live: cancelled mid-`transcribe` on the GPU exe; the run reported ANULOWANO, no second engine spawn, `deps-settings.json` gained no `gpuUnusable` key. The highest-risk interaction in the change, per the plan's own note — e645552
 - [ ] 4.12 After demotion with only the GPU engine staged, the next transcription passes `--device cpu` and succeeds first try; `reason` explains why — DEFERRED to Phase 5 (per user 2026-07-11): requires 4.10's demotion to have happened on a staged-only GPU root
 - [ ] 4.13 `REEL_ENGINE_VARIANT=cpu` + only the GPU engine staged: a CUDA failure still triggers exactly one CPU retry — DEFERRED to Phase 5 (per user 2026-07-11): the "only the GPU engine staged" half is exactly the staged-only root Phase 5 builds; the dev box's `binaries/` holds all three exes, which masks the case. Unit-covered by `retry_keys_on_the_spawned_exe_not_the_variant_label`
 
