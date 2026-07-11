@@ -1,6 +1,6 @@
 [package]
 name = "reel-automator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reels EDL Automator"
 authors = []
 license = ""
