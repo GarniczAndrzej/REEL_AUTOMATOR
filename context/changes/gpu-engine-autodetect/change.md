@@ -40,13 +40,45 @@ Scope for the plan:
 
 ## RESUME STATE (2026-07-11) — read this first
 
-**Where we are:** Phase 1 DONE (except macOS 1.13, deferred — needs a Mac). Phase 2
-DONE + committed **e833dd6**. Phase 3 DONE (automated 3.1–3.7 green; 3.8 verified live;
-3.9–3.13 deferred to Phase 5's first-run flow — see the plan rows for why). Phase 4
-DONE (automated 4.1–4.7 green; 4.8 + 4.11 verified live; 4.9/4.10/4.12/4.13 deferred
-to Phase 5). **Phase 5 is next** (ZALEŻNOŚCI window: hardware panel, variant-aware
-auto-open, dismissal scoping) — and it is the phase that finally builds the
-**staged-only deps root** every deferred manual row from Phases 2/3/4 is waiting on.
+**Where we are: ALL FIVE PHASES DONE.** The only Progress row still open is **1.13**
+(macOS: VAD on CPU, alignment on MPS, `--capability` reporting `ct2_device:cpu` /
+`torch_device:mps`) — it needs a Mac and is not reachable from the Windows dev box.
+Everything else is green.
+
+**Phase 5 outcome (ZALEŻNOŚCI window — frontend + docs; the backend was already in place):**
+- `src/index.html`: new `#depsHardwareInfo` panel above the "Wariant sprzętowy" heading.
+- `src/ui/first-run-deps.js`: `gpu_info` joined the `refreshDepsView()` fan-out and
+  `renderHardware()` paints it (the Polish `reason` is authored in Rust — the UI never
+  re-derives it); `maybeAutoOpen()` now consults **`variant_satisfied`**, not
+  `transcription_ready`; the dismissal is a `{specVersion, variant}` record (a legacy
+  `'1'` parses to the NUMBER 1, not a throw — handled explicitly as an "unknown state"
+  that never matches, so the window re-opens exactly once after upgrade);
+  `downloadDep()` invokes `verify_staged_engine` for `kind === 'engine'` and toasts the
+  verdict; a failed download leaves an explicit **"Ponów"** button (plan-review F4);
+  the per-dep progress line gained a determinate bar.
+- `src/ui/import/transcribe.js`: the badge renders the DEVICE PAIR via a new
+  `deviceLabel()` (`transkrypcja: cuda · dopasowanie: cpu`), degrading to the single
+  legacy `device` string on a pre-S-30 cached verdict.
+- Docs: `CLAUDE.md` (command table + a Windows GPU-engine note), `roadmap.md` (S-30 →
+  done; the "no-cap host" Blockers paragraph rewritten to record how it was dissolved).
+
+**Phase 5 DEVIATIONS (both ratified in-session, both needed to make the plan's own
+success criteria reachable):**
+1. **`deps-changed` now also refreshes the engine badge** (`transcribe.js`). The event
+   refreshed only the transcribe gate, never `refreshEngineReadiness` — so criterion 5.7
+   ("badge flips to the GPU verdict **without a relaunch**") could not have passed: the
+   badge would have kept painting the pre-download verdict until the next launch. The
+   plan assumed the `OnceLock` removal (Phase 3 §5) was sufficient; it was necessary but
+   not sufficient — nothing was re-READING the verdict.
+2. **The post-verify toast scopes the cuBLAS check to the `gpu` variant**, mirroring
+   Rust's `should_demote_engine`. `gpu-full` reports `cublas: false` while running fine
+   on CUDA (its CUDA comes from the cu128 torch wheel, not our bundled DLLs), so an
+   unscoped check would have told a `gpu-full` user their working engine was broken.
+
+**Known pre-existing defect, deliberately NOT fixed here:** `src/styles.css` fails
+`npx prettier --check`. It is a committed violation this change never touched; per
+lessons.md ("Incidental Prettier churn must not ride into a feature commit") it was
+left unstaged. Worth its own cleanup commit.
 
 **Phase 4 outcome (post-stage verification + the runtime fallback net):**
 - `engine.rs`: `EngineStatus` gained `cublas: Option<bool>`, `ct2_device`,
@@ -65,8 +97,8 @@ auto-open, dismissal scoping) — and it is the phase that finally builds the
   `write_settings_field`. Nothing clears it automatically; an env/UI override beats it.
 - `lib.rs`: `verify_staged_engine` registered.
 
-**Phase 5 MUST wire `verify_staged_engine` into `downloadDep()`** (plan §4) — it has
-no frontend call site yet, so 4.9's Polish demotion explanation has nowhere to render.
+**DONE in Phase 5:** `verify_staged_engine` is wired into `downloadDep()` (plan §4), so
+4.9's Polish demotion explanation now has a place to render.
 
 **Phase 3 outcome (honest hardware detection):**
 - `deps.rs`: `nvidia_query()` (memoized `nvidia-smi --query-gpu` → name/VRAM/compute-cap/
@@ -135,19 +167,18 @@ too). Bundling gap in whisperx_engine.spec. Flag to the user / open a new change
 - `whisperx-engine-gpu-x86_64-pc-windows-msvc.exe` — CT2-CUDA (1.03 GB, torch+cpu + cuBLAS) [hosted]
 - `whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe` — cu128 baseline (3.08 GB) [hosted on HF]
 
-**Next action = Phase 5 (ZALEŻNOŚCI window).** Resume:
-`/10x-implement gpu-engine-autodetect phase 5`. Read plan.md Phase 5 (§1 hardware-panel
-markup in `index.html`; §2 render `gpu_info` in `first-run-deps.js`; §3 variant-aware
-auto-open on `variant_satisfied` + `{specVersion, variant}` dismissal record; §4
-post-download `verify_staged_engine` + a "Ponów" retry button + a determinate bar; §5 the
-readiness badge renders the device PAIR; §6 docs). Two things to carry in:
-- The backend is fully in place — `gpu_info`, `variant_satisfied`, `verify_staged_engine`
-  are all registered in `lib.rs`. Phase 5 is frontend + docs.
-- Plan §5 says the badge reads `status.ct2Device`/`status.torchDevice` (camelCase). That
-  is WRONG: `EngineStatus` has no `rename_all`, and `transcribe.js:263` already reads
-  `status.alignment_model_ready`. The real keys are **`ct2_device` / `torch_device`**.
-- Phase 5's wiped-deps-root flow is the state that unblocks every deferred manual row:
-  2.9–2.11, 3.9–3.13, 4.9, 4.10, 4.12, 4.13. Plan the run to sweep them.
+**Next action: none — the change is implemented.** Remaining open item is 1.13 (macOS),
+which needs hardware nobody on the team has here.
+
+Two facts worth keeping, both confirmed in Phase 5:
+- Plan §5 said the badge reads `status.ct2Device`/`status.torchDevice` (camelCase). That
+  was WRONG: `EngineStatus` has no `rename_all`, and `transcribe.js` already reads
+  `status.alignment_model_ready`. The real keys are **`ct2_device` / `torch_device`** —
+  which is what shipped. (`GpuInfo` DOES carry `rename_all = "camelCase"`, so the
+  hardware panel correctly reads `vramBytes` / `cudaUsable` / `driverVersion`. The two
+  structs genuinely differ; do not "normalize" one to match the other.)
+- Phase 5's wiped-deps-root flow was the state every deferred manual row was waiting on
+  (2.8–2.11, 3.9–3.13, 4.9, 4.10, 4.12, 4.13). All were swept green in that one run.
 
 **Phase 4 TODO — DONE:** `gpu-full`'s `--capability` reports `cublas:false` (its CUDA
 comes from torch, not our bundled DLLs) while still running on CUDA. Phase 4's plan

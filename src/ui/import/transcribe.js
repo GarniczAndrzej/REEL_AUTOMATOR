@@ -93,6 +93,11 @@ export function initTranscribe() {
   if (depsCtaBtn)
     depsCtaBtn.addEventListener('click', () => openFirstRunDeps());
   document.addEventListener('deps-changed', refreshTranscribeReadiness);
+  // The badge must follow too: staging an engine mid-session changes which binary
+  // resolves, and `verify_staged_engine` files a fresh verdict under the new
+  // readiness key. Without this the badge keeps painting the pre-download verdict
+  // (or "niezweryfikowany") until the next launch.
+  document.addEventListener('deps-changed', refreshEngineReadiness);
   refreshTranscribeReadiness();
 
   // S-09 Mode A — wire the "Z osi czasu Resolve" button. It renders the active
@@ -246,9 +251,25 @@ async function initModelManager() {
 }
 
 /**
+ * Describe the engine's devices. Since S-30 the ASR device (CTranslate2) and the torch
+ * device (VAD / alignment / diarization) can legitimately differ: the shipping Windows
+ * GPU build transcribes on `cuda` and aligns on CPU torch, while macOS transcribes on
+ * `cpu` and aligns on `mps`. A single value cannot say that, so name both. A verdict
+ * cached by a pre-S-30 build carries only the old `device` string — degrade to it rather
+ * than inventing a pair.
+ * @param {{device?:string, gpu?:boolean, ct2_device?:string, torch_device?:string}} status
+ * @returns {string}
+ */
+function deviceLabel(status) {
+  if (status.ct2_device && status.torch_device)
+    return `transkrypcja: ${status.ct2_device} · dopasowanie: ${status.torch_device}`;
+  return `${status.device || 'cpu'}${status.gpu ? ', GPU' : ''}`;
+}
+
+/**
  * Paint the engine-readiness badge from a status verdict.
  * @param {HTMLElement|null} el
- * @param {{ok:boolean, device?:string, gpu?:boolean, alignment_model_ready?:boolean}} status
+ * @param {{ok:boolean, device?:string, gpu?:boolean, alignment_model_ready?:boolean, ct2_device?:string, torch_device?:string}} status
  * @param {{authoritative:boolean}} opts - `authoritative` is true ONLY for the full
  *   `--selftest` path, which is the sole path allowed to paint the green "Silnik gotowy"
  *   tier. The cheap capability probe cannot `import whisperx`, so it cannot verify the
@@ -258,7 +279,7 @@ async function initModelManager() {
 function renderEngineBadge(el, status, { authoritative }) {
   if (!el) return;
   if (status.ok) {
-    const dev = `${status.device || 'cpu'}${status.gpu ? ', GPU' : ''}`;
+    const dev = deviceLabel(status);
     if (authoritative) {
       el.textContent = `Silnik gotowy (${dev})${status.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
       el.style.color = 'var(--green)';
