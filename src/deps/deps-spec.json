@@ -1,6 +1,6 @@
 {
-  "_note": "EMBEDDED dependency spec — the checksum trust anchor (ships inside the code-signed installer). Windows-first; macOS keeps bundling this slice, so no macOS entries yet (the schema supports platform:'macos' for later adoption). PHASE 0 (PARTIAL): the CPU engine + FFmpeg are LIVE — hosted on the public GitHub repo GarniczAndrzej/reel-automator-deps (release deps-v1.0.0) with real pinned SHA-256. ALIGN MODELS ARE NOT A MANAGED DEPENDENCY: the wav2vec2 align model is no longer downloaded/staged via this spec — the engine pulls it from the OFFICIAL HuggingFace repo (jonatasgrosman/wav2vec2-large-xlsr-53-polish) into the default HF cache at first transcription (see whisper.rs: HF-offline is only forced when a local align dir is present). STILL STUBBED: the GPU engine (`engine-gpu-windows-x86_64`) keeps a placeholder RELEASE_HOST url + empty sha256 because the 3.3 GB artifact exceeds GitHub's 2 GB per-asset cap — it needs a no-cap host (e.g. HuggingFace) before it can be pinned. An empty sha256 means 'not yet pinned' → the Phase 2 downloader fail-closes and REFUSES to stage that artifact (safe default). On a GPU machine, force the CPU variant (UI override / REEL_ENGINE_VARIANT=cpu) to exercise the live download path until the GPU host is chosen. To pin a new artifact: upload at its versioned URL, compute SHA-256 (`Get-FileHash -Algorithm SHA256` / `sha256sum`), replace `url` + `sha256` (+ verify `sizeBytes`).",
-  "specVersion": 1,
+  "_note": "EMBEDDED dependency spec — the checksum trust anchor (ships inside the code-signed installer). Windows-first; macOS keeps bundling this slice, so no macOS entries yet (the schema supports platform:'macos' for later adoption). LIVE deps are hosted on the public GitHub repo GarniczAndrzej/reel-automator-deps with real pinned SHA-256: the CPU engine + FFmpeg on release deps-v1.0.0, and the GPU engine on release deps-v1.1.0. The GPU engine (`engine-gpu-windows-x86_64`) is the CT2-CUDA + torch-CPU build with the two cuBLAS DLLs baked in — it froze to ~1.03 GB (down from the 3.08 GB cu128 build), which fits under GitHub's 2 GB per-asset cap, so it is hosted and pinned exactly like the CPU engine. `engine-gpu-full-windows-x86_64` is an OPT-IN escape hatch: the full CUDA-torch build (3.08 GB, GPU alignment + diarization). It exceeds GitHub's 2 GB per-asset cap, so it is hosted on a public HuggingFace bucket (Vndrew/ReelAutomatorGPUfull, /buckets/.../resolve/<file>?download=true → public Xet CDN) and pinned with a real SHA-256. It is reachable ONLY via REEL_ENGINE_VARIANT=gpu-full — never auto-selected by hardware detection and deliberately absent from the UI variant dropdown (see plan 'What We're NOT Doing'), so the dropdown stays honest about what a normal install downloads. ALIGN MODELS ARE NOT A MANAGED DEPENDENCY: the wav2vec2 align model is no longer downloaded/staged via this spec — the engine pulls it from the OFFICIAL HuggingFace repo (jonatasgrosman/wav2vec2-large-xlsr-53-polish) into the default HF cache at first transcription (see whisper.rs: HF-offline is only forced when a local align dir is present). An empty sha256 means 'not yet pinned' → the downloader fail-closes and REFUSES to stage that artifact (safe default). To pin a new artifact: upload at its versioned URL, compute SHA-256 (`Get-FileHash -Algorithm SHA256` / `sha256sum`), replace `url` + `sha256` (+ verify `sizeBytes`).",
+  "specVersion": 2,
   "dependencies": [
     {
       "id": "engine-gpu-windows-x86_64",
@@ -8,11 +8,24 @@
       "platform": "windows",
       "arch": "x86_64",
       "variantPredicate": "gpu",
-      "url": "https://RELEASE_HOST/reel-automator/deps/v1.0.0/whisperx-engine-gpu-x86_64-pc-windows-msvc.exe",
-      "sizeBytes": 3302778914,
-      "sha256": "",
-      "version": "1.0.0",
+      "url": "https://github.com/GarniczAndrzej/reel-automator-deps/releases/download/deps-v1.1.0/whisperx-engine-gpu-x86_64-pc-windows-msvc.exe",
+      "sizeBytes": 1031465189,
+      "sha256": "cc45a73ce68dc64956e9da3b3a7d1f900b99ab43d5bbf9d6ea8db51d54339c9e",
+      "version": "1.1.0",
       "sentinel": "whisperx-engine-gpu-x86_64-pc-windows-msvc.exe",
+      "stageTo": "engine-bin"
+    },
+    {
+      "id": "engine-gpu-full-windows-x86_64",
+      "kind": "engine",
+      "platform": "windows",
+      "arch": "x86_64",
+      "variantPredicate": "gpu-full",
+      "url": "https://huggingface.co/buckets/Vndrew/ReelAutomatorGPUfull/resolve/whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe?download=true",
+      "sizeBytes": 3302783700,
+      "sha256": "3c43ee37ea69a0902d4a481547569a2bce066d62f08c773528ee51cd966f4965",
+      "version": "1.1.0",
+      "sentinel": "whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe",
       "stageTo": "engine-bin"
     },
     {

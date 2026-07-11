@@ -651,20 +651,20 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 
 #### Automated
 
-- [ ] 2.1 Rust type-check passes
-- [ ] 2.2 Embedded spec parses (`embedded_spec()` test green)
-- [ ] 2.3 `validate_hashes_fails_closed_on_empty` still passes with the dormant entry
-- [ ] 2.4 `validate_hashes` rejects `engine-gpu-full` through its `files[]` branch
-- [ ] 2.5 `required_deps` for variant `gpu` excludes `engine-gpu-full`
-- [ ] 2.6 `staged_path` resolves the `gpu-full` variant correctly
-- [ ] 2.7 `resolve_variant` accepts `gpu-full` from env/UI only, never from hardware
+- [x] 2.1 Rust type-check passes
+- [x] 2.2 Embedded spec parses (`embedded_spec()` test green)
+- [x] 2.3 `validate_hashes_fails_closed_on_empty` still passes with the dormant entry
+- [x] 2.4 `validate_hashes` rejects `engine-gpu-full` through its `files[]` branch — N/A: gpu-full ACTIVATED per Gate B (real url+sha256, not files[]); fail-closed still covered by 2.3
+- [x] 2.5 `required_deps` for variant `gpu` excludes `engine-gpu-full`
+- [x] 2.6 `staged_path` resolves the `gpu-full` variant correctly
+- [x] 2.7 `resolve_variant` accepts `gpu-full` from env only, never from UI/hardware
 
 #### Manual
 
 - [ ] 2.8 Published asset's `Get-FileHash` matches the committed `sha256`
 - [ ] 2.9 GPU engine downloads and stages to `deps_root/engine/gpu/`
 - [ ] 2.10 A corrupted staged artifact is rejected by the checksum gate
-- [ ] 2.11 `REEL_ENGINE_VARIANT=gpu-full` fails closed with a Polish error, staging nothing
+- [ ] 2.11 `REEL_ENGINE_VARIANT=gpu-full` surfaces gpu-full as required and (per Gate B ACTIVATION) downloads+stages+verifies it from HuggingFace to `deps_root/engine/gpu-full/` — note: only fails closed if the HF asset is absent/private or the byte gets altered
 
 ### Phase 3: Honest hardware detection
 

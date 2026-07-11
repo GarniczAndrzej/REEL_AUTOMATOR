@@ -13,11 +13,15 @@ use std::time::Duration;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
 
-/// Base names of the two engine sidecar variants; Tauri appends the host triple
-/// (e.g. `-x86_64-pc-windows-msvc.exe`). The `-gpu` build ships cu128/CUDA torch;
-/// the default build is CPU-only. The active one is chosen by `engine_sidecar()`.
+/// Base names of the engine sidecar variants; Tauri appends the host triple
+/// (e.g. `-x86_64-pc-windows-msvc.exe`). The default build is CPU-only; `-gpu` is
+/// the shipping CT2-CUDA + torch-CPU build (baked cuBLAS, ~1 GB); `-gpu-full` is
+/// the opt-in full CUDA-torch build (GPU alignment + diarization, ~3 GB), reachable
+/// only via `REEL_ENGINE_VARIANT=gpu-full`. The active one is chosen by
+/// `engine_sidecar()`.
 pub const ENGINE_SIDECAR_CPU: &str = "whisperx-engine";
 pub const ENGINE_SIDECAR_GPU: &str = "whisperx-engine-gpu";
+pub const ENGINE_SIDECAR_GPU_FULL: &str = "whisperx-engine-gpu-full";
 
 /// Host target triple: lifted to `deps.rs` so the spawn-side and the download-side
 /// share one definition. Re-exported here under the original private name to keep
@@ -158,10 +162,10 @@ pub fn align_model_dir(app: &AppHandle) -> Option<String> {
 /// look for the stripped name there.
 fn resolve_engine_variant(app: &AppHandle, variant: &str, triple: &str) -> Option<PathBuf> {
     let ext = if cfg!(windows) { ".exe" } else { "" };
-    let base = if variant == "gpu" {
-        ENGINE_SIDECAR_GPU
-    } else {
-        ENGINE_SIDECAR_CPU
+    let base = match variant {
+        "gpu" => ENGINE_SIDECAR_GPU,
+        "gpu-full" => ENGINE_SIDECAR_GPU_FULL,
+        _ => ENGINE_SIDECAR_CPU,
     };
     // 1. staged deps root (thin-installer download).
     if let Ok(root) = crate::deps::deps_root(app) {
@@ -200,17 +204,22 @@ fn resolve_engine_variant(app: &AppHandle, variant: &str, triple: &str) -> Optio
 /// staged-only GPU install (thin installer) actually spawn the GPU engine.
 pub fn engine_bin_path(app: &AppHandle) -> Result<PathBuf, String> {
     let triple = host_triple();
-    let want_gpu = crate::deps::detect_variant() == "gpu";
-    if want_gpu {
-        if let Some(p) = resolve_engine_variant(app, "gpu", triple) {
-            return Ok(p);
-        }
-    }
-    if let Some(p) = resolve_engine_variant(app, "cpu", triple) {
+    let variant = crate::deps::detect_variant();
+    // 1. The exact requested variant, if its binary is staged/bundled anywhere.
+    if let Some(p) = resolve_engine_variant(app, variant, triple) {
         return Ok(p);
     }
-    if !want_gpu {
-        if let Some(p) = resolve_engine_variant(app, "gpu", triple) {
+    // 2. Graceful fallbacks — never spawn a missing exe. The GPU builds are safe
+    //    supersets (they self-fall-back to device=cpu when CUDA is unusable), so a
+    //    `cpu` selection may still run a staged-only GPU build, and `gpu-full`
+    //    degrades to the lighter `gpu` build before CPU.
+    let fallbacks: &[&str] = match variant {
+        "gpu-full" => &["gpu", "cpu"],
+        "gpu" => &["cpu"],
+        _ => &["gpu"],
+    };
+    for v in fallbacks {
+        if let Some(p) = resolve_engine_variant(app, v, triple) {
             return Ok(p);
         }
     }

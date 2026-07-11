@@ -268,9 +268,16 @@ fn variant_override() -> Option<String> {
 /// Pure variant precedence, factored out for unit testing without touching the
 /// environment or the filesystem: env override → UI override → NVIDIA present ⇒
 /// gpu → cpu. `gpu_present` is injected so the test doesn't shell out.
+///
+/// `gpu-full` is the opt-in CUDA-torch escape hatch (see deps-spec.json): it is
+/// accepted from the ENV override ONLY — never from the persisted UI override
+/// (`set_variant_override` normalizes anything outside gpu/cpu to ""), and never
+/// from hardware detection (which can only ever yield `gpu` or `cpu`). This keeps
+/// the UI dropdown honest about what a normal install downloads.
 fn resolve_variant(env_override: Option<&str>, ui_override: Option<&str>, gpu_present: bool) -> &'static str {
     match env_override {
         Some("gpu") => "gpu",
+        Some("gpu-full") => "gpu-full",
         Some("cpu") => "cpu",
         _ => match ui_override {
             Some("gpu") => "gpu",
@@ -282,7 +289,8 @@ fn resolve_variant(env_override: Option<&str>, ui_override: Option<&str>, gpu_pr
 }
 
 /// Resolve the host's engine variant, fail-safe to CPU. Precedence:
-///   1. `REEL_ENGINE_VARIANT=gpu|cpu` env override (power-user/debug),
+///   1. `REEL_ENGINE_VARIANT=gpu|gpu-full|cpu` env override (power-user/debug;
+///      `gpu-full` is env-only — never from the UI override or hardware),
 ///   2. persisted UI override (`deps-settings.json → variantOverride`, Phase 4),
 ///   3. `nvidia-smi` finds a GPU ⇒ gpu,
 ///   4. else cpu.
@@ -328,10 +336,10 @@ pub fn staged_path(root: &Path, slot: &str, variant: &str, triple: &str) -> Path
     let ext = if cfg!(windows) { ".exe" } else { "" };
     match slot {
         "engine-bin" => {
-            let base = if variant == "gpu" {
-                "whisperx-engine-gpu"
-            } else {
-                "whisperx-engine"
+            let base = match variant {
+                "gpu" => "whisperx-engine-gpu",
+                "gpu-full" => "whisperx-engine-gpu-full",
+                _ => "whisperx-engine",
             };
             root.join("engine")
                 .join(variant)
@@ -1054,6 +1062,17 @@ mod tests {
     }
 
     #[test]
+    fn variant_gpu_full_is_env_only() {
+        // `gpu-full` resolves from the ENV override only.
+        assert_eq!(resolve_variant(Some("gpu-full"), None, false), "gpu-full");
+        // ...never from the UI override (set_variant_override would have normalized
+        // it away anyway) — a `gpu-full` UI value falls through to hardware/cpu.
+        assert_eq!(resolve_variant(None, Some("gpu-full"), false), "cpu");
+        // ...and never from hardware: a present GPU yields plain `gpu`, not gpu-full.
+        assert_eq!(resolve_variant(None, None, true), "gpu");
+    }
+
+    #[test]
     fn variant_precedence_ui_over_hardware() {
         // no env; UI override beats hardware detection.
         assert_eq!(resolve_variant(None, Some("cpu"), true), "cpu");
@@ -1082,6 +1101,45 @@ mod tests {
         assert!(ff.to_string_lossy().contains("ffmpeg-"));
         let al = staged_path(root, "align-models", "cpu", triple);
         assert!(al.ends_with("align_models"));
+        // gpu-full stages under its own subdir with the gpu-full base name.
+        let gf = staged_path(root, "engine-bin", "gpu-full", triple);
+        assert!(
+            gf.ends_with(format!("engine/gpu-full/whisperx-engine-gpu-full-{triple}.exe")),
+            "gpu-full path was {gf:?}"
+        );
+    }
+
+    #[test]
+    fn gpu_host_excludes_gpu_full_engine() {
+        // A `gpu` host requires the (lightweight) gpu engine but NEVER the opt-in
+        // gpu-full build — its variantPredicate is the env-only `gpu-full`.
+        let mut spec = sample_spec();
+        spec.dependencies.push(dep(
+            "engine-gpu-full",
+            "engine",
+            "windows",
+            "x86_64",
+            "gpu-full",
+            "engine-bin",
+        ));
+        let ids: Vec<&str> = required_deps(&spec, "windows", "x86_64", "gpu")
+            .iter()
+            .map(|d| d.id.as_str())
+            .collect();
+        assert!(ids.contains(&"engine-gpu"), "gpu host needs the gpu engine");
+        assert!(
+            !ids.contains(&"engine-gpu-full"),
+            "gpu host must NOT require the opt-in gpu-full engine"
+        );
+        // ...but a `gpu-full` host (env override) does require exactly it + ffmpeg.
+        let full: Vec<&str> = required_deps(&spec, "windows", "x86_64", "gpu-full")
+            .iter()
+            .map(|d| d.id.as_str())
+            .collect();
+        assert!(full.contains(&"engine-gpu-full"));
+        assert!(full.contains(&"ffmpeg"));
+        assert!(!full.contains(&"engine-gpu"));
+        assert!(!full.contains(&"engine-cpu"));
     }
 
     #[test]
