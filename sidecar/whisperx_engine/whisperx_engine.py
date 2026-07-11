@@ -33,11 +33,15 @@ Modes:
   --align-only     force-align an existing transcript to the audio
                    (skips transcription; requires --transcript)
   --selftest       readiness probe; prints {ok, version, gpu,
-                   alignment_model_ready} and exits 0. Must NOT require a
-                   downloaded transcription model. `alignment_model_ready` is a
-                   *real* check: it loads the bundled align model and runs one
-                   tiny forced-align, so a broken bundling of the wav2vec2 import
-                   chain reports false instead of a misleading true.
+                   alignment_model_ready, audio_decode_ready} and exits 0. Must
+                   NOT require a downloaded transcription model. Both readiness
+                   fields are *real* checks, not file stats: `alignment_model_ready`
+                   loads the bundled align model and runs one tiny forced-align, so
+                   a broken bundling of the wav2vec2 import chain reports false
+                   instead of a misleading true; `audio_decode_ready` decodes a
+                   real (synthetic) WAV through the same helper a transcription
+                   uses, so a machine that cannot reach FFmpeg reports false
+                   instead of earning a green badge it cannot honor.
 
 This script is intentionally dependency-light at import time: heavy deps
 (`whisperx`, `torch`) are imported lazily inside the functions that need them so
@@ -302,15 +306,63 @@ def _selftest_align_runs(whisperx, language="pl"):
         return False
 
 
+def _selftest_decode_runs(whisperx):
+    """Actually decode a real audio file through the exact path a transcription takes.
+
+    Every other readiness check is structurally blind to a broken decode:
+    `_selftest_align_runs` aligns against synthetic silence in memory and never invokes
+    ffmpeg, and `cmd_capability` only stats a directory. So a green "Silnik gotowy" badge
+    could certify a machine that cannot decode one frame of audio — which is exactly what
+    it did in the bug this exists to abolish. This is the only check in the system that
+    can fail when decode is broken.
+
+    Writes ~0.5 s of 16 kHz mono silence with the stdlib `wave` module (no ffmpeg is
+    needed to *create* it) and pushes it through `_decode_audio` — the RAISING helper.
+    Never `_load_audio`: that one exits with EXIT_AUDIO_DECODE_FAIL, and SystemExit is a
+    BaseException, so the `except Exception` below would not catch it — the probe would
+    die with exit 11 on precisely the broken machine it exists to diagnose, and
+    `audio_decode_ready: false` would never be emitted at all.
+    """
+    import tempfile
+    import wave
+
+    path = None
+    try:
+        fd, path = tempfile.mkstemp(suffix=".wav", prefix="reel_selftest_")
+        os.close(fd)
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"\x00\x00" * 8000)  # 0.5 s of silence
+        audio = _decode_audio(whisperx, path)
+        return len(audio) > 0
+    except Exception as e:
+        _log("selftest: audio decode exercise failed: %s" % e)
+        if os.environ.get("ENGINE_DEBUG"):
+            import traceback
+
+            _log(traceback.format_exc())
+        return False
+    finally:
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
 def cmd_selftest(args=None):
     ct2_device, torch_device, gpu, compute_type = _resolve_devices(args or argparse.Namespace())
     align_ready = False
+    decode_ready = False
     try:
         import whisperx  # noqa: F401
 
         version = getattr(__import__("whisperx"), "__version__", ENGINE_VERSION)
         ok = True
         align_ready = _selftest_align_runs(whisperx)
+        decode_ready = _selftest_decode_runs(whisperx)
     except Exception as e:  # whisperx not importable → not ok, but still report
         version = ENGINE_VERSION
         ok = False
@@ -328,6 +380,9 @@ def cmd_selftest(args=None):
         "compute_type": compute_type,
         # Truthful now: reflects an actual tiny align run, not just file presence.
         "alignment_model_ready": align_ready,
+        # A real decode of a real file through the real path. `cmd_capability` omits
+        # this field on purpose (see its docstring) ⇒ Rust reads None = "unknown".
+        "audio_decode_ready": decode_ready,
     }
     _write_result(json.dumps(out))
     return EXIT_OK
@@ -348,6 +403,12 @@ def cmd_capability(args=None):
     whose frozen import chain is broken (the false-positive cmd_selftest guards
     against). The Rust/frontend layer renders this verdict as a non-authoritative
     tier; the authoritative green is earned only by --selftest.
+
+    It deliberately omits `audio_decode_ready` — Rust then reads None ("unknown",
+    never "failed"), exactly as `cublas` is scoped in the mirror direction. Keeping
+    it out preserves this probe's cheap, spawn-free tier; and a capability verdict is
+    stamped non-authoritative anyway, so it could never reach the green tier that the
+    field exists to guard. The real decode in --selftest is where the value is.
     """
     ct2_device, torch_device, gpu, compute_type = _resolve_devices(args or argparse.Namespace())
     model_dir = _alignment_model_dir("pl")
@@ -371,12 +432,51 @@ def cmd_capability(args=None):
     return EXIT_OK
 
 
+def _decode_audio(whisperx, audio_path):
+    """Decode `audio_path` → whisperx's float32 16 kHz mono ndarray. RAISES on failure.
+
+    whisperx's own `load_audio` shells out to a BARE-NAMED `ffmpeg` resolved from an
+    inherited PATH — there is no injection point in it (no env var, no path arg). The
+    app never provisioned that PATH, so on Windows, where no ambient ffmpeg masks it,
+    the lookup fails and every decode dies. When the app hands us an absolute FFmpeg in
+    REEL_FFMPEG_BIN we run the decode against it directly; with the var unset we fall
+    back to whisperx (so a bare `python whisperx_engine.py --audio x.mp4` dev run keeps
+    behaving exactly as it does today).
+
+    Raising, not exiting: `_load_audio` is the exit wrapper. `sys.exit` raises
+    SystemExit, a BaseException that `except Exception` does NOT catch — so a self-test
+    that needs to *report* a decode failure must call this helper, not the wrapper.
+
+    The argv and the dtype math reproduce whisperx 3.8.6's `load_audio` exactly; any
+    drift here shifts every downstream timestamp.
+    """
+    ffmpeg_bin = os.environ.get("REEL_FFMPEG_BIN")
+    if not (ffmpeg_bin and os.path.isfile(ffmpeg_bin)):
+        return whisperx.load_audio(audio_path)
+
+    import numpy as np
+    import subprocess
+
+    cmd = [
+        ffmpeg_bin, "-nostdin", "-threads", "0", "-i", audio_path,
+        "-f", "s16le", "-ac", "1", "-acodec", "pcm_s16le", "-ar", "16000", "-",
+    ]
+    kwargs = {}
+    if sys.platform == "win32":
+        # crate::proc::build_command suppresses the console window for every Rust-side
+        # spawn; this child is spawned by Python, outside that guarantee.
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    out = subprocess.run(cmd, capture_output=True, check=True, **kwargs).stdout
+    return np.frombuffer(out, np.int16).flatten().astype(np.float32) / 32768.0
+
+
 def _load_audio(whisperx, audio_path):
+    """`_decode_audio` + the exit contract every transcription entry point expects."""
     if not os.path.isfile(audio_path):
         _log("audio not found: %s" % audio_path)
         sys.exit(EXIT_AUDIO_DECODE_FAIL)
     try:
-        return whisperx.load_audio(audio_path)
+        return _decode_audio(whisperx, audio_path)
     except Exception as e:
         _log("audio decode failed: %s" % e)
         sys.exit(EXIT_AUDIO_DECODE_FAIL)

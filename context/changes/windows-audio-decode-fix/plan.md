@@ -580,34 +580,34 @@ this for the Phase-4 fields).
 
 #### Automated
 
-- [x] 1.1 Rust type-check passes: `cargo check`
-- [x] 1.2 Rust unit tests pass: `cargo test` (shim decision + PATH prepend ordering + stale-shim re-link)
-- [x] 1.3 Regression suite still green: `node --experimental-vm-modules test/regression.js`
+- [x] 1.1 Rust type-check passes: `cargo check` — d6b4748
+- [x] 1.2 Rust unit tests pass: `cargo test` (shim decision + PATH prepend ordering + stale-shim re-link) — d6b4748
+- [x] 1.3 Regression suite still green: `node --experimental-vm-modules test/regression.js` — d6b4748
 
 #### Manual
 
-- [x] 1.4 Transkrybuj wideo completes on the affected Windows machine (GPU variant)
-- [x] 1.5 Same video transcribes with `REEL_ENGINE_VARIANT=cpu`
-- [x] 1.6 Align-only (Dopasuj transkrypcję) completes on the same video
-- [x] 1.7 Waveform UI still renders (waveform.rs unaffected — S-31 unknown #3)
-- [x] 1.8 Shim exists at `binaries/bin/ffmpeg.exe`, is a hardlink, no disk bloat
-- [x] 1.9 Opportunistic (frame D1): extracted `%TEMP%` WAV is healthy and non-zero
+- [x] 1.4 Transkrybuj wideo completes on the affected Windows machine (GPU variant) — d6b4748
+- [x] 1.5 Same video transcribes with `REEL_ENGINE_VARIANT=cpu` — d6b4748
+- [x] 1.6 Align-only (Dopasuj transkrypcję) completes on the same video — d6b4748
+- [x] 1.7 Waveform UI still renders (waveform.rs unaffected — S-31 unknown #3) — d6b4748
+- [x] 1.8 Shim exists at `binaries/bin/ffmpeg.exe`, is a hardlink, no disk bloat — d6b4748
+- [x] 1.9 Opportunistic (frame D1): extracted `%TEMP%` WAV is healthy and non-zero — d6b4748
 
 ### Phase 2: Engine takes an explicit FFmpeg + a truthful decode self-test
 
 #### Automated
 
-- [ ] 2.1 Rust type-check passes: `cargo check`
-- [ ] 2.2 Rust unit tests pass: `cargo test` (`audio_decode_ready` hand-mapped; legacy verdict → `None`)
-- [ ] 2.3 Engine `--selftest` runs from source and reports `audio_decode_ready`
-- [ ] 2.4 Regression suite still green: `node --experimental-vm-modules test/regression.js`
+- [x] 2.1 Rust type-check passes: `cargo check`
+- [x] 2.2 Rust unit tests pass: `cargo test` (`audio_decode_ready` hand-mapped; legacy verdict → `None`)
+- [x] 2.3 Engine `--selftest` runs from source and reports `audio_decode_ready`
+- [x] 2.4 Regression suite still green: `node --experimental-vm-modules test/regression.js`
 
 #### Manual
 
-- [ ] 2.5 `--selftest` with `REEL_FFMPEG_BIN` set reports `audio_decode_ready: true`
-- [ ] 2.6 `--selftest` with no `REEL_FFMPEG_BIN` and no PATH ffmpeg reports `false` (the check can fail)
-- [ ] 2.7 A `false` verdict blocks the green badge and names the decode problem in Polish
-- [ ] 2.8 An old staged engine (no such field) paints exactly as today — `undefined` ≠ failure
+- [x] 2.5 `--selftest` with `REEL_FFMPEG_BIN` set reports `audio_decode_ready: true`
+- [x] 2.6 `--selftest` with no `REEL_FFMPEG_BIN` and no PATH ffmpeg reports `false` (the check can fail)
+- [x] 2.7 A `false` verdict blocks the green badge and names the decode problem in Polish
+- [x] 2.8 An old staged engine (no such field) paints exactly as today — `undefined` ≠ failure
 
 ### Phase 3: Rebuild, re-pin, release (Windows CPU + GPU)
 

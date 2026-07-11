@@ -371,6 +371,14 @@ pub struct EngineStatus {
     pub ct2_device: String,
     #[serde(default)]
     pub torch_device: String,
+    /// Did the engine decode a real audio file through the same helper a
+    /// transcription uses? Emitted by `--selftest` only (`--capability` never
+    /// decodes ⇒ `None`), and absent entirely from any engine staged before this
+    /// change — so `None` means "unknown", never "failed", exactly as `cublas`
+    /// above. Getting that backwards would paint every existing install red
+    /// overnight. Only an explicit `Some(false)` may block the green badge.
+    #[serde(default)]
+    pub audio_decode_ready: Option<bool>,
 }
 
 /// Run the sidecar with the given args, collecting (stdout, stderr, exit_code),
@@ -430,6 +438,11 @@ fn parse_engine_status(out: &str) -> Result<EngineStatus, String> {
         cublas: v["cublas"].as_bool(),
         ct2_device: v["ct2_device"].as_str().unwrap_or("").to_string(),
         torch_device: v["torch_device"].as_str().unwrap_or("").to_string(),
+        // The mirror of `cublas`: `--selftest` only, absent from `--capability` and
+        // from every engine staged before this change ⇒ None ("unknown"). `as_bool()`
+        // (not `.unwrap_or(false)`) is what keeps an old engine's silence from reading
+        // as a decode failure.
+        audio_decode_ready: v["audio_decode_ready"].as_bool(),
     })
 }
 
@@ -689,6 +702,35 @@ mod tests {
         assert_eq!(s.cublas, None);
         assert_eq!(s.ct2_device, "");
         assert_eq!(s.torch_device, "");
+        // Unknown, NOT failed. A `Some(false)` here would paint every verdict already
+        // on disk as a decode failure and refuse the green badge on machines that
+        // transcribe perfectly well.
+        assert_eq!(s.audio_decode_ready, None);
+    }
+
+    #[test]
+    fn parse_engine_status_hand_maps_audio_decode_ready() {
+        // Same trap as `cublas`: the `Deserialize` derive serves the disk cache alone,
+        // so a field the struct knows about stays `None` on every LIVE probe unless
+        // `parse_engine_status` reads it out explicitly. Miss it and the decode check
+        // can never fail — which is the whole point of the check.
+        let selftest = r#"{"ok":true,"version":"3.8.6","gpu":false,"device":"cpu",
+            "ct2_device":"cpu","torch_device":"cpu","alignment_model_ready":true,
+            "audio_decode_ready":true}"#;
+        let s = parse_engine_status(selftest).expect("selftest JSON must parse");
+        assert_eq!(s.audio_decode_ready, Some(true));
+
+        // The verdict that must reach the badge as a hard `false`.
+        let broken = selftest.replace("\"audio_decode_ready\":true", "\"audio_decode_ready\":false");
+        let s = parse_engine_status(&broken).expect("selftest JSON must parse");
+        assert_eq!(s.audio_decode_ready, Some(false));
+
+        // An engine staged before this change emits no such field, and `--capability`
+        // never emits it at all: unknown, never failed.
+        let legacy = r#"{"ok":true,"version":"3.8.6","gpu":false,"device":"cpu",
+            "alignment_model_ready":true}"#;
+        let s = parse_engine_status(legacy).expect("legacy sidecar JSON must parse");
+        assert_eq!(s.audio_decode_ready, None);
     }
 
     #[test]

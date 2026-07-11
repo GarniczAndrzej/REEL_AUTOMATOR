@@ -269,18 +269,30 @@ function deviceLabel(status) {
 /**
  * Paint the engine-readiness badge from a status verdict.
  * @param {HTMLElement|null} el
- * @param {{ok:boolean, device?:string, gpu?:boolean, alignment_model_ready?:boolean, ct2_device?:string, torch_device?:string}} status
+ * @param {{ok:boolean, device?:string, gpu?:boolean, alignment_model_ready?:boolean, ct2_device?:string, torch_device?:string, audio_decode_ready?:boolean}} status
  * @param {{authoritative:boolean}} opts - `authoritative` is true ONLY for the full
  *   `--selftest` path, which is the sole path allowed to paint the green "Silnik gotowy"
  *   tier. The cheap capability probe cannot `import whisperx`, so it cannot verify the
  *   frozen import chain (the false-positive documented in whisperx_engine.py) — it paints
  *   the distinct, non-authoritative amber "Silnik wykryty" tier instead.
+ *
+ *   `audio_decode_ready === false` outranks both tiers: an engine that cannot decode a
+ *   single frame of audio cannot transcribe, whatever else it reports — and a green badge
+ *   is exactly what certified the machine in the bug this check exists to abolish. Only an
+ *   EXPLICIT `false` blocks; `undefined` (an engine staged before the field existed, or a
+ *   `--capability` verdict, which never decodes) means "unknown" and paints as it always
+ *   did.
  */
 function renderEngineBadge(el, status, { authoritative }) {
   if (!el) return;
   if (status.ok) {
     const dev = deviceLabel(status);
-    if (authoritative) {
+    if (status.audio_decode_ready === false) {
+      el.textContent =
+        'Silnik nie potrafi zdekodować audio — brak działającego FFmpeg. ' +
+        'Sprawdź ZALEŻNOŚCI i pobierz FFmpeg.';
+      el.style.color = 'var(--red)';
+    } else if (authoritative) {
       el.textContent = `Silnik gotowy (${dev})${status.alignment_model_ready ? ', model dopasowania wbudowany' : ''}`;
       el.style.color = 'var(--green)';
     } else {
