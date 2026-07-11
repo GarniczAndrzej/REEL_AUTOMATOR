@@ -651,13 +651,13 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 
 #### Automated
 
-- [x] 2.1 Rust type-check passes
-- [x] 2.2 Embedded spec parses (`embedded_spec()` test green)
-- [x] 2.3 `validate_hashes_fails_closed_on_empty` still passes with the dormant entry
-- [x] 2.4 `validate_hashes` rejects `engine-gpu-full` through its `files[]` branch — N/A: gpu-full ACTIVATED per Gate B (real url+sha256, not files[]); fail-closed still covered by 2.3
-- [x] 2.5 `required_deps` for variant `gpu` excludes `engine-gpu-full`
-- [x] 2.6 `staged_path` resolves the `gpu-full` variant correctly
-- [x] 2.7 `resolve_variant` accepts `gpu-full` from env only, never from UI/hardware
+- [x] 2.1 Rust type-check passes — e833dd6
+- [x] 2.2 Embedded spec parses (`embedded_spec()` test green) — e833dd6
+- [x] 2.3 `validate_hashes_fails_closed_on_empty` still passes with the dormant entry — e833dd6
+- [x] 2.4 `validate_hashes` rejects `engine-gpu-full` through its `files[]` branch — N/A: gpu-full ACTIVATED per Gate B (real url+sha256, not files[]); fail-closed still covered by 2.3 — e833dd6
+- [x] 2.5 `required_deps` for variant `gpu` excludes `engine-gpu-full` — e833dd6
+- [x] 2.6 `staged_path` resolves the `gpu-full` variant correctly — e833dd6
+- [x] 2.7 `resolve_variant` accepts `gpu-full` from env only, never from UI/hardware — e833dd6
 
 #### Manual
 

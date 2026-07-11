@@ -40,50 +40,48 @@ Scope for the plan:
 
 ## RESUME STATE (2026-07-11) — read this first
 
-**Where we are:** Phase 1 is DONE except the macOS check (1.13, needs a Mac —
-deferred; this is a Windows box). 1.1–1.12 all PASS/recorded. Gate A PASSED (new
-GPU ~4× faster than CPU). Gate B FAILED 4.19× (CPU-torch align dominates) → decision
-recorded above: activate engine-gpu-full. **Phase 2 is cleared to start.**
+**Where we are:** Phase 1 DONE (except macOS 1.13, deferred — needs a Mac). Phase 2
+DONE + committed **e833dd6**. **Phase 3 is next** (honest hardware detection).
 
-**Phase 2 must (per Gate B decision):** host the lightweight GPU exe on GitHub
-(deps-v1.1.0) as the default GPU variant AND host+PIN gpu-full (3.08GB) on a
-HuggingFace repo — fill a REAL sha256 for gpu-full (NOT the empty/dormant stub the
-plan's Phase 2 §2 originally specified). gpu-full stays env-only (REEL_ENGINE_VARIANT
-=gpu-full), not in the UI. Compute digests with Get-FileHash -Algorithm SHA256 on the
-exes in src-tauri/binaries/ (byte sizes: gpu 1,031,465,189; gpu-full 3,302,783,700 —
-reconfirm before pinning).
+**Phase 2 outcome (all hosting live + verified reachable):**
+- `engine-gpu` hosted on GitHub release **deps-v1.1.0** (GarniczAndrzej/reel-automator-deps).
+  URL pinned; HEAD → 200, Content-Length 1,031,465,189 (matches). sha256
+  `cc45a73ce68dc64956e9da3b3a7d1f900b99ab43d5bbf9d6ea8db51d54339c9e`. version 1.1.0.
+- `engine-gpu-full` (3.08GB) hosted on a **public HuggingFace bucket** —
+  `Vndrew/ReelAutomatorGPUfull`. URL is the bucket shape:
+  `https://huggingface.co/buckets/Vndrew/ReelAutomatorGPUfull/resolve/whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe?download=true`
+  (302 → public Xet CDN; HEAD final 200, Content-Length 3,302,783,700 matches). sha256
+  `3c43ee37ea69a0902d4a481547569a2bce066d62f08c773528ee51cd966f4965`. version 1.1.0.
+- **DEVIATION (user-ratified):** gpu-full uses the **`url` shape**, NOT the plan's
+  literal `repo`+`files[]`. Reason: `files[]` routes through `download_dir` which stages
+  a DIRECTORY, breaking single-file engine spawn (`resolve_engine_variant` needs
+  `is_file()`). url-shape stages a spawnable file via `download_single`, zero downloader
+  changes. gpu-full stays env-only (`REEL_ENGINE_VARIANT=gpu-full`); `resolve_variant`
+  accepts it from the **env override only** (never UI/hardware). specVersion 1→2.
+- 2.1–2.7 green + committed. **2.8–2.11 are live app-download checks, deliberately
+  DEFERRED** to Phase 5's end-to-end first-run flow (user chose "defer app checks").
+- `roadmap.md` was staged into e833dd6 per user (it's Phase 5 doc work, carried early).
 
 **Known separate defect (NOT this change, needs its own):** diarization is broken in
 ALL frozen builds — `speechbrain.integrations.k2_fsa` lazy-import failure loading
 `pyannote/speaker-diarization-community-1` (exit 13). Pre-existing (fails on cu128
 too). Bundling gap in whisperx_engine.spec. Flag to the user / open a new change.
 
-**Phase 1 commits:** 6a00e2a, caafeb3, b94e54a, 70b7038, 491f788.
+**Phase 1 commits:** 6a00e2a, caafeb3, b94e54a, 70b7038, 491f788. **Phase 2:** e833dd6.
 
-**Three engine exes are built fresh (all from 491f788), in src-tauri/binaries/:**
-- `whisperx-engine-x86_64-pc-windows-msvc.exe` — CPU (464 MB, torch+cpu)
-- `whisperx-engine-gpu-x86_64-pc-windows-msvc.exe` — new CT2-CUDA (1.03 GB, torch+cpu + cuBLAS)
-- `whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe` — cu128 baseline (3.08 GB, torch+cu128)
-(binaries/ is git-ignored, so these persist on disk but are not in git.)
+**Three engine exes remain on disk in src-tauri/binaries/ (git-ignored):**
+- `whisperx-engine-x86_64-pc-windows-msvc.exe` — CPU (torch+cpu)
+- `whisperx-engine-gpu-x86_64-pc-windows-msvc.exe` — CT2-CUDA (1.03 GB, torch+cpu + cuBLAS) [hosted]
+- `whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe` — cu128 baseline (3.08 GB) [hosted on HF]
 
-**Next action = run the measurement (needs the user's HF_TOKEN, diarization ON):**
-Measurement harness (session-scratchpad, absolute path persists on disk):
-`C:\Users\garni\AppData\Local\Temp\claude\C--Users-garni-Desktop-REELS-REEL-AUTOMATOR\8257be9f-b6a7-492c-b227-f4cc434fcfe2\scratchpad\measure_engines.py`
-Run (PowerShell, python call on ONE line):
-```
-$env:HF_TOKEN = "hf_real_token"
-python "<measure_engines.py path above>" --audio "C:\Users\garni\Desktop\YTDown_YouTube_Media_NFdCkkkf_5M_001_1080p.mp4" --model large-v3 --cu128-exe "C:\Users\garni\Desktop\REELS\REEL_AUTOMATOR\src-tauri\binaries\whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe" --append-research
-```
-The script is fixed (utf-8 stderr decode, whisperx WhisperModel subclass, stderr
-tail on failure, invalid-gate warning). Gate B MUST keep --diarize on — align +
-diarize move to CPU torch on the new GPU build, which is exactly the cost measured.
-Preliminary (from a partial run): CPU load ~13.7 s, CPU large-v3 transcribe ~426 s.
-
-**When the numbers come in:** append the `--append-research` table to research.md
-under a "Follow-up: measured phase timings" heading (1.10); write Gate A/B verdict
-+ the engine-gpu-full activate-or-dormant decision into `gate_b_decision:` above
-(1.12); flip 1.10–1.12 (and 1.13 if a Mac is available); then run the Phase 1
-closeout commit and proceed to Phase 2.
+**Next action = Phase 3 (honest hardware detection).** Resume:
+`/10x-implement gpu-engine-autodetect phase 3`. Read plan.md Phase 3 (§1 nvidia_query
+profiling, §2 DXGI enumeration + `windows` crate dep, §3 `gpu_info` command, §4 persisted
+`gpuUnusable`, §5 delete `gpu_sidecar_present` / drop the `engine_sidecar()` OnceLock /
+add `variant_satisfied` + `engine_bin_resolved`). NOTE: `engine_sidecar()` was left
+argless in Phase 2 (still returns CPU for a gpu-full selection — Phase 3 §5 reworks it to
+consult the staged deps root via `resolve_engine_variant`). The plan.md SHA write-back
+for 2.1–2.7 + this resume-state update land in the pre-clear chore commit below.
 
 **Phase 4 TODO (don't lose this):** `gpu-full`'s `--capability` reports
 `cublas:false` (its CUDA comes from torch, not our bundled DLLs) while still
