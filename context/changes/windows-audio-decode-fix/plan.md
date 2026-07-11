@@ -613,15 +613,15 @@ this for the Phase-4 fields).
 
 #### Automated
 
-- [x] 3.1 Rust type-check passes: `cargo check`
-- [x] 3.2 Rust unit tests pass: `cargo test` (embedded-spec parse test against the edited JSON)
-- [x] 3.3 Every pinned `sha256` matches its uploaded artifact byte-for-byte
+- [x] 3.1 Rust type-check passes: `cargo check` — 9cf75de
+- [x] 3.2 Rust unit tests pass: `cargo test` (embedded-spec parse test against the edited JSON) — 9cf75de
+- [x] 3.3 Every pinned `sha256` matches its uploaded artifact byte-for-byte — 9cf75de
 
 #### Manual
 
-- [ ] 3.4 Old engine shows as stale, offers an update, and still transcribes before taking it
-- [ ] 3.5 Taking the update re-downloads + stages the new engine; SHA-256 check passes
-- [ ] 3.6 New binary reports `audio_decode_ready: true`, and the GPU build still reports `cublas: true`
-- [ ] 3.7 Transcription works on the freshly-staged engine (GPU and CPU)
-- [ ] 3.8 Clean-machine install (empty deps root) downloads and transcribes end-to-end
-- [x] 3.9 Roadmap § S-31 Diagnosis softened; status marked done
+- [x] 3.4 Old engine shows as stale, offers an update, and still transcribes before taking it — 9cf75de
+- [x] 3.5 Taking the update re-downloads + stages the new engine; SHA-256 check passes — 9cf75de
+- [x] 3.6 New binary reports `audio_decode_ready: true`, and the GPU build still reports `cublas: true` — 9cf75de
+- [x] 3.7 Transcription works on the freshly-staged engine (GPU and CPU) — 9cf75de
+- [x] 3.8 Clean-machine install (empty deps root) downloads and transcribes end-to-end — 9cf75de
+- [x] 3.9 Roadmap § S-31 Diagnosis softened; status marked done — 9cf75de
