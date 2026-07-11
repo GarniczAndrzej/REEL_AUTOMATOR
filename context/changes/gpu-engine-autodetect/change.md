@@ -41,7 +41,44 @@ Scope for the plan:
 ## RESUME STATE (2026-07-11) — read this first
 
 **Where we are:** Phase 1 DONE (except macOS 1.13, deferred — needs a Mac). Phase 2
-DONE + committed **e833dd6**. **Phase 3 is next** (honest hardware detection).
+DONE + committed **e833dd6**. Phase 3 DONE (automated 3.1–3.7 green; 3.8 verified live;
+3.9–3.13 deferred to Phase 5's first-run flow — see the plan rows for why).
+**Phase 4 is next** (post-stage verification + the runtime fallback net).
+
+**Phase 3 outcome (honest hardware detection):**
+- `deps.rs`: `nvidia_query()` (memoized `nvidia-smi --query-gpu` → name/VRAM/compute-cap/
+  driver, tolerant parse, any malformation ⇒ `None` ⇒ fail-safe to CPU);
+  `driver_meets_floor()` gating on `DRIVER_FLOOR_WINDOWS = (527, 41)` compared as a
+  `(major, minor)` TUPLE, not a float (527.9 is 527.09 — older — not newer than 527.41);
+  `dxgi_adapters()` (AMD/Intel/unknown, Basic Render Driver `0x1414` skipped, VRAM from
+  `DedicatedVideoMemory` never WMI's 32-bit `AdapterRAM`); `gpu_unusable()` reader;
+  `gpu_info()` command (Polish `reason`, un-memoized so a Phase 4 demotion surfaces
+  without relaunch); `resolve_variant`'s 3rd term changed meaning `gpu_present` →
+  `gpu_usable`.
+- `engine.rs`: `gpu_sidecar_present()` DELETED; `engine_sidecar()` now takes `&AppHandle`,
+  is **un-memoized** (the OnceLock is gone — it must re-resolve after a mid-session
+  download), and derives from `engine_bin_resolved()`; new
+  `engine_bin_resolved(app) -> (PathBuf, &'static str)` returns the path **and the
+  variant tag of the exe that actually resolved** (`engine_bin_path` is now a thin
+  wrapper over it); new `variant_satisfied` command.
+- `whisper.rs`: `push_gpu_demotion()` appends `--device cpu` at BOTH spawn sites when
+  `gpuUnusable` is persisted and the caller passed no explicit `--device`.
+- `Cargo.toml`: `windows` 0.61 under `[target.'cfg(windows)'.dependencies]` (same line
+  Tauri already pulls in, so no duplicate crate).
+- `lib.rs`: `gpu_info` + `variant_satisfied` registered. **`verify_staged_engine` is NOT
+  yet registered — Phase 4 §2 must add it.**
+
+**Phase 3 DEVIATIONS (both ratified in-session, both strictly safer):**
+1. Plan §5 specified `engine_sidecar()`'s guard as
+   `resolve_engine_variant(app, detect_variant(), triple).is_some()`. Implemented as
+   `engine_bin_resolved(app)`'s returned variant tag instead — identical in every case
+   the plan enumerates, but it ALSO covers the reverse cross-fallback the plan itself
+   calls out (`engine.rs` falls back to the GPU exe when a `cpu` selection has no CPU
+   binary). The literal guard would file that GPU exe's readiness verdict under the CPU
+   cache key; keying on the exe that actually resolves cannot.
+2. `nvidia_gpu_present()` DELETED, not kept as the plan's thin wrapper. Its rationale was
+   "so no existing caller breaks mid-phase", but `detect_variant()` was its only caller
+   and now calls `nvidia_query()` directly — it was dead code with a compiler warning.
 
 **Phase 2 outcome (all hosting live + verified reachable):**
 - `engine-gpu` hosted on GitHub release **deps-v1.1.0** (GarniczAndrzej/reel-automator-deps).
@@ -68,20 +105,21 @@ ALL frozen builds — `speechbrain.integrations.k2_fsa` lazy-import failure load
 too). Bundling gap in whisperx_engine.spec. Flag to the user / open a new change.
 
 **Phase 1 commits:** 6a00e2a, caafeb3, b94e54a, 70b7038, 491f788. **Phase 2:** e833dd6.
+**Phase 3:** see the SHA on the plan's 3.x Progress rows.
 
 **Three engine exes remain on disk in src-tauri/binaries/ (git-ignored):**
 - `whisperx-engine-x86_64-pc-windows-msvc.exe` — CPU (torch+cpu)
 - `whisperx-engine-gpu-x86_64-pc-windows-msvc.exe` — CT2-CUDA (1.03 GB, torch+cpu + cuBLAS) [hosted]
 - `whisperx-engine-gpu-full-x86_64-pc-windows-msvc.exe` — cu128 baseline (3.08 GB) [hosted on HF]
 
-**Next action = Phase 3 (honest hardware detection).** Resume:
-`/10x-implement gpu-engine-autodetect phase 3`. Read plan.md Phase 3 (§1 nvidia_query
-profiling, §2 DXGI enumeration + `windows` crate dep, §3 `gpu_info` command, §4 persisted
-`gpuUnusable`, §5 delete `gpu_sidecar_present` / drop the `engine_sidecar()` OnceLock /
-add `variant_satisfied` + `engine_bin_resolved`). NOTE: `engine_sidecar()` was left
-argless in Phase 2 (still returns CPU for a gpu-full selection — Phase 3 §5 reworks it to
-consult the staged deps root via `resolve_engine_variant`). The plan.md SHA write-back
-for 2.1–2.7 + this resume-state update land in the pre-clear chore commit below.
+**Next action = Phase 4 (post-stage verification + the runtime fallback net).** Resume:
+`/10x-implement gpu-engine-autodetect phase 4`. Read plan.md Phase 4 (§1 `EngineStatus`
+gains `cublas`/`ct2_device`/`torch_device` — and `parse_engine_status` must hand-map them
+too, the derive alone is NOT enough; §2 `verify_staged_engine` command + REGISTER it in
+`lib.rs`; §3 the runtime CUDA-failure net in `whisper.rs`). Phase 3 already landed the two
+things Phase 4 depends on: `deps::gpu_unusable()` + its `--device cpu` demotion at both
+spawn sites, and `engine::engine_bin_resolved()` (the variant tag Phase 4's retry gate
+MUST key on instead of `detect_variant()`).
 
 **Phase 4 TODO (don't lose this):** `gpu-full`'s `--capability` reports
 `cublas:false` (its CUDA comes from torch, not our bundled DLLs) while still

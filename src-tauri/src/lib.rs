@@ -50,6 +50,8 @@ pub fn run() {
             engine::whisperx_engine_check,
             engine::whisperx_engine_capability,
             engine::whisperx_engine_cached,
+            engine::variant_satisfied,
+            deps::gpu_info,
             deps::load_deps_spec,
             deps::deps_status,
             deps::get_deps_root,

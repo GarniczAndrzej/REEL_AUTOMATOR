@@ -212,19 +212,183 @@ pub fn host_platform_arch() -> (&'static str, &'static str) {
     (platform, arch)
 }
 
-/// True if a usable NVIDIA GPU + driver is present (cheap, ~instant): `nvidia-smi`
-/// runs and lists ≥1 GPU. Shells out only to the always-installed driver tool — it
-/// does NOT spawn the multi-GB engine. Any error/absence ⇒ false. Memoized: host
-/// hardware does not change within a run, so the probe runs at most once.
-pub fn nvidia_gpu_present() -> bool {
-    static PRESENT: OnceLock<bool> = OnceLock::new();
-    *PRESENT.get_or_init(|| {
-        std::process::Command::new("nvidia-smi")
-            .arg("-L")
-            .output()
-            .map(|o| o.status.success() && !o.stdout.is_empty())
-            .unwrap_or(false)
+/// The CUDA 12.x minor-version-compatibility driver floor on Windows (CUDA Toolkit
+/// release notes, Table 2's `>= 525 && < 580` band). Below this the CT2 CUDA wheel
+/// cannot initialize, so the machine is treated as CPU-only. Compared as
+/// `(major, minor)` so version ordering is exact (`527.9` < `527.41`). The CT2
+/// wheel documents no compute-capability floor, so `compute_cap` and VRAM are
+/// reported but NEVER gated — Phase 4's probe + runtime net adjudicate above this.
+const DRIVER_FLOOR_WINDOWS: (u32, u32) = (527, 41);
+const DRIVER_FLOOR_STR: &str = "527.41";
+
+/// A parsed `nvidia-smi` profile of the first GPU. `None` (from `nvidia_query`)
+/// fails safe to CPU, exactly as the old bare `nvidia-smi -L` bool did.
+#[derive(Debug, Clone)]
+pub struct NvidiaQuery {
+    pub name: String,
+    /// VRAM in bytes (nvidia-smi reports MiB; converted here). 0 when unknown.
+    pub vram_bytes: u64,
+    pub compute_cap: Option<String>,
+    pub driver_version: Option<String>,
+    /// NVIDIA card present AND its driver clears `DRIVER_FLOOR_WINDOWS`.
+    pub cuda_usable: bool,
+}
+
+/// A DXGI-enumerated display adapter (reporting signal only — NEVER influences
+/// variant selection; a card existing is not a working runtime).
+#[derive(Debug, Clone)]
+struct Adapter {
+    /// `nvidia` | `amd` | `intel` | `unknown` (from `vendor_from_id`).
+    vendor: String,
+    name: String,
+    vram_bytes: u64,
+}
+
+/// Is `driver` (an `nvidia-smi` `major.minor` string) at or above the CUDA floor?
+/// Any unparseable major component fails safe to `false`. Pure + unit-tested.
+fn driver_meets_floor(driver: &str) -> bool {
+    let mut parts = driver.trim().split('.');
+    let major: u32 = match parts.next().and_then(|s| s.trim().parse().ok()) {
+        Some(m) => m,
+        None => return false,
+    };
+    let minor: u32 = parts.next().and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+    (major, minor) >= DRIVER_FLOOR_WINDOWS
+}
+
+/// Parse one `--format=csv,noheader,nounits` row of
+/// `name,memory.total,compute_cap,driver_version` into an `NvidiaQuery`. Tolerant:
+/// any missing field, unexpected column count, non-numeric VRAM, or empty input
+/// yields `None`. Pure + unit-tested.
+fn parse_nvidia_csv(row: &str) -> Option<NvidiaQuery> {
+    let row = row.trim();
+    if row.is_empty() {
+        return None;
+    }
+    let cols: Vec<&str> = row.split(',').map(|s| s.trim()).collect();
+    if cols.len() != 4 {
+        return None;
+    }
+    let name = cols[0].to_string();
+    if name.is_empty() {
+        return None;
+    }
+    let mem_mib: u64 = cols[1].parse().ok()?;
+    let vram_bytes = mem_mib.saturating_mul(1024 * 1024);
+    let field = |s: &str| -> Option<String> {
+        let t = s.trim();
+        if t.is_empty() || t.eq_ignore_ascii_case("[N/A]") {
+            None
+        } else {
+            Some(t.to_string())
+        }
+    };
+    let compute_cap = field(cols[2]);
+    let driver_version = field(cols[3]);
+    let cuda_usable = driver_version.as_deref().map(driver_meets_floor).unwrap_or(false);
+    Some(NvidiaQuery {
+        name,
+        vram_bytes,
+        compute_cap,
+        driver_version,
+        cuda_usable,
     })
+}
+
+/// Profile the host's first NVIDIA GPU via `nvidia-smi --query-gpu`. Shells out only
+/// to the always-installed driver tool (never the multi-GB engine); any error /
+/// absence / malformed output ⇒ `None`. Memoized: host hardware does not change
+/// within a run.
+pub fn nvidia_query() -> Option<NvidiaQuery> {
+    static Q: OnceLock<Option<NvidiaQuery>> = OnceLock::new();
+    Q.get_or_init(|| {
+        let out = std::process::Command::new("nvidia-smi")
+            .args([
+                "--query-gpu=name,memory.total,compute_cap,driver_version",
+                "--format=csv,noheader,nounits",
+            ])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let text = String::from_utf8_lossy(&out.stdout);
+        parse_nvidia_csv(text.lines().next()?)
+    })
+    .clone()
+}
+
+/// Map a PCI vendor id to a lowercase vendor tag. Unknown ids (incl. the Microsoft
+/// Basic Render Driver `0x1414`) map to `unknown`. Pure + unit-tested.
+fn vendor_from_id(id: u32) -> &'static str {
+    match id {
+        0x10DE => "nvidia",
+        0x1002 => "amd",
+        0x8086 => "intel",
+        _ => "unknown",
+    }
+}
+
+/// The Microsoft Basic Render Driver is a software adapter present on every machine;
+/// skip it so it never reads as a GPU.
+fn is_basic_render(vendor_id: u32, desc: &str) -> bool {
+    vendor_id == 0x1414 || desc.contains("Basic Render")
+}
+
+/// Enumerate display adapters via DXGI (`CreateDXGIFactory1` → `EnumAdapters1` →
+/// `GetDesc1`). Reporting-only: this sees AMD/Intel cards the CUDA probe cannot, so
+/// the UI can say what it found — it NEVER influences variant selection. VRAM comes
+/// from `DedicatedVideoMemory` (never WMI's 32-bit `AdapterRAM`, which saturates
+/// near 4 GB). The Basic Render Driver is skipped.
+#[cfg(windows)]
+fn dxgi_adapters() -> Vec<Adapter> {
+    use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1};
+    let mut out = Vec::new();
+    unsafe {
+        let factory: IDXGIFactory1 = match CreateDXGIFactory1() {
+            Ok(f) => f,
+            Err(_) => return out,
+        };
+        let mut i = 0u32;
+        loop {
+            let adapter = match factory.EnumAdapters1(i) {
+                Ok(a) => a,
+                Err(_) => break, // DXGI_ERROR_NOT_FOUND ends the enumeration
+            };
+            i += 1;
+            let desc = match adapter.GetDesc1() {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let len = desc
+                .Description
+                .iter()
+                .position(|&c| c == 0)
+                .unwrap_or(desc.Description.len());
+            let name = String::from_utf16_lossy(&desc.Description[..len]);
+            if is_basic_render(desc.VendorId, &name) {
+                continue;
+            }
+            out.push(Adapter {
+                vendor: vendor_from_id(desc.VendorId).to_string(),
+                name,
+                vram_bytes: desc.DedicatedVideoMemory as u64,
+            });
+        }
+    }
+    out
+}
+
+/// Non-Windows stub: DXGI is Windows-only, and this app's GPU path is Windows-only.
+#[cfg(not(windows))]
+fn dxgi_adapters() -> Vec<Adapter> {
+    Vec::new()
+}
+
+/// Memoized DXGI enumeration — host adapters do not change within a run.
+fn dxgi_adapters_cached() -> &'static Vec<Adapter> {
+    static A: OnceLock<Vec<Adapter>> = OnceLock::new();
+    A.get_or_init(dxgi_adapters)
 }
 
 /// Per-machine settings path (`deps-settings.json`) resolved WITHOUT an
@@ -265,16 +429,34 @@ fn variant_override() -> Option<String> {
     read_settings_field("variantOverride")
 }
 
+/// True if a durable "GPU unusable on this machine" verdict has been persisted
+/// (`deps-settings.json → gpuUnusable == "1"`). Written by Phase 4's post-stage
+/// probe / runtime fallback net when CUDA fails despite a present NVIDIA card, so
+/// the machine stops re-trying GPU every launch. Consumed both by `detect_variant`
+/// (demotes the resolved variant to CPU) and by the `whisper.rs` spawn sites (which
+/// append `--device cpu`, demoting the CT2 device regardless of which exe resolves).
+/// NOT memoized — Phase 4 flips it mid-session and the next resolve must see it.
+pub fn gpu_unusable() -> bool {
+    read_settings_field("gpuUnusable").as_deref() == Some("1")
+}
+
 /// Pure variant precedence, factored out for unit testing without touching the
-/// environment or the filesystem: env override → UI override → NVIDIA present ⇒
-/// gpu → cpu. `gpu_present` is injected so the test doesn't shell out.
+/// environment or the filesystem: env override → UI override → GPU usable ⇒
+/// gpu → cpu. `gpu_usable` is injected so the test doesn't shell out.
+///
+/// `gpu_usable` (Phase 3) means "a usable NVIDIA CUDA runtime": an NVIDIA card
+/// whose driver clears the floor AND no persisted `gpuUnusable` verdict. It changed
+/// meaning from the old bare `gpu_present` — a present-but-below-floor card, or a
+/// card demoted by Phase 4's verdict, now resolves to `cpu`. An explicit override
+/// still wins over the verdict, so a user who fixes their driver can force `gpu`
+/// back on without editing JSON.
 ///
 /// `gpu-full` is the opt-in CUDA-torch escape hatch (see deps-spec.json): it is
 /// accepted from the ENV override ONLY — never from the persisted UI override
 /// (`set_variant_override` normalizes anything outside gpu/cpu to ""), and never
 /// from hardware detection (which can only ever yield `gpu` or `cpu`). This keeps
 /// the UI dropdown honest about what a normal install downloads.
-fn resolve_variant(env_override: Option<&str>, ui_override: Option<&str>, gpu_present: bool) -> &'static str {
+fn resolve_variant(env_override: Option<&str>, ui_override: Option<&str>, gpu_usable: bool) -> &'static str {
     match env_override {
         Some("gpu") => "gpu",
         Some("gpu-full") => "gpu-full",
@@ -282,7 +464,7 @@ fn resolve_variant(env_override: Option<&str>, ui_override: Option<&str>, gpu_pr
         _ => match ui_override {
             Some("gpu") => "gpu",
             Some("cpu") => "cpu",
-            _ if gpu_present => "gpu",
+            _ if gpu_usable => "gpu",
             _ => "cpu",
         },
     }
@@ -292,14 +474,17 @@ fn resolve_variant(env_override: Option<&str>, ui_override: Option<&str>, gpu_pr
 ///   1. `REEL_ENGINE_VARIANT=gpu|gpu-full|cpu` env override (power-user/debug;
 ///      `gpu-full` is env-only — never from the UI override or hardware),
 ///   2. persisted UI override (`deps-settings.json → variantOverride`, Phase 4),
-///   3. `nvidia-smi` finds a GPU ⇒ gpu,
+///   3. a usable NVIDIA CUDA runtime (card + driver ≥ floor, no `gpuUnusable`
+///      verdict) ⇒ gpu,
 ///   4. else cpu.
-/// Spawn-free apart from the memoized `nvidia-smi -L` probe. NOT memoized itself,
-/// so a mid-session UI-override change is reflected on the next `deps_status`.
+/// Spawn-free apart from the memoized `nvidia-smi` probe. NOT memoized itself, so a
+/// mid-session UI-override change OR a freshly-written `gpuUnusable` verdict (Phase
+/// 4) is reflected on the next `deps_status`.
 pub fn detect_variant() -> &'static str {
     let env = std::env::var("REEL_ENGINE_VARIANT").ok();
     let ui = variant_override();
-    resolve_variant(env.as_deref(), ui.as_deref(), nvidia_gpu_present())
+    let gpu_usable = nvidia_query().map(|q| q.cuda_usable).unwrap_or(false) && !gpu_unusable();
+    resolve_variant(env.as_deref(), ui.as_deref(), gpu_usable)
 }
 
 // ── Staging paths + required-set/status ──────────────────────────────
@@ -634,6 +819,144 @@ pub fn get_variant_override() -> String {
     variant_override().unwrap_or_default()
 }
 
+/// The hardware profile the first-run UI paints: what is in this box, what variant
+/// was picked, and (in Polish) why. All fields are spawn-free reads of the memoized
+/// hardware probes. `vendor`/`name`/`vramBytes`/`computeCap`/`driverVersion`
+/// describe the detected card; `cudaUsable` is hardware capability (NVIDIA + driver
+/// ≥ floor), independent of the chosen `variant` (which an override may force).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuInfo {
+    pub vendor: String,
+    pub name: String,
+    pub vram_bytes: u64,
+    pub compute_cap: Option<String>,
+    pub driver_version: Option<String>,
+    pub cuda_usable: bool,
+    pub variant: String,
+    pub reason: String,
+}
+
+/// Render VRAM bytes as a human `"16.0 GB"` (informal GiB). Empty for 0/unknown.
+fn human_vram(bytes: u64) -> String {
+    if bytes == 0 {
+        return String::new();
+    }
+    format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+}
+
+/// When an explicit override (env or UI) forces the variant, the `reason` explains
+/// the override instead of the hardware. `None` ⇒ let the hardware branch speak.
+fn override_reason(env_ov: &Option<String>, ui_ov: &Option<String>, variant: &str) -> Option<String> {
+    if matches!(env_ov.as_deref(), Some("gpu") | Some("gpu-full") | Some("cpu")) {
+        return Some(format!(
+            "Wariant „{variant}” wymuszony zmienną środowiskową REEL_ENGINE_VARIANT — pominięto automatyczne wykrywanie sprzętu."
+        ));
+    }
+    if matches!(ui_ov.as_deref(), Some("gpu") | Some("cpu")) {
+        return Some(format!(
+            "Wariant „{variant}” wybrany ręcznie w ustawieniach — pominięto automatyczne wykrywanie sprzętu."
+        ));
+    }
+    None
+}
+
+/// One spawn-free call answering "what GPU is in this box, what variant did we pick,
+/// and why", in Polish, for the ZALEŻNOŚCI window. Reads the memoized `nvidia_query`
+/// + DXGI probes plus the persisted `gpuUnusable` verdict; the reason is computed
+/// fresh each call (not memoized) so a mid-session demotion (Phase 4) surfaces
+/// without a relaunch, while the underlying hardware probes stay memoized.
+#[tauri::command]
+pub fn gpu_info() -> GpuInfo {
+    let variant = detect_variant().to_string();
+    let unusable = gpu_unusable();
+    let env_ov = std::env::var("REEL_ENGINE_VARIANT").ok();
+    let ui_ov = variant_override();
+
+    // NVIDIA is authoritative for CUDA; report it first.
+    if let Some(q) = nvidia_query() {
+        let cuda_usable = q.cuda_usable && !unusable;
+        let driver = q.driver_version.clone().unwrap_or_else(|| "nieznany".into());
+        let reason = override_reason(&env_ov, &ui_ov, &variant).unwrap_or_else(|| {
+            if unusable {
+                format!(
+                    "Wykryto kartę NVIDIA {}, ale wcześniejsza próba użycia GPU nie powiodła się — używany jest silnik CPU.",
+                    q.name
+                )
+            } else if !q.cuda_usable {
+                format!(
+                    "Wykryto kartę NVIDIA {} ze sterownikiem {}, ale wymagany jest sterownik co najmniej {} do obsługi CUDA — używany jest silnik CPU.",
+                    q.name, driver, DRIVER_FLOOR_STR
+                )
+            } else {
+                let vram = human_vram(q.vram_bytes);
+                let vram_clause = if vram.is_empty() { String::new() } else { format!(" ({vram})") };
+                format!(
+                    "Wykryto kartę NVIDIA {}{} ze sterownikiem {} — wybrano silnik GPU (CUDA).",
+                    q.name, vram_clause, driver
+                )
+            }
+        });
+        return GpuInfo {
+            vendor: "nvidia".into(),
+            name: q.name.clone(),
+            vram_bytes: q.vram_bytes,
+            compute_cap: q.compute_cap.clone(),
+            driver_version: q.driver_version.clone(),
+            cuda_usable,
+            variant,
+            reason,
+        };
+    }
+
+    // No NVIDIA — report AMD/Intel (or another discrete adapter) via DXGI, else none.
+    let adapters = dxgi_adapters_cached();
+    let picked = adapters
+        .iter()
+        .find(|a| a.vendor == "amd" || a.vendor == "intel")
+        .or_else(|| adapters.iter().find(|a| a.vendor == "unknown"));
+    match picked {
+        Some(a) => {
+            let vendor_pl = match a.vendor.as_str() {
+                "amd" => "AMD",
+                "intel" => "Intel",
+                _ => "innego producenta",
+            };
+            let reason = override_reason(&env_ov, &ui_ov, &variant).unwrap_or_else(|| {
+                format!(
+                    "Wykryto kartę {} ({}), która nie jest obsługiwana przez silnik transkrypcji — używany jest silnik CPU.",
+                    a.name, vendor_pl
+                )
+            });
+            GpuInfo {
+                vendor: a.vendor.clone(),
+                name: a.name.clone(),
+                vram_bytes: a.vram_bytes,
+                compute_cap: None,
+                driver_version: None,
+                cuda_usable: false,
+                variant,
+                reason,
+            }
+        }
+        None => {
+            let reason = override_reason(&env_ov, &ui_ov, &variant).unwrap_or_else(|| {
+                "Nie wykryto dedykowanej karty graficznej — używany jest silnik CPU.".into()
+            });
+            GpuInfo {
+                vendor: "none".into(),
+                name: String::new(),
+                vram_bytes: 0,
+                compute_cap: None,
+                driver_version: None,
+                cuda_usable: false,
+                variant,
+                reason,
+            }
+        }
+    }
+}
+
 /// Persist (or clear) the UI variant override in `deps-settings.json`. `"gpu"` or
 /// `"cpu"` forces that variant; any other value (including an empty string)
 /// clears the override so detection falls back to env → hardware. `detect_variant`
@@ -655,6 +978,14 @@ pub fn set_variant_override(variant: String) -> Result<(), String> {
 /// stays the per-artifact staged-presence report the first-run UI paints; this is
 /// the boolean the transcribe button consults. Both are pure file stats — neither
 /// spawns the multi-GB engine.
+///
+/// This answers "can this machine transcribe **at all**" and gates the transcribe
+/// button — it is variant-AGNOSTIC on purpose: ANY resolvable engine (even a CPU
+/// engine on a GPU box, or the bundled/dev fallback in a `tauri dev` checkout) is
+/// enough. Its sibling `engine::variant_satisfied` answers the stricter "is it
+/// running the engine its hardware deserves" and drives ONLY the ZALEŻNOŚCI
+/// auto-open nag (Phase 3 §5). Conflating them would disable transcription on a
+/// working CPU engine and gate off every `tauri dev` checkout.
 #[tauri::command]
 pub fn transcription_ready(app: AppHandle) -> bool {
     crate::engine::engine_bin_path(&app).is_ok() && crate::ffmpeg::ffmpeg_bin_path(&app).is_ok()
@@ -1140,6 +1471,107 @@ mod tests {
         assert!(full.contains(&"ffmpeg"));
         assert!(!full.contains(&"engine-gpu"));
         assert!(!full.contains(&"engine-cpu"));
+    }
+
+    // ── Phase 3: honest hardware detection ───────────────────────────
+    //
+    // The AMD/Intel branch cannot be exercised on the dev box (an NVIDIA machine),
+    // so `vendor_from_id` / `is_basic_render` unit tests are its ONLY proof.
+
+    #[test]
+    fn nvidia_csv_parses_a_well_formed_row() {
+        let q = parse_nvidia_csv("NVIDIA GeForce RTX 5070 Ti, 16303, 12.0, 576.02")
+            .expect("well-formed row must parse");
+        assert_eq!(q.name, "NVIDIA GeForce RTX 5070 Ti");
+        // nvidia-smi reports MiB; we store bytes.
+        assert_eq!(q.vram_bytes, 16303 * 1024 * 1024);
+        assert_eq!(q.compute_cap.as_deref(), Some("12.0"));
+        assert_eq!(q.driver_version.as_deref(), Some("576.02"));
+        assert!(q.cuda_usable, "576.02 clears the 527.41 floor");
+    }
+
+    #[test]
+    fn nvidia_csv_tolerates_a_trailing_newline() {
+        let q = parse_nvidia_csv("NVIDIA T400, 4096, 7.5, 527.41\n")
+            .expect("a trailing newline must not defeat the parse");
+        assert_eq!(q.name, "NVIDIA T400");
+        assert!(q.cuda_usable, "527.41 is exactly the floor ⇒ usable");
+    }
+
+    #[test]
+    fn nvidia_csv_malformed_rows_fail_safe_to_none() {
+        // Every malformed shape yields None, and None fails safe to CPU — exactly
+        // as the old bare `nvidia-smi -L` bool did on any error.
+        assert!(parse_nvidia_csv("").is_none(), "empty");
+        assert!(parse_nvidia_csv("   \n ").is_none(), "whitespace only");
+        assert!(
+            parse_nvidia_csv("NVIDIA GeForce RTX 5070 Ti, 16303").is_none(),
+            "truncated row (2 of 4 columns)"
+        );
+        assert!(
+            parse_nvidia_csv("NVIDIA GeForce RTX 5070 Ti, 16303, 12.0, 576.02, extra").is_none(),
+            "unexpected extra column"
+        );
+        assert!(
+            parse_nvidia_csv("NVIDIA GeForce RTX 5070 Ti, N/A, 12.0, 576.02").is_none(),
+            "non-numeric VRAM"
+        );
+        assert!(
+            parse_nvidia_csv(", 16303, 12.0, 576.02").is_none(),
+            "empty card name"
+        );
+    }
+
+    #[test]
+    fn nvidia_csv_missing_driver_is_not_cuda_usable() {
+        // A row whose driver column is absent/[N/A] parses (we still know the card)
+        // but can never be judged CUDA-usable — the floor is unverifiable.
+        let q = parse_nvidia_csv("NVIDIA GeForce RTX 5070 Ti, 16303, [N/A], [N/A]").unwrap();
+        assert!(q.compute_cap.is_none());
+        assert!(q.driver_version.is_none());
+        assert!(!q.cuda_usable, "no driver version ⇒ fail safe to not-usable");
+    }
+
+    #[test]
+    fn driver_floor_is_compared_as_major_minor_not_as_a_float() {
+        assert!(driver_meets_floor("527.41"), "the floor itself passes");
+        assert!(!driver_meets_floor("527.40"), "one below the floor fails");
+        assert!(driver_meets_floor("576.02"), "a newer driver passes");
+        assert!(!driver_meets_floor("516.94"), "an older major fails");
+        // The reason this is a (major, minor) tuple and not a float parse: as a
+        // float 527.9 > 527.41, but as a driver version 527.9 is 527.09 — older.
+        assert!(!driver_meets_floor("527.9"));
+        assert!(!driver_meets_floor("nieznany"), "unparseable ⇒ fail safe");
+        assert!(!driver_meets_floor(""), "empty ⇒ fail safe");
+    }
+
+    #[test]
+    fn vendor_ids_map_and_the_basic_render_driver_is_rejected() {
+        assert_eq!(vendor_from_id(0x10DE), "nvidia");
+        assert_eq!(vendor_from_id(0x1002), "amd");
+        assert_eq!(vendor_from_id(0x8086), "intel");
+        assert_eq!(vendor_from_id(0x1234), "unknown");
+        // The Microsoft Basic Render Driver is a SOFTWARE adapter present on every
+        // machine — enumerating it as a GPU would make every box look like it has a
+        // card. Rejected by vendor id or by description.
+        assert!(is_basic_render(0x1414, "Microsoft Basic Render Driver"));
+        assert!(is_basic_render(0x0000, "Microsoft Basic Render Driver"));
+        assert!(!is_basic_render(0x10DE, "NVIDIA GeForce RTX 5070 Ti"));
+        assert!(!is_basic_render(0x1002, "AMD Radeon RX 7900 XTX"));
+    }
+
+    #[test]
+    fn variant_gpu_usable_replaces_gpu_present() {
+        // The third term changed meaning from "an NVIDIA card exists" to "a USABLE
+        // NVIDIA CUDA runtime exists" (card + driver ≥ floor + no persisted
+        // `gpuUnusable` verdict). A card demoted by Phase 4's verdict, or one below
+        // the driver floor, now resolves to cpu.
+        assert_eq!(resolve_variant(None, None, false), "cpu");
+        assert_eq!(resolve_variant(None, None, true), "gpu");
+        // ...but an explicit override still beats the verdict, so a user who fixes
+        // their driver can force gpu back on without editing JSON.
+        assert_eq!(resolve_variant(Some("gpu"), None, false), "gpu");
+        assert_eq!(resolve_variant(None, Some("gpu"), false), "gpu");
     }
 
     #[test]

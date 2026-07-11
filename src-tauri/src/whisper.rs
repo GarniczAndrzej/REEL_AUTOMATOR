@@ -127,6 +127,25 @@ fn flatten_words(segments: &[serde_json::Value]) -> Vec<serde_json::Value> {
     words
 }
 
+/// Fold the persisted "GPU unusable on this machine" verdict into the engine argv:
+/// when it is set and the caller passed no explicit `--device`, force the engine's
+/// CT2 device to CPU.
+///
+/// Flipping `detect_variant()` to `cpu` is NOT enough to demote a machine. A GPU box
+/// only ever downloaded the GPU engine (`required_deps` for variant `gpu` excludes
+/// the CPU entry), so once `gpuUnusable` is written `engine_bin_path` still
+/// resolves — and spawns — the GPU exe, which re-detects CUDA through
+/// `get_cuda_device_count()` and fails exactly as before. This flag is what actually
+/// demotes it, whichever exe resolved. `--device` targets the CT2 device only, so
+/// torch (VAD / alignment / diarization) is unaffected.
+fn push_gpu_demotion(args: &mut Vec<String>, device: &Option<String>) {
+    let explicit = device.as_ref().is_some_and(|d| !d.trim().is_empty());
+    if !explicit && crate::deps::gpu_unusable() {
+        args.push("--device".into());
+        args.push("cpu".into());
+    }
+}
+
 /// Append the Phase-7 advanced-settings flags to the engine argv. Only flags the
 /// user actually set are pushed; everything else is omitted so the engine keeps
 /// its own defaults (untouched modal = no behavior change). `min/max_speakers`
@@ -589,6 +608,9 @@ pub async fn transcribe_video(
         &min_speakers,
         &max_speakers,
     );
+    // A machine demoted by Phase 4's probe / runtime net keeps spawning its GPU exe
+    // (it never downloaded a CPU one) — this is what forces that exe onto the CPU.
+    push_gpu_demotion(&mut args, &device);
     // Alignment model: a local copy (bundled on macOS, or staged from a prior
     // run) is passed via --align-model-dir and used offline. On a thin Windows
     // install there is none — we omit the flag AND leave HF reachable (below) so
@@ -834,6 +856,7 @@ pub async fn align_transcript(
         align_args.push("--device".into());
         align_args.push(d.clone());
     }
+    push_gpu_demotion(&mut align_args, &device);
     let local_align = crate::engine::align_model_dir(&app);
     if let Some(dir) = &local_align {
         align_args.push("--align-model-dir".into());

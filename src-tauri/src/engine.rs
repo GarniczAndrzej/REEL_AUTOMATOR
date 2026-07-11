@@ -8,7 +8,6 @@
 use crate::proc::ProcError;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
@@ -28,53 +27,40 @@ pub const ENGINE_SIDECAR_GPU_FULL: &str = "whisperx-engine-gpu-full";
 /// this module's call sites unchanged.
 use crate::deps::host_triple;
 
-/// True if the GPU sidecar binary is present for the host triple. Checks the dev
-/// staging dir (`src-tauri/binaries/`) and the production location (beside the
-/// bundled main executable). Spawn-free — it stats a file, never launches torch.
-fn gpu_sidecar_present() -> bool {
-    let ext = if cfg!(windows) { ".exe" } else { "" };
-    let file = format!("{ENGINE_SIDECAR_GPU}-{}{ext}", host_triple());
-    if Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("binaries")
-        .join(&file)
-        .is_file()
-    {
-        return true;
+/// Map a variant key to its sidecar base name. Unknown keys degrade to CPU.
+fn sidecar_base(variant: &str) -> &'static str {
+    match variant {
+        "gpu" => ENGINE_SIDECAR_GPU,
+        "gpu-full" => ENGINE_SIDECAR_GPU_FULL,
+        _ => ENGINE_SIDECAR_CPU,
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            if dir.join(&file).is_file() {
-                return true;
-            }
-        }
-    }
-    false
 }
 
-/// Choose the engine variant ONCE per process (memoized). Selection is cheap and
-/// spawn-free so the launch badge (`whisperx_engine_cached`, which must never
-/// spawn the engine) can fold the chosen variant into its readiness cache key.
-/// The hardware/override decision is delegated to `deps::detect_variant()` (the
-/// SINGLE shared resolver — env override → UI override → `nvidia-smi` → cpu) so
-/// the spawn-side here and the download-side (`deps::deps_status`) never disagree.
-/// This module still applies a binary-presence guard on top: a resolved `gpu`
-/// only picks the GPU sidecar when that binary is actually staged/bundled,
-/// otherwise it falls back to CPU (never spawns a missing binary).
+/// The sidecar base name of the engine that would ACTUALLY be spawned right now —
+/// i.e. the variant `engine_bin_resolved` lands on, cross-fallbacks included, not
+/// the one `deps::detect_variant()` merely asked for. Folded into the readiness
+/// cache key so a verdict is always filed under the exe that produced it.
+///
+/// Deliberately NOT memoized. It used to be (a `OnceLock`), which was safe only
+/// while its presence guard read the repo `binaries/` dir and the beside-exe dir —
+/// neither of which can change while the process runs. Now that it consults the
+/// staged deps root, the answer changes mid-session: the ZALEŻNOŚCI window
+/// downloads a GPU engine and probes it in the same launch. A frozen answer would
+/// file that fresh GPU verdict under the pre-download CPU cache key, so the badge
+/// would read stale until relaunch. The cost is two or three `is_file()` stats,
+/// well inside the spawn-free budget — the same reason `deps::detect_variant()` is
+/// itself un-memoized. (`nvidia_query()` stays memoized: host hardware genuinely
+/// does not change within a run.)
 ///
 /// The engine's own `--selftest`/`--capability` provides the *authoritative*
 /// `gpu:true`/`device` confirmation for the readiness badge; this routing only
 /// decides which binary to spawn. The GPU build is a safe superset — if CUDA is
-/// unusable it auto-falls back to `device="cpu"` (torch.cuda.is_available()), so a
-/// false-positive selection degrades gracefully rather than failing.
-pub fn engine_sidecar() -> &'static str {
-    static SELECTED: OnceLock<&'static str> = OnceLock::new();
-    SELECTED.get_or_init(|| {
-        if crate::deps::detect_variant() == "gpu" && gpu_sidecar_present() {
-            ENGINE_SIDECAR_GPU
-        } else {
-            ENGINE_SIDECAR_CPU
-        }
-    })
+/// unusable it auto-falls back to `device="cpu"`, so a false-positive selection
+/// degrades gracefully rather than failing.
+pub fn engine_sidecar(app: &AppHandle) -> &'static str {
+    engine_bin_resolved(app)
+        .map(|(_, variant)| sidecar_base(variant))
+        .unwrap_or(ENGINE_SIDECAR_CPU)
 }
 
 /// Bound for the cheap `--capability` probe. It does a device detect + dir check
@@ -162,11 +148,7 @@ pub fn align_model_dir(app: &AppHandle) -> Option<String> {
 /// look for the stripped name there.
 fn resolve_engine_variant(app: &AppHandle, variant: &str, triple: &str) -> Option<PathBuf> {
     let ext = if cfg!(windows) { ".exe" } else { "" };
-    let base = match variant {
-        "gpu" => ENGINE_SIDECAR_GPU,
-        "gpu-full" => ENGINE_SIDECAR_GPU_FULL,
-        _ => ENGINE_SIDECAR_CPU,
-    };
+    let base = sidecar_base(variant);
     // 1. staged deps root (thin-installer download).
     if let Ok(root) = crate::deps::deps_root(app) {
         let staged = crate::deps::staged_path(&root, "engine-bin", variant, triple);
@@ -193,39 +175,68 @@ fn resolve_engine_variant(app: &AppHandle, variant: &str, triple: &str) -> Optio
     None
 }
 
-/// Resolve the absolute engine exe to spawn. Picks the variant from
-/// `deps::detect_variant()` (the SAME shared resolver `engine_sidecar()` folds
-/// into the readiness cache key), then resolves that variant's binary across
-/// staged → beside-exe → repo. Fail-safe: a `gpu` selection whose binary is not
-/// present anywhere falls back to the CPU binary (never spawns a missing exe);
-/// conversely, if only the GPU build is staged, it is used (the GPU build
-/// self-falls-back to `device=cpu`). Resolving independently of
-/// `engine_sidecar()`'s repo/beside-exe presence guard is what lets a
-/// staged-only GPU install (thin installer) actually spawn the GPU engine.
-pub fn engine_bin_path(app: &AppHandle) -> Result<PathBuf, String> {
+/// Resolve the absolute engine exe to spawn **and the variant it actually belongs
+/// to**. Picks the requested variant from `deps::detect_variant()`, then resolves
+/// that variant's binary across staged → beside-exe → repo. Fail-safe: a `gpu`
+/// selection whose binary is not present anywhere falls back to the CPU binary
+/// (never spawns a missing exe); conversely, if only the GPU build is staged, it is
+/// used (the GPU build self-falls-back to `device=cpu`). Resolving independently of
+/// the repo/beside-exe presence guard is what lets a staged-only GPU install (thin
+/// installer) actually spawn the GPU engine.
+///
+/// **The returned variant tag — not `detect_variant()` — is the only reliable
+/// answer to "what is actually running."** The fallbacks cross in *both*
+/// directions: a `cpu` selection with no CPU binary staged spawns the GPU exe. So a
+/// `REEL_ENGINE_VARIANT=cpu` box holding only the GPU engine runs CUDA under a
+/// `cpu` variant label. Callers that must know whether a CUDA-capable exe is on the
+/// other end (the readiness cache key here; the CUDA-failure retry gate in
+/// `whisper.rs`) consult this tag, never the label.
+pub fn engine_bin_resolved(app: &AppHandle) -> Result<(PathBuf, &'static str), String> {
     let triple = host_triple();
     let variant = crate::deps::detect_variant();
     // 1. The exact requested variant, if its binary is staged/bundled anywhere.
     if let Some(p) = resolve_engine_variant(app, variant, triple) {
-        return Ok(p);
+        return Ok((p, variant));
     }
     // 2. Graceful fallbacks — never spawn a missing exe. The GPU builds are safe
     //    supersets (they self-fall-back to device=cpu when CUDA is unusable), so a
     //    `cpu` selection may still run a staged-only GPU build, and `gpu-full`
     //    degrades to the lighter `gpu` build before CPU.
-    let fallbacks: &[&str] = match variant {
+    let fallbacks: &[&'static str] = match variant {
         "gpu-full" => &["gpu", "cpu"],
         "gpu" => &["cpu"],
         _ => &["gpu"],
     };
     for v in fallbacks {
         if let Some(p) = resolve_engine_variant(app, v, triple) {
-            return Ok(p);
+            return Ok((p, v));
         }
     }
     Err(format!(
         "Silnik WhisperX niedostępny dla {triple}. Pobierz zależności lub zbuduj go: sidecar/build.sh"
     ))
+}
+
+/// Resolve the absolute engine exe to spawn — the path half of
+/// `engine_bin_resolved`, kept as its own name because most callers only spawn.
+pub fn engine_bin_path(app: &AppHandle) -> Result<PathBuf, String> {
+    engine_bin_resolved(app).map(|(p, _)| p)
+}
+
+/// Is this machine running the engine its hardware deserves? True when the
+/// **resolved** variant's own engine binary resolves somewhere in the three-way
+/// precedence (no cross-fallback — an NVIDIA box holding only the CPU engine is
+/// NOT satisfied) and FFmpeg resolves too. Spawn-free: pure file stats.
+///
+/// This drives the ZALEŻNOŚCI auto-open nag ONLY. Its sibling
+/// `deps::transcription_ready` answers the looser "can this machine transcribe at
+/// all" and is what gates the transcribe button — so a GPU box holding only the CPU
+/// engine gets nagged to fetch the GPU engine while still being able to transcribe.
+#[tauri::command]
+pub fn variant_satisfied(app: AppHandle) -> bool {
+    let variant = crate::deps::detect_variant();
+    resolve_engine_variant(&app, variant, host_triple()).is_some()
+        && crate::ffmpeg::ffmpeg_bin_path(&app).is_ok()
 }
 
 /// Readiness report returned by the engine `--selftest` / `--capability` probe.
@@ -311,9 +322,12 @@ fn readiness_cache_key(app: &AppHandle) -> String {
     let mut h = Sha256::new();
     h.update(app.package_info().version.to_string().as_bytes());
     h.update(b"\x00");
-    // Fold in the selected variant so a CPU verdict never paints a GPU badge
-    // (or vice-versa) after a swap — each variant gets its own cache file.
-    h.update(engine_sidecar().as_bytes());
+    // Fold in the variant of the exe that would actually be spawned, so a CPU
+    // verdict never paints a GPU badge (or vice-versa) after a swap — each variant
+    // gets its own cache file. Re-resolved per call (see `engine_sidecar`): a GPU
+    // engine downloaded mid-session must file its verdict under the GPU key, not
+    // the pre-download CPU one.
+    h.update(engine_sidecar(app).as_bytes());
     h.update(b"\x00");
     match align_model_dir(app).and_then(|d| std::fs::metadata(&d).ok()) {
         Some(meta) => {
