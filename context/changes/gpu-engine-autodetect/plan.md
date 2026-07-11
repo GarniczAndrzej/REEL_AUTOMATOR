@@ -670,17 +670,17 @@ macOS is untouched: it still bundles both sidecars through `tauri.conf.json → 
 
 #### Automated
 
-- [x] 3.1 Rust type-check passes
-- [x] 3.2 Rust build passes
-- [x] 3.3 `nvidia-smi` CSV parser tests (well-formed, truncated, non-numeric, empty, trailing newline)
-- [x] 3.4 Driver floor comparison tests across the `527.41` boundary
-- [x] 3.5 `vendor_from_id` mapping test, including Basic Render Driver rejection
-- [x] 3.6 `resolve_variant` tests for `gpu_usable` + persisted `gpuUnusable` + override precedence
-- [x] 3.7 Regression fence green
+- [x] 3.1 Rust type-check passes — b842e04
+- [x] 3.2 Rust build passes — b842e04
+- [x] 3.3 `nvidia-smi` CSV parser tests (well-formed, truncated, non-numeric, empty, trailing newline) — b842e04
+- [x] 3.4 Driver floor comparison tests across the `527.41` boundary — b842e04
+- [x] 3.5 `vendor_from_id` mapping test, including Basic Render Driver rejection — b842e04
+- [x] 3.6 `resolve_variant` tests for `gpu_usable` + persisted `gpuUnusable` + override precedence — b842e04
+- [x] 3.7 Regression fence green — b842e04
 
 #### Manual
 
-- [x] 3.8 `gpu_info()` on the RTX 5070 Ti reports card, VRAM, compute cap, driver, `cudaUsable:true`, Polish reason — verified live: `nvidia` / "NVIDIA GeForce RTX 5070 Ti" / 17094934528 B / cc 12.0 / driver 610.74 / `cudaUsable:true` / `variant:gpu`; the Polish `reason` came from the **UI-override** branch (a persisted `variantOverride:"gpu"` was in `deps-settings.json`), so `override_reason()` is proven but the hardware sentence is not yet
+- [x] 3.8 `gpu_info()` on the RTX 5070 Ti reports card, VRAM, compute cap, driver, `cudaUsable:true`, Polish reason — verified live: `nvidia` / "NVIDIA GeForce RTX 5070 Ti" / 17094934528 B / cc 12.0 / driver 610.74 / `cudaUsable:true` / `variant:gpu`; the Polish `reason` came from the **UI-override** branch (a persisted `variantOverride:"gpu"` was in `deps-settings.json`), so `override_reason()` is proven but the hardware sentence is not yet — b842e04
 - [ ] 3.9 `REEL_ENGINE_VARIANT=cpu` makes `reason` explain the override — DEFERRED to Phase 5's first-run flow (needs a relaunch with the env var set; the sibling UI-override branch of the same `override_reason()` was proven under 3.8)
 - [ ] 3.10 A staged-only GPU engine makes the readiness badge report GPU — DEFERRED to Phase 5: needs the GPU exe **only** under `deps_root/engine/gpu/`, which is exactly Phase 5's wiped-deps-root download flow (same reason 2.8–2.11 were deferred). The dev box currently holds all three exes in `src-tauri/binaries/`, so the repo fallback masks the staged-only case
 - [ ] 3.11 `variant_satisfied` false on a GPU box with only the CPU engine, while `transcription_ready` stays true — DEFERRED to Phase 5 (needs the GPU exe absent everywhere; both read `true` here, correctly, since `binaries/` holds it)
