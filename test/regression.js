@@ -19,6 +19,7 @@ import {
   generateTranscriptVTT,
   generateWordSRT,
   generateSegmentsMd,
+  MAX_HOLD_FRAMES,
 } from '../src/exporters/transcript.js';
 import { generateEDL } from '../src/exporters/edl.js';
 import { generateXML } from '../src/exporters/xml.js';
@@ -1634,6 +1635,91 @@ const overlapLines = overlapSRT.split('\n');
   assert(
     a <= b,
     `cue at line ${tcLine} is non-reversed (start ≤ end): ${a} --> ${b}`,
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Test 16a: word-SRT fill-forward is capped at MAX_HOLD_FRAMES (100)
+// Tests 15/16 only use gaps far below the cap, so the pure gapless rule and
+// the capped one are indistinguishable there. Here a 500-frame silence follows
+// the first word: without the cap that cue would stay on screen for 20s. The
+// cap must never shorten a cue below the word's OWN end_frame (word 2 is
+// genuinely 200 frames long), and gaps under the cap stay gapless (word 3).
+// FPS=25 → 1 frame = 40ms.
+// ─────────────────────────────────────────────────────────────────
+
+console.log('\n── Test 16a: word-SRT 100-frame hold cap ────────────────');
+
+assert(MAX_HOLD_FRAMES === 100, 'MAX_HOLD_FRAMES is 100 frames');
+
+const capSentences = [
+  {
+    id: 1,
+    text: 'jeden dwa',
+    start_frame: 0,
+    end_frame: 700,
+    words: [
+      // gap to next onset = 500 ≫ cap → end capped at 0 + 100
+      { text: 'jeden', start_frame: 0, end_frame: 10 },
+      // own duration 200 > cap → own end_frame wins over the cap
+      { text: 'dwa', start_frame: 500, end_frame: 700 },
+    ],
+  },
+  {
+    id: 2,
+    text: 'trzy cztery',
+    start_frame: 900,
+    end_frame: 960,
+    words: [
+      // gap to next onset = 50 < cap → unchanged gapless fill-forward
+      { text: 'trzy', start_frame: 900, end_frame: 905 },
+      // final word → own end (960), already past the 4-frame floor
+      { text: 'cztery', start_frame: 950, end_frame: 960 },
+    ],
+  },
+];
+
+const capSRT = generateWordSRT(capSentences, FPS);
+
+const expectedCapSRT = [
+  '1',
+  '00:00:00,000 --> 00:00:04,000', // start 0 pinned; end capped at frame 100, NOT 500
+  'jeden',
+  '',
+  '2',
+  '00:00:20,000 --> 00:00:28,000', // start 500; own end 700 outlasts the cap (600)
+  'dwa',
+  '',
+  '3',
+  '00:00:36,000 --> 00:00:38,000', // start 900; gap 50 < cap → filled to next onset 950
+  'trzy',
+  '',
+  '4',
+  '00:00:38,000 --> 00:00:38,400', // final word 950 → own end 960
+  'cztery',
+  '',
+].join('\n');
+
+assertEq(capSRT, expectedCapSRT, 'word .srt caps fill-forward at 100 frames');
+
+// No cue is ever held longer than the cap past its own onset unless the word
+// itself is that long. Parse every cue back to frames and check the invariant.
+const capLines = capSRT.split('\n');
+const stampToFrames = (stamp) => {
+  const [hms, ms] = stamp.split(',');
+  const [h, m, s] = hms.split(':').map(Number);
+  return Math.round(
+    ((h * 3600 + m * 60 + s) * 1000 + Number(ms)) * (FPS / 1000),
+  );
+};
+const capWords = capSentences.flatMap((s) => s.words);
+[1, 5, 9, 13].forEach((tcLine, i) => {
+  const [a, b] = capLines[tcLine].split(' --> ');
+  const held = stampToFrames(b) - stampToFrames(a);
+  const ownDuration = capWords[i].end_frame - capWords[i].start_frame;
+  assert(
+    held <= Math.max(MAX_HOLD_FRAMES, ownDuration),
+    `cue ${i + 1} held ${held}f ≤ max(cap, own ${ownDuration}f)`,
   );
 });
 

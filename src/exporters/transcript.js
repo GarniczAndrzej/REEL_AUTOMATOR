@@ -4,6 +4,14 @@
 // when sentences carry words[].
 
 /**
+ * Longest a word-by-word cue may be held forward past its own audio onset.
+ * ~4s at 25fps — long enough that normal speech stays gapless, short enough
+ * that a pause/music bed doesn't strand one word on screen. See
+ * {@link generateWordSRT}.
+ */
+export const MAX_HOLD_FRAMES = 100;
+
+/**
  * Format a frame count as an SRT/VTT timestamp.
  * @param {number} frames
  * @param {number} fps
@@ -65,6 +73,13 @@ export function generateTranscriptSRT(sentences, fps, opts = {}) {
  * never reversed. Words are flattened in global order across sentence
  * boundaries, so fill respects real audio adjacency. Speaker labels are never
  * emitted. Pure function.
+ *
+ * The fill-forward is capped at {@link MAX_HOLD_FRAMES} frames: across a long
+ * silence (pause, music bed, cut) the pure gapless rule would leave one word
+ * frozen on screen for the whole gap. Past the cap the cue simply ends and the
+ * screen goes blank until the next word — a real gap, deliberately. The cap
+ * never shortens a cue below the word's own `end_frame`, so a genuinely long
+ * word is still shown for as long as it is spoken.
  * @param {import('../state.js').Sentence[]} sentences
  * @param {number} fps
  * @returns {string}
@@ -90,10 +105,17 @@ export function generateWordSRT(sentences, fps) {
     const start = w.start_frame;
     const next = words[i + 1];
     // Gapless fill-forward: hold this cue until the next word's onset (clamped
-    // to `start` so an overlapping successor can't reverse the cue). The last
-    // word has no successor, so it keeps its own end with the 4-frame floor.
+    // to `start` so an overlapping successor can't reverse the cue), but never
+    // longer than MAX_HOLD_FRAMES past the onset — a long silence must not
+    // freeze one word on screen. The word's own `end_frame` still wins if it
+    // outlasts the cap. The last word has no successor, so it keeps its own end
+    // with the 4-frame floor.
     const end = next
-      ? Math.max(start, next.start_frame)
+      ? Math.max(
+          start,
+          Math.min(next.start_frame, start + MAX_HOLD_FRAMES),
+          Math.min(w.end_frame, next.start_frame),
+        )
       : Math.max(w.end_frame, start + FLOOR_FRAMES);
     out.push(String(i + 1));
     out.push(
