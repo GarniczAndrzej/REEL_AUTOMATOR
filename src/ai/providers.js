@@ -15,6 +15,11 @@
  *   `usage` is `data.usage` verbatim (includes `prompt_tokens`,
  *   `completion_tokens`, and `prompt_tokens_details.cached_tokens` when present);
  *   `finishReason` is the provider's `finish_reason` (e.g. `'length'` on truncation).
+ * @throws {Error} with `code === 'EMPTY_TRUNCATED'` when the model returned NO
+ *   content because it exhausted the completion budget (reasoning models spend
+ *   it on thinking tokens first). Throwing here — rather than returning `''` —
+ *   keeps the empty body out of the LLM disk cache and gives the caller an
+ *   actionable message instead of a downstream `JSON.parse('')` failure.
  */
 export async function callOpenRouter(
   apiKey,
@@ -38,7 +43,14 @@ export async function callOpenRouter(
     },
     body: JSON.stringify({
       model: orModel,
-      max_tokens: 16384,
+      // NO `max_tokens` on purpose. Any value we pick is the FULL completion
+      // allowance, and reasoning models (Claude Opus/Sonnet 5, Gemini 2.5,
+      // GPT-5, the `~vendor/*-latest` aliases) charge thinking tokens against it
+      // BEFORE the first content token — so a self-imposed cap could burn out on
+      // reasoning and return `content: ''` with `finish_reason: 'length'`.
+      // Omitting the field is valid per the OpenRouter schema (it is optional,
+      // and superseded by `max_completion_tokens`); the provider then applies the
+      // model's own ceiling: context length minus the prompt.
       temperature: 0.1,
       messages: [
         {
@@ -59,9 +71,21 @@ export async function callOpenRouter(
   const data = await resp.json();
   if (data.error) throw new Error(data.error.message || 'OpenRouter error');
   const choice = data.choices?.[0];
-  return {
-    content: choice?.message?.content || '',
-    usage: data.usage || null,
-    finishReason: choice?.finish_reason || null,
-  };
+  const content = choice?.message?.content || '';
+  const finishReason = choice?.finish_reason || null;
+
+  if (!content.trim()) {
+    const err = new Error(
+      finishReason === 'length'
+        ? `Model „${orModel}" wyczerpał własny limit wyjścia na rozumowanie i nie zwrócił ` +
+            'żadnej treści. Aplikacja nie narzuca już limitu odpowiedzi — to ceiling samego ' +
+            'modelu. Wybierz model o większym limicie wyjścia, przełącz tryb analizy na ' +
+            '„pipeline" (Ustawienia) albo skróć materiał.'
+        : `Model „${orModel}" zwrócił pustą odpowiedź (finish_reason=${finishReason ?? 'brak'}).`,
+    );
+    err.code = 'EMPTY_TRUNCATED';
+    throw err;
+  }
+
+  return { content, usage: data.usage || null, finishReason };
 }

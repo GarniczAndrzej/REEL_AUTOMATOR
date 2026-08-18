@@ -97,6 +97,17 @@ function shouldUsePipeline(sentences) {
   return sentences.length >= PIPELINE_AUTO_THRESHOLD;
 }
 
+// Closing hint for a run that produced NO raw text to hand to paste-fix. The
+// blanket "check your API key" line used to fire here even when the request had
+// clearly succeeded and only the model's answer was empty/truncated, which sent
+// debugging down the wrong path — `EMPTY_TRUNCATED` carries its own remedy.
+/** @param {Error & {code?: string}} e @returns {string} */
+function failureHint(e) {
+  if (e.code === 'EMPTY_TRUNCATED')
+    return 'Zapytanie dotarło do modelu — problem dotyczy limitu odpowiedzi, nie API key.';
+  return 'Sprawdź API key i połączenie internetowe.';
+}
+
 /** @param {'running' | 'idle'} mode */
 function setAnalyzeBtnMode(mode) {
   const btn = document.getElementById('analyzeBtn');
@@ -318,7 +329,7 @@ async function runSingleShot(sentences, apiKey, signal, onProgress) {
           'err',
         );
       } else {
-        log('Sprawdź API key i połączenie internetowe.', 'err');
+        log(failureHint(e), 'err');
       }
     }
     return [];
@@ -410,7 +421,7 @@ async function runPipeline(sentences, apiKey, signal, onProgress) {
         'err',
       );
     } else {
-      log('Sprawdź API key i połączenie internetowe.', 'err');
+      log(failureHint(e), 'err');
     }
     return [];
   }

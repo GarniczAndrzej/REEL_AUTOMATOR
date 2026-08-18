@@ -28,7 +28,11 @@ export async function withLlmCache(cacheKey, callFn) {
 
   try {
     const cached = await invoke('load_llm_cache', { hash });
-    if (cached != null)
+    // A blank entry is a POISONED cache write from before the empty-response
+    // guard below existed (a truncated reasoning response persisted as ''). Treat
+    // it as a miss so an affected key self-heals on the next run instead of
+    // replaying `JSON.parse('')` forever without ever hitting the network.
+    if (cached != null && String(cached).trim())
       return {
         result: { content: cached, usage: null, finishReason: 'cached' },
         fromCache: true,
@@ -40,10 +44,14 @@ export async function withLlmCache(cacheKey, callFn) {
 
   const result = await callFn();
 
-  try {
-    await invoke('save_llm_cache', { hash, content: result.content });
-  } catch (e) {
-    console.warn('LLM cache save failed:', e);
+  // Never persist an empty/blank body: caching a failed generation makes the
+  // failure permanent and silent (every retry becomes a cache HIT).
+  if (result.content && result.content.trim()) {
+    try {
+      await invoke('save_llm_cache', { hash, content: result.content });
+    } catch (e) {
+      console.warn('LLM cache save failed:', e);
+    }
   }
 
   return { result, fromCache: false, hashShort };
