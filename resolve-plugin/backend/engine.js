@@ -195,8 +195,92 @@ async function whisperxEngineCapability() {
   return status;
 }
 
+// ── Alignment-model presence (port of engine.rs align_model_present/_status) ──
+
+/**
+ * Shallow-recursive glob for a non-trivial `*.safetensors` OR `*.bin` weight
+ * under the align-model dir. Both extensions are checked because the engine
+ * downloads whichever single format a language's repo actually ships — the
+ * Polish repo has no `.safetensors` at all, only `pytorch_model.bin`.
+ * `statSync` (not `lstatSync`) so the HF snapshot layout's symlinks into
+ * `blobs/` are FOLLOWED to the real file's size.
+ * @param {string} p @param {number} depth @returns {boolean}
+ */
+function hasWeight(p, depth) {
+  if (depth > 6) return false;
+  let entries;
+  try {
+    entries = fs.readdirSync(p, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const e of entries) {
+    const full = path.join(p, e.name);
+    if (e.isDirectory()) {
+      if (hasWeight(full, depth + 1)) return true;
+    } else if (/\.(safetensors|bin)$/.test(e.name)) {
+      try {
+        if (fs.statSync(full).size > 1024) return true;
+      } catch {
+        /* dangling symlink — not a usable weight */
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Recursive total size of REAL (non-symlink) files under `dir`. The HF cache
+ * layout nests `blobs/` (real files) inside `models--org--repo/snapshots/<sha>/`
+ * (symlinks into `blobs/`), so symlinks are skipped rather than dereferenced —
+ * each blob is counted exactly once instead of being doubled via its snapshot
+ * link. `lstatSync` is what makes that distinction.
+ * @param {string} dir @returns {number}
+ */
+function dirSizeRecursive(dir) {
+  let total = 0;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    let meta;
+    try {
+      meta = fs.lstatSync(full);
+    } catch {
+      continue;
+    }
+    if (meta.isDirectory()) total += dirSizeRecursive(full);
+    else if (meta.isFile()) total += meta.size;
+  }
+  return total;
+}
+
+/**
+ * Cheap status read for the model-manager's align-model card: whether the model
+ * is present and its on-disk footprint. NEVER spawns the sidecar.
+ *
+ * Without this handler the renderer's `invoke('align_model_status')` rejected
+ * with "No handler registered"; the caller swallows that in a bare catch and
+ * falls back to `{}`, so a fully-downloaded 2.4 GB model still rendered as
+ * "Brak" with an active download button (S-09 parity gap).
+ * @returns {Promise<{downloaded: boolean, size_bytes: number}>}
+ */
+async function alignModelStatus() {
+  const dir = paths.alignModelDir();
+  if (!dir) return { downloaded: false, size_bytes: 0 };
+  return {
+    downloaded: hasWeight(dir, 0),
+    size_bytes: dirSizeRecursive(dir),
+  };
+}
+
 module.exports = {
   whisperxEngineCheck,
   whisperxEngineCached,
   whisperxEngineCapability,
+  alignModelStatus,
 };

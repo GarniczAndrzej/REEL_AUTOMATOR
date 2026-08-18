@@ -94,11 +94,16 @@ const handlers = {
   transcribe_video: (args) => whisper.transcribeVideo(args),
   align_transcript: (args) => whisper.alignTranscript(args),
   cancel_transcription: () => whisper.cancelTranscription(),
+  // whisper.rs — proactive alignment-model fetch (`--fetch-align-model`),
+  // progress via the align-download-progress event
+  download_align_model: (args) => whisper.downloadAlignModel(args),
   // engine.rs — readiness (cached read on the launch path; --selftest/--capability
   // spawn only on explicit user action)
   whisperx_engine_check: () => engine.whisperxEngineCheck(),
   whisperx_engine_capability: () => engine.whisperxEngineCapability(),
   whisperx_engine_cached: () => engine.whisperxEngineCached(),
+  // engine.rs — align-model card status (glob-only presence + size; never spawns)
+  align_model_status: () => engine.alignModelStatus(),
   // models.rs — model manager (download emits model-download-progress)
   list_models: (args) => models.listModels(args),
   download_model: (args) => models.downloadModel(args),

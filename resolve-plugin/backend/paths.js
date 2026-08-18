@@ -77,13 +77,48 @@ function ffmpegPath() {
  * @returns {string | null}
  */
 function alignModelDir() {
-  const dir = path.join(binariesDir(), 'align_models');
+  const bundled = path.join(binariesDir(), 'align_models');
   try {
-    if (fs.statSync(dir).isDirectory()) return dir;
+    if (fs.statSync(bundled).isDirectory()) return bundled;
+  } catch {
+    /* absent — fall through to the user-downloaded dir */
+  }
+  // Nothing shipped beside the engine: use the dir `download_align_model` pulls
+  // into, so a proactively-downloaded language is found by the transcribe/
+  // selftest paths too. Only reported once it actually exists — a null keeps the
+  // engine's own next-to-exe auto-resolution intact (mirrors the Rust contract).
+  const downloaded = userAlignModelDir();
+  try {
+    if (fs.statSync(downloaded).isDirectory()) return downloaded;
   } catch {
     /* absent */
   }
   return null;
+}
+
+/**
+ * Writable destination for `download_align_model`. The bundled dir wins when it
+ * is writable (that's where the shipped 2.4 GB `pl` model lives, and what the
+ * engine already reads); otherwise downloads land in the userData namespace so a
+ * read-only resources dir can't fail the pull. Created on demand.
+ * @returns {string}
+ */
+function alignModelDownloadDir() {
+  const bundled = path.join(binariesDir(), 'align_models');
+  try {
+    fs.accessSync(bundled, fs.constants.W_OK);
+    return bundled;
+  } catch {
+    /* absent or read-only — use the writable fallback */
+  }
+  const dir = userAlignModelDir();
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** `<userData>/align_models` — writable align-model fallback. @returns {string} */
+function userAlignModelDir() {
+  return path.join(userDataRoot(), 'align_models');
 }
 
 /**
@@ -155,6 +190,7 @@ module.exports = {
   ffmpegPath,
   ffmpegPathDir,
   alignModelDir,
+  alignModelDownloadDir,
   whisperCacheDir,
   engineReadinessDir,
   waveformCacheDir,

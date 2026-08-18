@@ -740,10 +740,144 @@ async function cancelTranscription() {
   if (child) await reapEngineChild(child);
 }
 
+// ── Proactive alignment-model download (port of whisper.rs) ─────────────────
+
+/** Rejects a second concurrent fetch; mirrors the Rust ALIGN_DOWNLOAD_INFLIGHT guard. */
+let alignDownloadInflight = false;
+
+/** Idle (no-event) timeout, NOT an overall cap: active downloading emits PROGRESS
+ * lines steadily and the ~4-min cold start stays well under this, so it fires
+ * only on a genuine silent stall that would otherwise wedge the command forever. */
+const ALIGN_DL_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+
+/**
+ * Drive the engine's `--fetch-align-model` mode: download (or confirm cached) one
+ * language's wav2vec2 alignment model, relaying its `PROGRESS phase=download
+ * percent=…` stderr lines as `align-download-progress` events for the model
+ * manager's "Pobierz model wyrównania" button.
+ *
+ * Deliberately NOT routed through `driveEngine`/`transcribeChild` — that
+ * singleton tracks the one in-flight *transcription* and its cancel semantics;
+ * this is a separate, short-lived, non-cancellable fetch. No forced-offline HF
+ * env here (unlike `engine.js runEngine`) — allowing the network is the whole
+ * point of this command.
+ * @param {{ language?: string }} args
+ * @returns {Promise<void>}
+ */
+async function downloadAlignModel({ language } = {}) {
+  if (alignDownloadInflight) {
+    throw new Error(
+      'Pobieranie modelu wyrównania już trwa. Poczekaj na jego zakończenie.',
+    );
+  }
+  alignDownloadInflight = true;
+
+  const lang = language && language.trim() ? language.trim() : 'pl';
+  const args = ['--fetch-align-model', '--language', lang];
+  let dir;
+  try {
+    dir = paths.alignModelDownloadDir();
+  } catch (e) {
+    alignDownloadInflight = false;
+    throw new Error(
+      `Brak zapisywalnego katalogu na model wyrównania: ${e.message}`,
+    );
+  }
+  if (dir) args.push('--align-model-dir', dir);
+
+  try {
+    await new Promise((resolve, reject) => {
+      let child;
+      try {
+        // ffmpeg on PATH is not needed for a pure fetch, but the engine probes
+        // for it during startup — keep the env identical to the other spawns.
+        child = spawn(paths.enginePath(), args, {
+          env: withFfmpegOnPath({ ...process.env }),
+        });
+      } catch (e) {
+        reject(
+          new Error(
+            `Silnik WhisperX niedostępny: ${e.message}. Zbuduj go: sidecar/build.sh`,
+          ),
+        );
+        return;
+      }
+
+      let stderrTail = '';
+      let lineBuf = '';
+      let settled = false;
+      let idleTimer;
+
+      const finish = (fn, arg) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(idleTimer);
+        fn(arg);
+      };
+      const armIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already gone */
+          }
+          finish(
+            reject,
+            new Error(
+              'Pobieranie modelu wyrównania przekroczyło limit czasu (brak postępu przez 15 minut). Sprawdź połączenie z internetem i spróbuj ponownie.',
+            ),
+          );
+        }, ALIGN_DL_IDLE_TIMEOUT_MS);
+      };
+      armIdle();
+
+      child.stderr.on('data', (b) => {
+        armIdle();
+        const chunk = b.toString('utf8');
+        stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_BYTES);
+        lineBuf += chunk;
+        let nl;
+        while ((nl = lineBuf.indexOf('\n')) !== -1) {
+          const line = lineBuf.slice(0, nl).trimEnd();
+          lineBuf = lineBuf.slice(nl + 1);
+          if (!line.startsWith('PROGRESS ')) continue;
+          let phase = '';
+          let percent = 0;
+          for (const tok of line.slice('PROGRESS '.length).split(/\s+/)) {
+            if (tok.startsWith('phase=')) phase = tok.slice(6);
+            else if (tok.startsWith('percent='))
+              percent = parseFloat(tok.slice(8)) || 0;
+          }
+          if (phase === 'download')
+            events.emit('align-download-progress', { language: lang, percent });
+        }
+      });
+      // Drain stdout so a filled pipe can never block the child.
+      child.stdout.on('data', () => armIdle());
+      child.on('error', (e) =>
+        finish(
+          reject,
+          new Error(`Nie udało się uruchomić silnika WhisperX: ${e.message}`),
+        ),
+      );
+      child.on('close', (code) => {
+        if (code === 0) finish(resolve);
+        else finish(reject, new Error(engineErrorMessage(code, stderrTail)));
+      });
+    });
+  } finally {
+    alignDownloadInflight = false;
+  }
+
+  events.emit('align-download-progress', { language: lang, percent: 100 });
+}
+
 module.exports = {
   transcribeVideo,
   alignTranscript,
   cancelTranscription,
+  downloadAlignModel,
   // Exposed for unit smoke (node --check covers syntax; these stay internal).
   _internals: { buildSrtFromSegments, flattenWords, mapProgress, variantKey },
 };
