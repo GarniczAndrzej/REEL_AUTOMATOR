@@ -89,6 +89,18 @@ else
   python -m pip install -r "$ENGINE_PKG/requirements.txt"
 fi
 
+# ── macOS 27 dyld compat ────────────────────────────────────────────────────
+# scipy 1.15.3's wheels carry a non-zero file offset on their zero-fill
+# __thread_bss section, which macOS 27's dyld rejects → every scipy import fails
+# → whisperx.load_model raises → engine exit 10 ("model not found"). Zero the
+# offset (behavior-neutral) and prove scipy imports before freezing.
+if [ "$uname_s" = "Darwin" ]; then
+  SCIPY_DIR="$(python -c 'import os, importlib.util as u; print(os.path.dirname(u.find_spec("scipy").origin))')"
+  python "$SIDECAR_DIR/patch_macho_tls.py" "$SCIPY_DIR"
+  python -c "import scipy.sparse.linalg, scipy.signal, scipy.stats, scipy.optimize" \
+    || { echo "scipy still fails to import after the TLS patch" >&2; exit 1; }
+fi
+
 # ── Freeze ──────────────────────────────────────────────────────────────────
 echo "==> Freezing with PyInstaller"
 ( cd "$SIDECAR_DIR" && ENGINE_OUT_NAME="$OUT_NAME" python -m PyInstaller \
