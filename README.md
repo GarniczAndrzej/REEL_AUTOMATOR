@@ -143,6 +143,25 @@ importować go ręcznie, wtyczka steruje projektem Resolve bezpośrednio przez s
 - **Mac z Apple Silicon** oraz natywny plik pomostowy `WorkflowIntegration.node` z pakietu
   DaVinci Resolve Developer SDK (dołączony do instalacji Resolve Studio).
 
+### Instalator `.pkg` (na inne Maki)
+
+Samodzielny instalator zawiera wtyczkę razem z silnikiem WhisperX i FFmpeg (~350 MB).
+Modele transkrypcji i wyrównania **nie** są dołączone — wtyczka pobiera je przy pierwszym
+użyciu, tak samo jak aplikacja z DMG. Zbuduj go z katalogu repozytorium:
+
+```bash
+sidecar/build-resolve-plugin-pkg.sh   # → dist/Reels-Automator-Resolve-<wersja>.pkg
+```
+
+Wymaga tych samych plików co instalacja deweloperska (sidecary + `WorkflowIntegration.node`,
+patrz niżej) — bez nich skrypt kończy się błędem. Instalator jest **niepodpisany**: na
+docelowym Macu otwórz go przez prawy przycisk → Otwórz (albo Ustawienia systemowe →
+Prywatność i ochrona → „Otwórz mimo to"). Aby go podpisać, ustaw
+`PKG_SIGN_IDENTITY="Developer ID Installer: …"` przed uruchomieniem skryptu.
+
+Instalator zastępuje wcześniejszą instalację wtyczki (także deweloperską z dowiązaniem
+`binaries`). Po instalacji uruchom ponownie DaVinci Resolve Studio.
+
 ### Budowanie i instalacja (dla programistów)
 
 Wtyczka WI to zwykły **folder**, który hostuje sam Resolve (HTML/JS + backend Node +

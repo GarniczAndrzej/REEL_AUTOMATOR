@@ -45,3 +45,13 @@ Resolve Studio and open **Workspace → Workflow Integrations → Reels Automato
 ```
 
 Build `renderer/` first (step 1 above) — `main.js` loads `renderer/index.html`.
+
+## Distributable installer
+
+`sidecar/build-resolve-plugin-pkg.sh` builds `dist/Reels-Automator-Resolve-<version>.pkg`
+(version from `manifest.xml`). It installs into `…/Workflow Integration Plugins/Reels-Automator/`
+with the sidecars **copied** into `binaries/` (no symlink), `align_models/` excluded (downloaded
+on first use into userData). Its preinstall removes any previous `Reels-Automator` /
+`com.brave.reelsautomator` dir. The payload is repacked with bsdtar because `pkgbuild`
+turns the unstrippable `com.apple.provenance` xattr into `._*` AppleDouble entries.
+Unsigned unless `PKG_SIGN_IDENTITY` is set.
